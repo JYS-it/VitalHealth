@@ -1,0 +1,808 @@
+[
+  {
+    "id": "clear_p1",
+    "index": 84198,
+    "use_case": "A",
+    "payload": {
+      "predicted_level": "P1",
+      "probabilities": {
+        "P4": 0.0,
+        "P3": 0.0,
+        "P2": 0.0,
+        "P1": 0.999
+      },
+      "threshold_context": "well above the P1 alert threshold",
+      "red_flag_triggered": true,
+      "red_flag_complaint": "cardiacarrest",
+      "active_chief_complaints": [
+        "cardiacarrest"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "cardiacarrest",
+          "historical_emergency_rate": 1.0,
+          "n_historical": 326
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 74.0,
+      "arrival_mode": "ambulance",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 2,
+        "n_admissions": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_cardiacarrest",
+          "contribution": 3.9074
+        },
+        {
+          "feature": "triage_vital_temp",
+          "contribution": 1.7904
+        },
+        {
+          "feature": "triage_vital_o2_device",
+          "contribution": 0.7791
+        },
+        {
+          "feature": "triage_vital_dbp",
+          "contribution": 0.4314
+        },
+        {
+          "feature": "triage_vital_hr",
+          "contribution": 0.375
+        }
+      ],
+      "escalation_basis": "red_flag",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Based on triage data, this P1 assignment was forced by a rule-based safety override triggered by the chief complaint of cardiacarrest, bypassing any independent physiological assessment. Historically, 326 out of 326 patients presenting with this complaint required emergency-level care. \n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "clear_p1",
+    "index": 84198,
+    "use_case": "B",
+    "payload": {
+      "predicted_level": "P1",
+      "probabilities": {
+        "P4": 0.0,
+        "P3": 0.0,
+        "P2": 0.0,
+        "P1": 0.999
+      },
+      "threshold_context": "well above the P1 alert threshold",
+      "red_flag_triggered": true,
+      "red_flag_complaint": "cardiacarrest",
+      "active_chief_complaints": [
+        "cardiacarrest"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "cardiacarrest",
+          "historical_emergency_rate": 1.0,
+          "n_historical": 326
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 74.0,
+      "arrival_mode": "ambulance",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 2,
+        "n_admissions": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_cardiacarrest",
+          "contribution": 3.9074
+        },
+        {
+          "feature": "triage_vital_temp",
+          "contribution": 1.7904
+        },
+        {
+          "feature": "triage_vital_o2_device",
+          "contribution": 0.7791
+        },
+        {
+          "feature": "triage_vital_dbp",
+          "contribution": 0.4314
+        },
+        {
+          "feature": "triage_vital_hr",
+          "contribution": 0.375
+        }
+      ],
+      "escalation_basis": "red_flag",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Assessment: Based on the information recorded at triage, the model predicted a P1 level well above the alert threshold. Acuity driven by red_flag escalation_basis, reflecting a rule-based safety override triggered by c/o cardiacarrest; does not imply independent physiological assessment. Model weighted high-importance feature of ambulance arrival, age 74.0, and c/o cardiacarrest with a historical emergency rate of 1.0 across 326 cases. No vitals recorded at triage; SHAP contributions for temp, o2_device, dbp, and hr reflect model baseline weights rather than patient physiology.\n\nRecommendation: Obtain missing triage vitals (o2, sbp, dbp, hr, rr, temp) and initiate standard resuscitation protocol.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "borderline",
+    "index": 48805,
+    "use_case": "A",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.007,
+        "P3": 0.036,
+        "P2": 0.744,
+        "P1": 0.214
+      },
+      "threshold_context": "just below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "neurologicproblem"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "neurologicproblem",
+          "historical_emergency_rate": 0.797,
+          "n_historical": 2497
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 87.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 2,
+        "n_surgeries": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode",
+        "cc_neurologicproblem"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_neurologicproblem",
+          "contribution": 0.3256
+        },
+        {
+          "feature": "age",
+          "contribution": 0.2059
+        },
+        {
+          "feature": "meds_gastrointestinal",
+          "contribution": 0.1822
+        },
+        {
+          "feature": "meds_diuretics",
+          "contribution": 0.1136
+        },
+        {
+          "feature": "meds_cardiacdrugs",
+          "contribution": 0.1076
+        }
+      ],
+      "escalation_basis": "complaint",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Based on the information recorded at triage, the model's P2 prediction is driven primarily by the chief complaint of neurologicproblem, with additional weight from the patient's age of 87 and home use of gastrointestinal, diuretic, and cardiac medications. Historically, 79.7% of the 2,497 patients presenting with a neurologicproblem are assigned to a high-acuity level. Because no triage vitals were recorded, the prediction relies on these historical and demographic features, placing the case just below the P1 alert threshold.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "borderline",
+    "index": 48805,
+    "use_case": "B",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.007,
+        "P3": 0.036,
+        "P2": 0.744,
+        "P1": 0.214
+      },
+      "threshold_context": "just below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "neurologicproblem"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "neurologicproblem",
+          "historical_emergency_rate": 0.797,
+          "n_historical": 2497
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 87.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 2,
+        "n_surgeries": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode",
+        "cc_neurologicproblem"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_neurologicproblem",
+          "contribution": 0.3256
+        },
+        {
+          "feature": "age",
+          "contribution": 0.2059
+        },
+        {
+          "feature": "meds_gastrointestinal",
+          "contribution": 0.1822
+        },
+        {
+          "feature": "meds_diuretics",
+          "contribution": 0.1136
+        },
+        {
+          "feature": "meds_cardiacdrugs",
+          "contribution": 0.1076
+        }
+      ],
+      "escalation_basis": "complaint",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Assessment: Model predicts P2 acuity, placing pt just below P1 alert threshold. Acuity driven by chief complaint of neurologicproblem and its high historical emergency rate (0.797), not physiological instability. Model heavily weighted cc_neurologicproblem, age 87.0, and home medications (gastrointestinal, diuretics, cardiac). Prediction rests on highly incomplete data with zero triage vitals recorded.\nRecommendation: Obtain missing vitals (HR, SBP, DBP, RR, SpO2, Temp) and perform focused neurologic assessment.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "thin_payload",
+    "index": 936,
+    "use_case": "A",
+    "payload": {
+      "predicted_level": "P3",
+      "probabilities": {
+        "P4": 0.138,
+        "P3": 0.417,
+        "P2": 0.31,
+        "P1": 0.135
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [],
+      "complaint_base_rates": [],
+      "abnormal_vitals": [],
+      "age": 86.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 1,
+        "n_admissions": 1,
+        "n_surgeries": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "triage_vital_temp",
+          "contribution": -0.2158
+        },
+        {
+          "feature": "triage_vital_hr",
+          "contribution": -0.1173
+        },
+        {
+          "feature": "arrivalmode",
+          "contribution": 0.104
+        },
+        {
+          "feature": "triage_vital_rr",
+          "contribution": -0.1022
+        },
+        {
+          "feature": "triage_vital_sbp",
+          "contribution": -0.0894
+        }
+      ],
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Based on the triage data, the model's P3 prediction was driven by the arrival mode of Car, whereas the complete absence of recorded vitals\u2014specifically temp, hr, rr, and sbp\u2014heavily weighted against a higher acuity assignment. With no active chief complaints or historical base rates recorded, the model instead relied on the patient's age of 86.0 and a utilization history of 1 ED visit, 1 admission, and 2 surgeries, meaning the prediction rests on highly limited clinical data.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "thin_payload",
+    "index": 936,
+    "use_case": "B",
+    "payload": {
+      "predicted_level": "P3",
+      "probabilities": {
+        "P4": 0.138,
+        "P3": 0.417,
+        "P2": 0.31,
+        "P1": 0.135
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [],
+      "complaint_base_rates": [],
+      "abnormal_vitals": [],
+      "age": 86.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 1,
+        "n_admissions": 1,
+        "n_surgeries": 2
+      },
+      "high_importance_features_present": [
+        "arrivalmode"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "triage_vital_temp",
+          "contribution": -0.2158
+        },
+        {
+          "feature": "triage_vital_hr",
+          "contribution": -0.1173
+        },
+        {
+          "feature": "arrivalmode",
+          "contribution": 0.104
+        },
+        {
+          "feature": "triage_vital_rr",
+          "contribution": -0.1022
+        },
+        {
+          "feature": "triage_vital_sbp",
+          "contribution": -0.0894
+        }
+      ],
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {},
+      "vitals_not_recorded": [
+        "o2",
+        "sbp",
+        "dbp",
+        "hr",
+        "rr",
+        "temp"
+      ]
+    },
+    "output": "Assessment: Based on information recorded at triage, model predicted P3 acuity. Acuity driven by routine escalation basis, not physiological instability or red flags. Model weighted arrival mode of Car and pt age 86.0. High uncertainty due to thin data; no active chief complaints or triage vitals recorded. SHAP contributors show negative weights for missing vitals (temp, hr, rr, sbp) and positive weight for arrival mode. Hx of 1 ED visit, 1 admission, 2 surgeries.\n\nRecommendation: Obtain missing triage vitals (o2, sbp, dbp, hr, rr, temp) and document active chief complaint.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "demo_protocol_p2",
+    "index": 14,
+    "use_case": "A",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.003,
+        "P3": 0.009,
+        "P2": 0.987,
+        "P1": 0.001
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "drugproblem",
+        "suicidal"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "drugproblem",
+          "historical_emergency_rate": 0.822,
+          "n_historical": 1873
+        },
+        {
+          "complaint": "suicidal",
+          "historical_emergency_rate": 0.972,
+          "n_historical": 5585
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 18.0,
+      "arrival_mode": "Walk-in",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr",
+        "cc_suicidal"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_suicidal",
+          "contribution": 2.3648
+        },
+        {
+          "feature": "cc_drugproblem",
+          "contribution": 0.6943
+        },
+        {
+          "feature": "age",
+          "contribution": -0.1392
+        },
+        {
+          "feature": "cc_backpain",
+          "contribution": 0.068
+        },
+        {
+          "feature": "cc_alcoholintoxication",
+          "contribution": -0.0531
+        }
+      ],
+      "escalation_basis": "protocol",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 99,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 141,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 77,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 59,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 16,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.9,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": []
+    },
+    "output": "The model's P2 prediction reflects protocol-based triage priority for the \"suicidal\" and \"drugproblem\" chief complaints, not a physiological emergency, as all recorded vitals are normal. Historically, patients presenting with a \"suicidal\" complaint are assigned an emergency-level triage in approximately 97 out of 100 cases, while those with a \"drugproblem\" are triaged as emergency-level in about 82 out of 100 cases. This escalation is protocol-driven based on safety policies in the training data for these high-importance features.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "demo_protocol_p2",
+    "index": 14,
+    "use_case": "B",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.003,
+        "P3": 0.009,
+        "P2": 0.987,
+        "P1": 0.001
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "drugproblem",
+        "suicidal"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "drugproblem",
+          "historical_emergency_rate": 0.822,
+          "n_historical": 1873
+        },
+        {
+          "complaint": "suicidal",
+          "historical_emergency_rate": 0.972,
+          "n_historical": 5585
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 18.0,
+      "arrival_mode": "Walk-in",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr",
+        "cc_suicidal"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "cc_suicidal",
+          "contribution": 2.3648
+        },
+        {
+          "feature": "cc_drugproblem",
+          "contribution": 0.6943
+        },
+        {
+          "feature": "age",
+          "contribution": -0.1392
+        },
+        {
+          "feature": "cc_backpain",
+          "contribution": 0.068
+        },
+        {
+          "feature": "cc_alcoholintoxication",
+          "contribution": -0.0531
+        }
+      ],
+      "escalation_basis": "protocol",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 99,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 141,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 77,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 59,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 16,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.9,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": []
+    },
+    "output": "Assessment: Based on information recorded at triage, model P2 prediction driven by protocol-based escalation, not physiological instability. Model heavily weighted chief complaints \"suicidal\" (SHAP 2.3648) and \"drugproblem\" (SHAP 0.6943), which have historical emergency rates of 0.972 and 0.822. High-importance features include arrivalmode (Walk-in), triage_vital_hr, and cc_suicidal, with age 18.0. Recorded vitals WNL (HR 59, SpO\u2082 99%, SBP 141, DBP 77, RR 16, Temp 36.9). Prediction reflects protocol-based triage priority for safety, not a physiological emergency.\n\nRecommendation: Initiate mental-health risk assessment, ensure continuous safety observation, and repeat vitals.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "demo_physiology_p2",
+    "index": 12,
+    "use_case": "A",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.101,
+        "P3": 0.155,
+        "P2": 0.709,
+        "P1": 0.034
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "other"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "other",
+          "historical_emergency_rate": 0.29,
+          "n_historical": 32801
+        }
+      ],
+      "abnormal_vitals": [
+        "hr=137"
+      ],
+      "age": 90.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 1,
+        "n_surgeries": 1
+      },
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "triage_vital_hr",
+          "contribution": 0.9574
+        },
+        {
+          "feature": "age",
+          "contribution": 0.2181
+        },
+        {
+          "feature": "cc_alcoholintoxication",
+          "contribution": -0.0832
+        },
+        {
+          "feature": "triage_vital_sbp",
+          "contribution": 0.0721
+        },
+        {
+          "feature": "previousdispo",
+          "contribution": -0.0667
+        }
+      ],
+      "escalation_basis": "physiology",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 97,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 137,
+          "status": "high"
+        },
+        "rr": {
+          "value": 18,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.1,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [
+        "sbp",
+        "dbp"
+      ]
+    },
+    "output": "Based on the information recorded at triage, the model weighted the high HR of 137 and the patient's age of 90 as the primary drivers for the P2 prediction. Historically, patients presenting with the chief complaint of \"other\" are assigned an emergency-level acuity in 29% of 32,801 cases, though this prediction is qualified by unrecorded SBP and DBP.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  },
+  {
+    "id": "demo_physiology_p2",
+    "index": 12,
+    "use_case": "B",
+    "payload": {
+      "predicted_level": "P2",
+      "probabilities": {
+        "P4": 0.101,
+        "P3": 0.155,
+        "P2": 0.709,
+        "P1": 0.034
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "other"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "other",
+          "historical_emergency_rate": 0.29,
+          "n_historical": 32801
+        }
+      ],
+      "abnormal_vitals": [
+        "hr=137"
+      ],
+      "age": 90.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {
+        "n_edvisits": 1,
+        "n_surgeries": 1
+      },
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": [
+        {
+          "feature": "triage_vital_hr",
+          "contribution": 0.9574
+        },
+        {
+          "feature": "age",
+          "contribution": 0.2181
+        },
+        {
+          "feature": "cc_alcoholintoxication",
+          "contribution": -0.0832
+        },
+        {
+          "feature": "triage_vital_sbp",
+          "contribution": 0.0721
+        },
+        {
+          "feature": "previousdispo",
+          "contribution": -0.0667
+        }
+      ],
+      "escalation_basis": "physiology",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 97,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 137,
+          "status": "high"
+        },
+        "rr": {
+          "value": 18,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.1,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [
+        "sbp",
+        "dbp"
+      ]
+    },
+    "output": "Assessment: Based on information recorded at triage, model predicts P2 acuity. Acuity driven by physiology, specifically the recorded HR 137, which was the top positive contributor to the prediction. Model also heavily weighted pt age of 90.0. Chief complaint recorded as \"other\" (historical emergency rate 0.29). Other triage vitals: SpO\u2082 97%, RR 18, Temp 36.1. Arrival mode Car. Utilisation history shows 1 ED visit and 1 surgery. SBP and DBP not recorded.\nRecommendation: Obtain SBP and DBP, and repeat HR.\n\nThis describes the model's prediction of a triage assignment, not a clinical diagnosis.",
+    "guardrails_passed": true,
+    "flags": []
+  }
+]

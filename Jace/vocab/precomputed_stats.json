@@ -1,0 +1,837 @@
+{
+ "base_rates": {
+  "cc_abdominalcramping": {
+   "rate": 0.089,
+   "n": 405
+  },
+  "cc_abdominaldistention": {
+   "rate": 0.426,
+   "n": 432
+  },
+  "cc_abdominalpain": {
+   "rate": 0.151,
+   "n": 36887
+  },
+  "cc_abdominalpainpregnant": {
+   "rate": 0.333,
+   "n": 1397
+  },
+  "cc_abnormallab": {
+   "rate": 0.609,
+   "n": 2524
+  },
+  "cc_abscess": {
+   "rate": 0.026,
+   "n": 2393
+  },
+  "cc_addictionproblem": {
+   "rate": 0.551,
+   "n": 461
+  },
+  "cc_agitation": {
+   "rate": 0.606,
+   "n": 449
+  },
+  "cc_alcoholintoxication": {
+   "rate": 0.866,
+   "n": 10821
+  },
+  "cc_alcoholproblem": {
+   "rate": 0.792,
+   "n": 1539
+  },
+  "cc_allergicreaction": {
+   "rate": 0.357,
+   "n": 2239
+  },
+  "cc_alteredmentalstatus": {
+   "rate": 0.83,
+   "n": 5786
+  },
+  "cc_animalbite": {
+   "rate": 0.026,
+   "n": 1100
+  },
+  "cc_ankleinjury": {
+   "rate": 0.025,
+   "n": 1421
+  },
+  "cc_anklepain": {
+   "rate": 0.027,
+   "n": 2014
+  },
+  "cc_anxiety": {
+   "rate": 0.238,
+   "n": 1980
+  },
+  "cc_arminjury": {
+   "rate": 0.05,
+   "n": 519
+  },
+  "cc_armpain": {
+   "rate": 0.093,
+   "n": 2654
+  },
+  "cc_armswelling": {
+   "rate": 0.135,
+   "n": 495
+  },
+  "cc_assaultvictim": {
+   "rate": 0.294,
+   "n": 2159
+  },
+  "cc_asthma": {
+   "rate": 0.167,
+   "n": 1572
+  },
+  "cc_backpain": {
+   "rate": 0.064,
+   "n": 14011
+  },
+  "cc_bleeding/bruising": {
+   "rate": 0.308,
+   "n": 568
+  },
+  "cc_blurredvision": {
+   "rate": 0.327,
+   "n": 376
+  },
+  "cc_bodyfluidexposure": {
+   "rate": 0.739,
+   "n": 556
+  },
+  "cc_breastpain": {
+   "rate": 0.032,
+   "n": 348
+  },
+  "cc_breathingdifficulty": {
+   "rate": 0.57,
+   "n": 2219
+  },
+  "cc_breathingproblem": {
+   "rate": 0.431,
+   "n": 318
+  },
+  "cc_burn": {
+   "rate": 0.086,
+   "n": 452
+  },
+  "cc_cardiacarrest": {
+   "rate": 1.0,
+   "n": 326
+  },
+  "cc_cellulitis": {
+   "rate": 0.033,
+   "n": 150
+  },
+  "cc_chestpain": {
+   "rate": 0.53,
+   "n": 24130
+  },
+  "cc_chesttightness": {
+   "rate": 0.269,
+   "n": 748
+  },
+  "cc_chills": {
+   "rate": 0.145,
+   "n": 413
+  },
+  "cc_coldlikesymptoms": {
+   "rate": 0.037,
+   "n": 2186
+  },
+  "cc_confusion": {
+   "rate": 0.631,
+   "n": 520
+  },
+  "cc_conjunctivitis": {
+   "rate": 0.007,
+   "n": 293
+  },
+  "cc_constipation": {
+   "rate": 0.098,
+   "n": 1190
+  },
+  "cc_cough": {
+   "rate": 0.104,
+   "n": 8510
+  },
+  "cc_cyst": {
+   "rate": 0.009,
+   "n": 822
+  },
+  "cc_decreasedbloodsugar-symptomatic": {
+   "rate": 0.729,
+   "n": 808
+  },
+  "cc_dehydration": {
+   "rate": 0.266,
+   "n": 440
+  },
+  "cc_dentalpain": {
+   "rate": 0.013,
+   "n": 2569
+  },
+  "cc_depression": {
+   "rate": 0.704,
+   "n": 1262
+  },
+  "cc_detoxevaluation": {
+   "rate": 0.513,
+   "n": 844
+  },
+  "cc_diarrhea": {
+   "rate": 0.151,
+   "n": 2982
+  },
+  "cc_dizziness": {
+   "rate": 0.309,
+   "n": 8652
+  },
+  "cc_drug/alcoholassessment": {
+   "rate": 0.795,
+   "n": 816
+  },
+  "cc_drugproblem": {
+   "rate": 0.822,
+   "n": 1873
+  },
+  "cc_dyspnea": {
+   "rate": 0.637,
+   "n": 2113
+  },
+  "cc_dysuria": {
+   "rate": 0.05,
+   "n": 1150
+  },
+  "cc_earpain": {
+   "rate": 0.009,
+   "n": 2185
+  },
+  "cc_earproblem": {
+   "rate": 0.007,
+   "n": 297
+  },
+  "cc_edema": {
+   "rate": 0.358,
+   "n": 579
+  },
+  "cc_elbowpain": {
+   "rate": 0.029,
+   "n": 443
+  },
+  "cc_elevatedbloodsugar-nosymptoms": {
+   "rate": 0.401,
+   "n": 934
+  },
+  "cc_elevatedbloodsugar-symptomatic": {
+   "rate": 0.626,
+   "n": 1132
+  },
+  "cc_emesis": {
+   "rate": 0.202,
+   "n": 7804
+  },
+  "cc_epigastricpain": {
+   "rate": 0.214,
+   "n": 618
+  },
+  "cc_epistaxis": {
+   "rate": 0.23,
+   "n": 1361
+  },
+  "cc_exposuretostd": {
+   "rate": 0.013,
+   "n": 224
+  },
+  "cc_extremitylaceration": {
+   "rate": 0.036,
+   "n": 1448
+  },
+  "cc_extremityweakness": {
+   "rate": 0.394,
+   "n": 558
+  },
+  "cc_eyeinjury": {
+   "rate": 0.169,
+   "n": 449
+  },
+  "cc_eyepain": {
+   "rate": 0.059,
+   "n": 1198
+  },
+  "cc_eyeproblem": {
+   "rate": 0.115,
+   "n": 1703
+  },
+  "cc_eyeredness": {
+   "rate": 0.012,
+   "n": 481
+  },
+  "cc_facialinjury": {
+   "rate": 0.149,
+   "n": 437
+  },
+  "cc_faciallaceration": {
+   "rate": 0.078,
+   "n": 472
+  },
+  "cc_facialpain": {
+   "rate": 0.049,
+   "n": 618
+  },
+  "cc_facialswelling": {
+   "rate": 0.13,
+   "n": 1100
+  },
+  "cc_fall": {
+   "rate": 0.286,
+   "n": 12875
+  },
+  "cc_fall>65": {
+   "rate": 0.342,
+   "n": 4990
+  },
+  "cc_fatigue": {
+   "rate": 0.359,
+   "n": 2708
+  },
+  "cc_femaleguproblem": {
+   "rate": 0.077,
+   "n": 2183
+  },
+  "cc_fever": {
+   "rate": 0.217,
+   "n": 327
+  },
+  "cc_fever-75yearsorolder": {
+   "rate": 0.637,
+   "n": 891
+  },
+  "cc_fever-9weeksto74years": {
+   "rate": 0.342,
+   "n": 4154
+  },
+  "cc_feverimmunocompromised": {
+   "rate": 0.867,
+   "n": 414
+  },
+  "cc_fingerinjury": {
+   "rate": 0.021,
+   "n": 1557
+  },
+  "cc_fingerpain": {
+   "rate": 0.011,
+   "n": 785
+  },
+  "cc_fingerswelling": {
+   "rate": 0.005,
+   "n": 383
+  },
+  "cc_flankpain": {
+   "rate": 0.108,
+   "n": 6101
+  },
+  "cc_follow-upcellulitis": {
+   "rate": 0.073,
+   "n": 659
+  },
+  "cc_footinjury": {
+   "rate": 0.017,
+   "n": 1014
+  },
+  "cc_footpain": {
+   "rate": 0.037,
+   "n": 3329
+  },
+  "cc_footswelling": {
+   "rate": 0.092,
+   "n": 617
+  },
+  "cc_foreignbodyineye": {
+   "rate": 0.033,
+   "n": 272
+  },
+  "cc_fulltrauma": {
+   "rate": 0.998,
+   "n": 440
+  },
+  "cc_generalizedbodyaches": {
+   "rate": 0.075,
+   "n": 1577
+  },
+  "cc_gibleeding": {
+   "rate": 0.733,
+   "n": 1851
+  },
+  "cc_giproblem": {
+   "rate": 0.314,
+   "n": 1374
+  },
+  "cc_groinpain": {
+   "rate": 0.097,
+   "n": 733
+  },
+  "cc_hallucinations": {
+   "rate": 0.849,
+   "n": 551
+  },
+  "cc_handinjury": {
+   "rate": 0.042,
+   "n": 1332
+  },
+  "cc_handpain": {
+   "rate": 0.029,
+   "n": 1796
+  },
+  "cc_headache": {
+   "rate": 0.106,
+   "n": 613
+  },
+  "cc_headache-newonsetornewsymptoms": {
+   "rate": 0.247,
+   "n": 5928
+  },
+  "cc_headache-recurrentorknowndxmigraines": {
+   "rate": 0.106,
+   "n": 1592
+  },
+  "cc_headachere-evaluation": {
+   "rate": 0.214,
+   "n": 1707
+  },
+  "cc_headinjury": {
+   "rate": 0.173,
+   "n": 1680
+  },
+  "cc_headlaceration": {
+   "rate": 0.123,
+   "n": 529
+  },
+  "cc_hematuria": {
+   "rate": 0.206,
+   "n": 1115
+  },
+  "cc_hemoptysis": {
+   "rate": 0.443,
+   "n": 325
+  },
+  "cc_hippain": {
+   "rate": 0.113,
+   "n": 1997
+  },
+  "cc_homicidal": {
+   "rate": 0.956,
+   "n": 273
+  },
+  "cc_hyperglycemia": {
+   "rate": 0.338,
+   "n": 71
+  },
+  "cc_hypertension": {
+   "rate": 0.445,
+   "n": 2549
+  },
+  "cc_hypotension": {
+   "rate": 0.813,
+   "n": 1056
+  },
+  "cc_influenza": {
+   "rate": 0.088,
+   "n": 273
+  },
+  "cc_ingestion": {
+   "rate": 0.918,
+   "n": 61
+  },
+  "cc_insectbite": {
+   "rate": 0.012,
+   "n": 859
+  },
+  "cc_irregularheartbeat": {
+   "rate": 0.706,
+   "n": 483
+  },
+  "cc_jawpain": {
+   "rate": 0.122,
+   "n": 450
+  },
+  "cc_jointswelling": {
+   "rate": 0.032,
+   "n": 313
+  },
+  "cc_kneeinjury": {
+   "rate": 0.022,
+   "n": 733
+  },
+  "cc_kneepain": {
+   "rate": 0.026,
+   "n": 4335
+  },
+  "cc_laceration": {
+   "rate": 0.038,
+   "n": 2602
+  },
+  "cc_leginjury": {
+   "rate": 0.061,
+   "n": 591
+  },
+  "cc_legpain": {
+   "rate": 0.083,
+   "n": 6777
+  },
+  "cc_legswelling": {
+   "rate": 0.164,
+   "n": 3002
+  },
+  "cc_lethargy": {
+   "rate": 0.715,
+   "n": 840
+  },
+  "cc_lossofconsciousness": {
+   "rate": 0.545,
+   "n": 737
+  },
+  "cc_maleguproblem": {
+   "rate": 0.16,
+   "n": 1795
+  },
+  "cc_mass": {
+   "rate": 0.054,
+   "n": 276
+  },
+  "cc_medicalproblem": {
+   "rate": 0.282,
+   "n": 3852
+  },
+  "cc_medicalscreening": {
+   "rate": 0.163,
+   "n": 876
+  },
+  "cc_medicationproblem": {
+   "rate": 0.135,
+   "n": 571
+  },
+  "cc_medicationrefill": {
+   "rate": 0.049,
+   "n": 885
+  },
+  "cc_migraine": {
+   "rate": 0.107,
+   "n": 1143
+  },
+  "cc_modifiedtrauma": {
+   "rate": 0.987,
+   "n": 891
+  },
+  "cc_motorcyclecrash": {
+   "rate": 0.491,
+   "n": 479
+  },
+  "cc_motorvehiclecrash": {
+   "rate": 0.11,
+   "n": 10044
+  },
+  "cc_multiplefalls": {
+   "rate": 0.393,
+   "n": 483
+  },
+  "cc_nasalcongestion": {
+   "rate": 0.022,
+   "n": 741
+  },
+  "cc_nausea": {
+   "rate": 0.188,
+   "n": 3549
+  },
+  "cc_nearsyncope": {
+   "rate": 0.471,
+   "n": 1072
+  },
+  "cc_neckpain": {
+   "rate": 0.083,
+   "n": 2724
+  },
+  "cc_neurologicproblem": {
+   "rate": 0.797,
+   "n": 2497
+  },
+  "cc_numbness": {
+   "rate": 0.299,
+   "n": 1102
+  },
+  "cc_oralswelling": {
+   "rate": 0.261,
+   "n": 394
+  },
+  "cc_otalgia": {
+   "rate": 0.003,
+   "n": 303
+  },
+  "cc_other": {
+   "rate": 0.29,
+   "n": 32801
+  },
+  "cc_overdose-accidental": {
+   "rate": 0.804,
+   "n": 448
+  },
+  "cc_overdose-intentional": {
+   "rate": 0.977,
+   "n": 394
+  },
+  "cc_pain": {
+   "rate": 0.09,
+   "n": 300
+  },
+  "cc_palpitations": {
+   "rate": 0.451,
+   "n": 2352
+  },
+  "cc_panicattack": {
+   "rate": 0.248,
+   "n": 496
+  },
+  "cc_pelvicpain": {
+   "rate": 0.051,
+   "n": 454
+  },
+  "cc_poisoning": {
+   "rate": 0.908,
+   "n": 759
+  },
+  "cc_post-opproblem": {
+   "rate": 0.257,
+   "n": 674
+  },
+  "cc_psychiatricevaluation": {
+   "rate": 0.855,
+   "n": 4899
+  },
+  "cc_psychoticsymptoms": {
+   "rate": 0.939,
+   "n": 328
+  },
+  "cc_rapidheartrate": {
+   "rate": 0.683,
+   "n": 511
+  },
+  "cc_rash": {
+   "rate": 0.027,
+   "n": 3987
+  },
+  "cc_rectalbleeding": {
+   "rate": 0.302,
+   "n": 162
+  },
+  "cc_rectalpain": {
+   "rate": 0.074,
+   "n": 526
+  },
+  "cc_respiratorydistress": {
+   "rate": 0.915,
+   "n": 351
+  },
+  "cc_ribinjury": {
+   "rate": 0.059,
+   "n": 303
+  },
+  "cc_ribpain": {
+   "rate": 0.075,
+   "n": 724
+  },
+  "cc_seizure-newonset": {
+   "rate": 0.805,
+   "n": 594
+  },
+  "cc_seizure-priorhxof": {
+   "rate": 0.479,
+   "n": 2215
+  },
+  "cc_seizures": {
+   "rate": 0.442,
+   "n": 113
+  },
+  "cc_shortnessofbreath": {
+   "rate": 0.573,
+   "n": 16612
+  },
+  "cc_shoulderinjury": {
+   "rate": 0.113,
+   "n": 759
+  },
+  "cc_shoulderpain": {
+   "rate": 0.065,
+   "n": 2859
+  },
+  "cc_sicklecellpain": {
+   "rate": 0.828,
+   "n": 777
+  },
+  "cc_sinusproblem": {
+   "rate": 0.008,
+   "n": 369
+  },
+  "cc_skinirritation": {
+   "rate": 0.01,
+   "n": 699
+  },
+  "cc_skinproblem": {
+   "rate": 0.034,
+   "n": 873
+  },
+  "cc_sorethroat": {
+   "rate": 0.021,
+   "n": 5082
+  },
+  "cc_stdcheck": {
+   "rate": 0.01,
+   "n": 600
+  },
+  "cc_strokealert": {
+   "rate": 0.997,
+   "n": 1463
+  },
+  "cc_suicidal": {
+   "rate": 0.972,
+   "n": 5585
+  },
+  "cc_suture/stapleremoval": {
+   "rate": 0.002,
+   "n": 1162
+  },
+  "cc_swallowedforeignbody": {
+   "rate": 0.467,
+   "n": 242
+  },
+  "cc_syncope": {
+   "rate": 0.638,
+   "n": 3423
+  },
+  "cc_tachycardia": {
+   "rate": 0.757,
+   "n": 748
+  },
+  "cc_testiclepain": {
+   "rate": 0.294,
+   "n": 527
+  },
+  "cc_thumbinjury": {
+   "rate": 0.025,
+   "n": 314
+  },
+  "cc_tickremoval": {
+   "rate": 0.004,
+   "n": 278
+  },
+  "cc_toeinjury": {
+   "rate": 0.002,
+   "n": 423
+  },
+  "cc_toepain": {
+   "rate": 0.018,
+   "n": 840
+  },
+  "cc_trauma": {
+   "rate": 0.745,
+   "n": 329
+  },
+  "cc_unresponsive": {
+   "rate": 0.967,
+   "n": 668
+  },
+  "cc_uri": {
+   "rate": 0.015,
+   "n": 1211
+  },
+  "cc_urinaryfrequency": {
+   "rate": 0.07,
+   "n": 359
+  },
+  "cc_urinaryretention": {
+   "rate": 0.26,
+   "n": 728
+  },
+  "cc_urinarytractinfection": {
+   "rate": 0.075,
+   "n": 1618
+  },
+  "cc_vaginalbleeding": {
+   "rate": 0.242,
+   "n": 2762
+  },
+  "cc_vaginaldischarge": {
+   "rate": 0.006,
+   "n": 485
+  },
+  "cc_vaginalpain": {
+   "rate": 0.027,
+   "n": 259
+  },
+  "cc_weakness": {
+   "rate": 0.511,
+   "n": 4937
+  },
+  "cc_wheezing": {
+   "rate": 0.151,
+   "n": 384
+  },
+  "cc_withdrawal-alcohol": {
+   "rate": 0.81,
+   "n": 443
+  },
+  "cc_woundcheck": {
+   "rate": 0.045,
+   "n": 1579
+  },
+  "cc_woundinfection": {
+   "rate": 0.112,
+   "n": 1112
+  },
+  "cc_woundre-evaluation": {
+   "rate": 0.054,
+   "n": 478
+  },
+  "cc_wristinjury": {
+   "rate": 0.013,
+   "n": 523
+  },
+  "cc_wristpain": {
+   "rate": 0.023,
+   "n": 945
+  }
+ },
+ "top_features": [
+  "arrivalmode",
+  "cc_abdominalpain",
+  "cc_alcoholintoxication",
+  "cc_alteredmentalstatus",
+  "cc_backpain",
+  "cc_chestpain",
+  "cc_flankpain",
+  "cc_headache-newonsetornewsymptoms",
+  "cc_neurologicproblem",
+  "cc_psychiatricevaluation",
+  "cc_respiratorydistress",
+  "cc_shortnessofbreath",
+  "cc_strokealert",
+  "cc_suicidal",
+  "triage_vital_hr"
+ ],
+ "provenance": {
+  "source_artefacts": [
+   "X_train.npy",
+   "X_test.npy",
+   "y_train.npy",
+   "y_test.npy",
+   "ctrse_p1p4_model.pkl",
+   "feature_cols.pkl"
+  ],
+  "n_train_rows": 446421,
+  "n_test_rows": 111606,
+  "random_state": 42,
+  "sklearn_version": "1.5.1",
+  "computed_utc": "2026-07-20T19:36:04.026576+00:00",
+  "note": "Derived by precompute_stats.py from the NB1/NB2 artefacts so ctrse_core.init() can run without X_*/y_*.npy. See init() for the logic."
+ }
+}

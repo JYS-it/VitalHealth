@@ -1,0 +1,8 @@
+{
+  "thr_p1": 0.2137601155374617,
+  "model_name": "gemini-3.5-flash",
+  "n_patients": 245,
+  "dep_name_present": false,
+  "gemini_available": true,
+  "feature_count": 552
+}

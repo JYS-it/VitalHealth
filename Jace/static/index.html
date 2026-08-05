@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CTRSE — triage acuity</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=2">
+  <script defer src="/app.js?v=2"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body x-data="ctrseApp()" x-init="init()">
+
+  <!-- ============================ HEADER ============================ -->
+  <header class="header">
+    <div class="header__wrap">
+      <span class="brand">CTRSE <span class="sep">&#9656;</span> triage acuity</span>
+      <span class="scope-badge">decision support &middot; predicts a triage assignment, not a diagnosis</span>
+      <div class="segmented mode-switch" role="group" aria-label="Surface">
+        <button type="button" :aria-pressed="mode==='browse'" @click="setMode('browse')">Browse patients</button>
+        <button type="button" :aria-pressed="mode==='intake'" @click="setMode('intake')">Triage intake</button>
+      </div>
+      <div class="header__meta" x-show="meta">
+        <span><span class="k">model</span> <span class="mono" x-text="meta?.model_name"></span></span>
+        <span><span class="k">thr&nbsp;P1</span> <span class="mono" x-text="meta ? meta.thr_p1.toFixed(4) : ''"></span></span>
+        <span><span class="k">features</span> <span class="mono" x-text="meta?.feature_count"></span></span>
+        <span>
+          <span class="dot" :class="meta?.gemini_available ? 'dot--live' : 'dot--offline'"></span>
+          <span x-text="meta?.gemini_available ? 'live model available' : 'offline session'"></span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app">
+    <div class="layout" :class="{ 'layout--intake': mode === 'intake' }">
+
+      <!-- ============================ SIDEBAR ============================ -->
+      <aside class="sidebar card" aria-label="Patient selector" x-show="mode === 'browse'">
+        <!-- compare controls -->
+        <div class="sidebar__group">
+          <div class="compare-controls">
+            <button class="filter-btn" type="button" aria-label="Toggle compare mode"
+                    :aria-pressed="compareMode" @click="toggleCompare()">
+              <span x-text="compareMode ? 'Compare · on' : 'Compare'"></span>
+            </button>
+          </div>
+          <div class="slot-hint" x-show="compareMode" x-cloak
+               x-text="`Next pick fills column ${activeSlot + 1}`"></div>
+        </div>
+
+        <div class="sidebar__group">
+          <div class="eyebrow mb2">Level filter</div>
+          <div class="filter-row">
+            <button class="filter-btn" type="button" :aria-pressed="levelFilter==='all'" @click="levelFilter='all'">All</button>
+            <template x-for="lvl in levels" :key="lvl">
+              <button class="filter-btn" type="button" :aria-pressed="levelFilter===lvl" @click="levelFilter=lvl" x-text="lvl"></button>
+            </template>
+          </div>
+        </div>
+
+        <div class="sidebar__group">
+          <div class="eyebrow mb2 row-between">
+            <span>Patients</span>
+            <span class="count" x-text="filteredPatients.length + ' shown'"></span>
+          </div>
+          <ul class="plist">
+            <template x-for="p in filteredPatients" :key="p.id">
+              <li>
+                <button class="plist__item" type="button"
+                        :aria-current="isSelectedAnywhere(p.id)"
+                        @click="selectPatient(p.id)">
+                  <span class="plist__lvl" :style="`background:${p.level_colour}`"></span>
+                  <span class="plist__code" x-text="p.predicted_level"></span>
+                  <span class="plist__summary" x-text="p.summary"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- ============================ INTAKE (§5 two-zone -> confirm -> result) ============================ -->
+      <div class="intake-col" x-show="mode === 'intake'" x-cloak>
+
+        <!-- ---------------- STAGE 1: two-zone input ---------------- -->
+        <section class="card panel" x-show="intake.stage === 'input'" aria-label="Triage intake">
+          <div class="panel__title eyebrow"><span>Triage intake</span></div>
+          <div class="stack">
+
+            <!-- NOTE zone — the only thing the LLM ever sees -->
+            <div class="izone">
+              <div class="eyebrow mb2 row-between">
+                <span>Note</span>
+                <span class="count mono" x-text="intake.note.length + ' / 5000'"></span>
+              </div>
+              <textarea class="note-input" rows="4" maxlength="5000"
+                        aria-label="Triage note"
+                        placeholder="Type the triage note — age, complaint, arrival, history&hellip;"
+                        x-model="intake.note"></textarea>
+              <div class="seed-row">
+                <span class="eyebrow">Demo seeds</span>
+                <template x-for="(s, i) in seeds" :key="s.label">
+                  <button class="arche-btn" type="button" x-text="s.label" @click="seed(i)"></button>
+                </template>
+              </div>
+            </div>
+
+            <!-- VITALS zone — typed directly; never sent to the language model (§5) -->
+            <div class="izone">
+              <div class="eyebrow mb2">Vitals &mdash; typed directly; not extracted from the note</div>
+              <label class="ack"><input type="checkbox" x-model="intake.noVitals"> No vitals recorded at triage</label>
+              <div class="vit-grid" x-show="!intake.noVitals">
+                <label class="vfield"><span class="vfield__lbl">HR</span>
+                  <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.hr" aria-label="Heart rate"></label>
+                <label class="vfield"><span class="vfield__lbl">BP</span>
+                  <span class="vfield__pair">
+                    <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.sbp" aria-label="Systolic blood pressure">
+                    <span class="vfield__sep">/</span>
+                    <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.dbp" aria-label="Diastolic blood pressure">
+                  </span></label>
+                <label class="vfield"><span class="vfield__lbl">SpO&#8322;</span>
+                  <span class="vfield__pair">
+                    <input class="finput finput--num" type="number" min="0" max="100" x-model="intake.vitals.o2" aria-label="Oxygen saturation">
+                    <select class="finput" x-model="intake.vitals.device" aria-label="Oxygen device">
+                      <option value="">device&hellip;</option><option value="RA">RA</option><option value="O2">O&#8322;</option>
+                    </select>
+                  </span></label>
+                <label class="vfield"><span class="vfield__lbl">RR</span>
+                  <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.rr" aria-label="Respiratory rate"></label>
+                <label class="vfield"><span class="vfield__lbl">Temp</span>
+                  <span class="vfield__pair">
+                    <input class="finput finput--num" type="number" step="0.1" x-model="intake.vitals.temp" aria-label="Temperature">
+                    <select class="finput" x-model="intake.vitals.temp_unit" aria-label="Temperature unit">
+                      <option value="C">&deg;C</option><option value="F">&deg;F</option>
+                    </select>
+                  </span></label>
+              </div>
+            </div>
+
+            <div class="msg-warn" x-show="intake.extractError" x-cloak x-text="intake.extractError"></div>
+            <div>
+              <button class="btn-generate" type="button" aria-label="Extract fields"
+                      :disabled="!intake.note.trim() || intake.extracting"
+                      @click="extract()" x-text="intake.extracting ? 'Extracting…' : 'Extract fields →'"></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------------- STAGE 2: confirmation ---------------- -->
+        <section class="card panel" x-show="intake.stage === 'confirm'" x-cloak aria-label="Confirm extracted fields">
+          <div class="panel__title eyebrow row-between">
+            <span>Confirm extracted fields</span>
+            <span class="source" x-show="intake.extraction" x-cloak>
+              <span class="dot" :class="extractSourceMeta().dot"></span>
+              <span x-text="extractSourceMeta().label"></span>
+            </span>
+            <button class="btn-ghost" type="button" @click="backToInput()">&larr; Edit note / vitals</button>
+          </div>
+          <template x-if="intake.fields">
+          <div class="stack">
+
+            <!-- the note stays visible; hover a field to light up its source phrase -->
+            <div class="note-view" aria-label="Source note" x-html="highlightedNote()"></div>
+            <p class="footnote">Every field below quotes a phrase from this note &mdash; hover a field to see its source. A field with no quotation cannot exist.</p>
+
+            <!-- refusal (paediatric / OOD / multi-patient): no confirm action offered -->
+            <div class="refusal" x-show="intake.refusal" x-cloak>
+              <span>&#9888;</span>
+              <span><b>Model refused.</b> <span x-text="intake.refusal"></span></span>
+            </div>
+
+            <!-- guardrail notices -->
+            <div class="gnotices" x-show="intake.extraction?.guardrail_flags?.length" x-cloak>
+              <div class="eyebrow mb2">Guardrail notices &mdash; what the validator did</div>
+              <ul class="gnotice-list">
+                <template x-for="f in (intake.extraction?.guardrail_flags || [])" :key="f">
+                  <li x-text="friendlyFlag(f)"></li>
+                </template>
+              </ul>
+              <label class="ack ack--gate"><input type="checkbox" x-model="intake.flagsAck"> I have reviewed these notices</label>
+
+              <!-- §14 beat 3: make the code-level backstop visible. Live, the LLM usually
+                   obeys rule 10 and never emits the injected token — so this runs the REAL
+                   guardrail on a planted extraction where it DID. -->
+              <div class="toolbar backstop-bar"
+                   x-show="(intake.extraction?.guardrail_flags || []).some(f => f.startsWith('injection'))" x-cloak>
+                <button class="btn-ghost" type="button" @click="runExtractBackstop()">Show guardrail backstop</button>
+                <span class="synthetic-note" x-show="intake.backstop" x-cloak
+                      x-text="intake.backstop?.synthetic"></span>
+              </div>
+              <div class="synthetic-candidate mono" x-show="intake.backstop" x-cloak
+                   x-text="backstopSummary()"></div>
+            </div>
+
+            <!-- field rows -->
+            <div class="frows">
+              <!-- AGE -->
+              <div class="frow"
+                   @mouseenter="intake.hoverSpan = intake.fields?.age.span" @mouseleave="intake.hoverSpan = null">
+                <div class="frow__label eyebrow">Age</div>
+                <div class="frow__control">
+                  <input class="finput finput--num" type="number" min="0" max="130"
+                         x-model="intake.fields.age.value" aria-label="Age">
+                  <span class="not-stated" x-show="intake.fields?.age.value === null || intake.fields?.age.value === ''">not stated</span>
+                </div>
+                <div class="frow__src mono" x-show="intake.fields?.age.span" x-text="'&ldquo;' + intake.fields?.age.span + '&rdquo;'"></div>
+              </div>
+
+              <!-- SEX -->
+              <div class="frow"
+                   @mouseenter="intake.hoverSpan = intake.fields?.sex.span" @mouseleave="intake.hoverSpan = null">
+                <div class="frow__label eyebrow">Sex</div>
+                <div class="frow__control">
+                  <select class="finput" x-model="intake.fields.sex.value" aria-label="Sex">
+                    <option value="">&mdash; not stated &mdash;</option>
+                    <option value="Male">Male</option><option value="Female">Female</option>
+                  </select>
+                  <span class="not-stated" x-show="!intake.fields?.sex.value">not stated</span>
+                </div>
+                <div class="frow__src mono" x-show="intake.fields?.sex.span" x-text="'&ldquo;' + intake.fields?.sex.span + '&rdquo;'"></div>
+              </div>
+
+              <!-- ARRIVAL MODE -->
+              <div class="frow"
+                   @mouseenter="intake.hoverSpan = intake.fields?.arrival.span" @mouseleave="intake.hoverSpan = null">
+                <div class="frow__label eyebrow">Arrival</div>
+                <div class="frow__control">
+                  <select class="finput" x-model="intake.fields.arrival.value" aria-label="Arrival mode"
+                          x-init="$nextTick(() => $el.value = intake.fields?.arrival.value ?? '')"
+                          @change="intake.fields.arrival.ack = true">
+                    <option value="">&mdash; not stated &mdash;</option>
+                    <template x-for="m in (vocab?.arrival_modes || [])" :key="m">
+                      <option :value="m" x-text="m"></option>
+                    </template>
+                  </select>
+                  <span class="not-stated" x-show="!intake.fields?.arrival.value">not stated</span>
+                </div>
+                <div class="frow__src mono" x-show="intake.fields?.arrival.span" x-text="'&ldquo;' + intake.fields?.arrival.span + '&rdquo;'"></div>
+                <div class="flag" x-show="intake.fields?.arrival.flagged" x-cloak>
+                  <span class="flag__mark">&#9873; model guessed</span>
+                  <span x-show="intake.fields?.arrival.reason" x-text="intake.fields?.arrival.reason"></span>
+                  <span x-show="intake.fields?.arrival.alternates.length"
+                        x-text="'alternates: ' + intake.fields?.arrival.alternates.join(', ')"></span>
+                  <label class="ack"><input type="checkbox" x-model="intake.fields.arrival.ack"> acknowledge</label>
+                </div>
+              </div>
+
+              <!-- COMPLAINTS (max 2) -->
+              <template x-for="(c, i) in (intake.fields?.complaints || [])" :key="i">
+                <div class="frow"
+                     @mouseenter="intake.hoverSpan = c.span" @mouseleave="intake.hoverSpan = null">
+                  <div class="frow__label eyebrow" x-text="'Complaint ' + (i + 1)"></div>
+                  <div class="frow__control">
+                    <select class="finput" x-model="c.token" :aria-label="'Complaint ' + (i + 1)"
+                            x-init="$nextTick(() => $el.value = c.token || '')"
+                            @change="c.ack = true; c.evidence = null; c.span = null; c.fallback = false">
+                      <option value="">&mdash; not stated &mdash;</option>
+                      <template x-for="t in (vocab?.complaints || [])" :key="t">
+                        <option :value="t" x-text="t"></option>
+                      </template>
+                    </select>
+                    <span class="not-stated" x-show="!c.token">not stated</span>
+                    <span class="chip chip--rf" x-show="(intake.extraction?.red_flags || []).includes(c.token)"><span class="mono">red-flag token</span></span>
+                  </div>
+                  <div class="frow__src mono" x-show="c.span" x-text="'&ldquo;' + c.span + '&rdquo;'"></div>
+                  <div class="frow__src" x-show="c.fallback" x-cloak><span class="not-stated">vocabulary fallback &mdash; no direct quotation</span></div>
+                  <div class="flag" x-show="c.flagged" x-cloak>
+                    <span class="flag__mark">&#9873; model guessed</span>
+                    <span x-show="c.alternates.length" x-text="'alternates: ' + c.alternates.join(', ')"></span>
+                    <label class="ack"><input type="checkbox" x-model="c.ack"> acknowledge</label>
+                  </div>
+                </div>
+              </template>
+
+              <!-- ONSET (display only) -->
+              <div class="frow" x-show="intake.extraction?.onset?.length" x-cloak>
+                <div class="frow__label eyebrow">Onset</div>
+                <div class="frow__control frow__control--ro">
+                  <template x-for="o in (intake.extraction?.onset || [])" :key="o.complaint + o.span">
+                    <span class="chip" @mouseenter="intake.hoverSpan = o.span" @mouseleave="intake.hoverSpan = null">
+                      <span class="mono" x-text="o.complaint"></span>&nbsp;<span x-text="o.value"></span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+
+              <!-- HISTORY + MEDICATIONS (raw phrases; §1.3 not coded) -->
+              <div class="frow" x-show="intake.extraction?.history_mentions?.length" x-cloak>
+                <div class="frow__label eyebrow">History</div>
+                <div class="frow__control frow__control--ro">
+                  <template x-for="h in (intake.extraction?.history_mentions || [])" :key="h.span">
+                    <span class="chip" @mouseenter="intake.hoverSpan = h.span" @mouseleave="intake.hoverSpan = null">
+                      <span x-text="h.text"></span>
+                    </span>
+                  </template>
+                  <span class="footnote">displayed only &mdash; never auto-coded into the model&rsquo;s history flags</span>
+                </div>
+              </div>
+              <div class="frow" x-show="intake.extraction?.medications?.length" x-cloak>
+                <div class="frow__label eyebrow">Medications</div>
+                <div class="frow__control frow__control--ro">
+                  <template x-for="m in (intake.extraction?.medications || [])" :key="m.span">
+                    <span class="chip" @mouseenter="intake.hoverSpan = m.span" @mouseleave="intake.hoverSpan = null">
+                      <span x-text="m.text"></span>
+                    </span>
+                  </template>
+                  <span class="footnote">displayed only &mdash; never auto-coded into the model&rsquo;s medication flags</span>
+                </div>
+              </div>
+
+              <!-- ALLERGIES (display/handover-only; editable; NKDA = recorded absence) -->
+              <div class="frow">
+                <div class="frow__label eyebrow">Allergies</div>
+                <div class="frow__control">
+                  <template x-for="(a, i) in (intake.fields?.allergies || [])" :key="i">
+                    <input class="finput" type="text" :aria-label="'Allergy ' + (i + 1)"
+                           placeholder="add&hellip;" x-model="a.value"
+                           @mouseenter="intake.hoverSpan = a.span" @mouseleave="intake.hoverSpan = null">
+                  </template>
+                  <span class="not-stated"
+                        x-show="!(intake.fields?.allergies || []).some(a => a.value && String(a.value).trim())">not stated</span>
+                </div>
+                <div class="frow__src mono"
+                     x-show="(intake.fields?.allergies || []).some(a => a.span)"
+                     x-text="(intake.fields?.allergies || []).filter(a => a.span).map(a => '&ldquo;' + a.span + '&rdquo;').join(' ')"></div>
+                <div class="frow__src" x-show="intake.fields"><span class="footnote">handover display only &mdash; not a model input</span></div>
+              </div>
+
+              <!-- VITALS summary (typed source of truth from stage 1) -->
+              <div class="frow">
+                <div class="frow__label eyebrow">Vitals</div>
+                <div class="frow__control frow__control--ro">
+                  <span class="mono" x-text="vitalsSummary()"></span>
+                  <button class="btn-ghost" type="button" @click="backToInput()">edit</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg-warn" x-show="intake.predictError" x-cloak x-text="intake.predictError"></div>
+
+            <!-- gated confirm — absent entirely when the model refused -->
+            <div x-show="!intake.refusal" x-cloak>
+              <button class="btn-generate" type="button" aria-label="Confirm and run triage model"
+                      :disabled="!allAcked || intake.predicting"
+                      @click="confirmRun()"
+                      x-text="intake.predicting ? 'Running model…' : 'Confirm & run triage model →'"></button>
+              <span class="footnote ml2" x-show="!allAcked">acknowledge every &#9873; flag to enable</span>
+            </div>
+          </div>
+          </template>
+        </section>
+
+        <!-- ---------------- STAGE 3: result toolbar ---------------- -->
+        <div x-show="intake.stage === 'result'" x-cloak>
+          <div class="toolbar intake-result-bar">
+            <button class="btn-ghost" type="button" @click="resetIntake()">New intake</button>
+            <span class="footnote" x-show="intake.logCount" x-cloak
+                  x-text="'field overrides logged this session: ' + intake.logCount"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================ MAIN (1 or 2 columns) ============================ -->
+      <main class="main" :class="{ compare: compareMode }"
+            x-show="mode === 'browse' || intake.stage === 'result'">
+        <template x-for="(col, ci) in columns" :key="ci">
+          <div class="column">
+
+            <!-- ---------------- MODEL PANEL ---------------- -->
+            <section class="card panel" aria-label="Model assessment">
+              <div class="panel__title eyebrow">
+                <span>Model assessment</span>
+                <span class="col-tag" x-show="compareMode" x-text="`col ${ci + 1}`"></span>
+              </div>
+
+              <div class="empty-state" x-show="!col.detail && !col.loadingDetail" x-cloak>
+                No patient selected &mdash; choose one from the list to see the model&rsquo;s assessment.
+              </div>
+              <div class="empty-state" x-show="col.loadingDetail" x-cloak>Loading the model&rsquo;s assessment&hellip;</div>
+
+              <template x-if="col.detail">
+              <div class="stack">
+                <!-- SIGNATURE: badge + basis pill + distribution bar (§4.3 / §3.1) -->
+                <div>
+                  <span class="badge" x-text="`${col.detail?.predicted_level} · ${col.detail?.level_label}`"
+                        :style="`background:${col.detail?.level_colour}`"></span>
+
+                  <div class="basis-row">
+                    <span class="basis-pill" x-text="basisText(col.detail)"></span>
+                    <span class="basis-pill__ts" x-show="col.detail?.threshold_sensitive" x-cloak>threshold-sensitive</span>
+                  </div>
+
+                  <div class="dist">
+                    <div class="dist__bar">
+                      <template x-for="lvl in levels" :key="lvl">
+                        <div class="dist__seg"
+                             :class="{ 'dist__seg--pred': isPredicted(col.detail, lvl) }"
+                             :style="`width:${barWidth(col.detail.probabilities[lvl])}; background:${levelColour(lvl)}`"></div>
+                      </template>
+                      <div class="dist__tick" :style="`left:${tickPos()}`" title="P1 alert threshold"></div>
+                    </div>
+                    <div class="dist__read mono">
+                      <template x-for="lvl in levels" :key="lvl">
+                        <span><b x-text="lvl"></b> <span x-text="col.detail.probabilities[lvl].toFixed(3)"></span></span>
+                      </template>
+                    </div>
+                    <div class="dist__note" x-text="col.detail?.threshold_context"></div>
+                  </div>
+                </div>
+
+                <!-- Confidence -->
+                <div>
+                  <div class="eyebrow">Model confidence</div>
+                  <div class="conf__val" :class="confCueClass(col.detail?.confidence_word)" x-text="col.detail?.confidence_word"></div>
+                </div>
+
+                <!-- Red-flag banner -->
+                <div class="redflag" x-show="col.detail?.red_flag_triggered" x-cloak>
+                  <span>&#9888;</span>
+                  <span>Red-flag override &mdash; <span class="mono" x-text="col.detail?.red_flag_complaint"></span> floored to P1</span>
+                </div>
+
+                <!-- Chief complaints -->
+                <div>
+                  <div class="eyebrow mb2">Active chief complaints</div>
+                  <div class="chips">
+                    <template x-for="c in col.detail.active_chief_complaints" :key="c">
+                      <span class="chip" :class="{ 'chip--rf': c === col.detail.red_flag_complaint }"><span class="mono" x-text="c"></span></span>
+                    </template>
+                    <span class="empty-inline" x-show="col.detail.active_chief_complaints.length === 0">none recorded</span>
+                  </div>
+                </div>
+
+                <!-- Base rates -->
+                <div x-show="col.detail.complaint_base_rates.length">
+                  <div class="eyebrow mb2">Historical base rates</div>
+                  <div class="chips">
+                    <template x-for="b in col.detail.complaint_base_rates" :key="b.complaint">
+                      <span class="chip">
+                        <span class="mono" x-text="b.complaint"></span>
+                        <span class="chip__stat mono" x-text="`·${b.historical_emergency_rate?.toFixed(2)} emerg· n=${b.n_historical}`"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Abnormal vitals -->
+                <div x-show="col.detail.abnormal_vitals.length">
+                  <div class="eyebrow mb2">Abnormal vitals</div>
+                  <div class="vitals">
+                    <template x-for="v in col.detail.abnormal_vitals" :key="v">
+                      <span class="vpill">
+                        <span class="vpill__dot"></span>
+                        <span class="vpill__label" x-text="v.split('=')[0]"></span>
+                        <span class="vpill__num mono" x-text="v.split('=')[1]"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Drivers -->
+                <div x-show="col.detail.high_importance_features_present.length">
+                  <div class="eyebrow mb2">Top drivers (high-importance features present)</div>
+                  <div class="chips">
+                    <template x-for="f in col.detail.high_importance_features_present" :key="f">
+                      <span class="chip"><span class="mono" x-text="f"></span></span>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- SHAP contributors -->
+                <div x-show="col.detail.shap_top_contributors">
+                  <div class="eyebrow mb2">SHAP contributors</div>
+                  <div class="chips">
+                    <template x-for="s in (col.detail.shap_top_contributors || [])" :key="s.feature">
+                      <span class="chip">
+                        <span class="mono" x-text="s.feature"></span>
+                        <span class="chip__stat mono" x-text="s.contribution.toFixed(3)"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Patient factors -->
+                <div>
+                  <div class="eyebrow mb2">Patient factors</div>
+                  <dl class="facts">
+                    <template x-if="col.detail.age !== null">
+                      <div class="contents"><dt>Age</dt><dd><span class="mono" x-text="col.detail.age?.toFixed(0)"></span></dd></div>
+                    </template>
+                    <template x-if="col.detail.arrival_mode !== null">
+                      <div class="contents"><dt>Arrival</dt><dd x-text="col.detail.arrival_mode"></dd></div>
+                    </template>
+                    <template x-if="col.detail.department !== null">
+                      <div class="contents"><dt>Dept</dt><dd x-text="col.detail.department"></dd></div>
+                    </template>
+                    <template x-if="Object.keys(col.detail.utilisation_history || {}).length">
+                      <div class="contents">
+                        <dt>Utilisation</dt>
+                        <dd><template x-for="(val, key) in col.detail.utilisation_history" :key="key"><span class="mr3"><span x-text="key.replace('n_','')"></span> <span class="mono" x-text="val"></span></span></template></dd>
+                      </div>
+                    </template>
+                  </dl>
+                </div>
+
+                <!-- honest-scope notice — shown with every prediction -->
+                <div class="scope-note" role="note">
+                  <span>Triage-acuity prediction &mdash; decision support, not a diagnosis. Predicts the triage assignment a nurse would make.</span>
+                  <span class="derived-tag" x-show="col.detail?.derived_from_note" x-cloak>note-derived</span>
+                </div>
+              </div>
+              </template>
+            </section>
+
+            <!-- ---------------- GEN-AI PANEL ---------------- -->
+            <section class="card panel" aria-label="Gen-AI explanation">
+              <div class="panel__title eyebrow row-between">
+                <span>Gen-AI explanation</span>
+                <!-- prominent guardrail chip (or synthetic-test result) -->
+                <template x-if="col.guardTest">
+                  <span class="guard guard--flag" x-text="'⚑ synthetic test flagged: ' + (col.guardTest.flags || []).join(', ')"></span>
+                </template>
+                <template x-if="!col.guardTest">
+                  <span class="guard" :class="combinedGuard(col).cls" x-text="combinedGuard(col).label"></span>
+                </template>
+              </div>
+
+              <div class="stack">
+                <!-- toolbar -->
+                <div class="toolbar">
+                  <div class="segmented" role="group" aria-label="Register view">
+                    <button type="button" :aria-pressed="col.view==='both'" @click="setView(ci,'both')">Both</button>
+                    <button type="button" :aria-pressed="col.view==='justify'" @click="setView(ci,'justify')">Justification</button>
+                    <button type="button" :aria-pressed="col.view==='handover'" @click="setView(ci,'handover')">Handover</button>
+                  </div>
+                  <button class="btn-generate" type="button" aria-label="Generate explanation"
+                          :disabled="!(col.id || col.payload) || col.generating"
+                          @click="generate(ci)" x-text="col.generating ? 'Generating…' : 'Generate'"></button>
+                </div>
+
+                <!-- adversarial guardrail control -->
+                <div class="toolbar">
+                  <button class="btn-ghost" type="button" @click="runGuardrailTest(ci, col.view === 'handover' ? 'handover' : 'justify')">Test guardrail</button>
+                  <button class="btn-ghost" type="button" x-show="col.guardTest" x-cloak @click="resetGuardrailTest(ci)">Reset</button>
+                  <span class="synthetic-note" x-show="col.guardTest" x-cloak>synthetic test input — no live output altered</span>
+                </div>
+                <div class="synthetic-candidate mono" x-show="col.guardTest" x-cloak x-text="col.guardTest?.candidate"></div>
+
+                <!-- empty / ready states -->
+                <div class="empty-state" x-show="!(col.id || col.payload)" x-cloak>Select a patient, then generate the model&rsquo;s explanation.</div>
+                <div class="empty-state" x-show="(col.id || col.payload) && !col.gen.justify && !col.gen.handover && !col.generating" x-cloak>
+                  Ready &mdash; press Generate to produce both registers.
+                </div>
+                <div class="msg-warn" x-show="col.error" x-cloak x-text="col.error"></div>
+
+                <!-- JUSTIFICATION (A) -->
+                <template x-if="col.gen.justify && (col.view === 'both' || col.view === 'justify')">
+                  <div class="reg-block">
+                    <div class="reg-label">
+                      <span class="eyebrow">Justification</span>
+                      <span class="source">
+                        <span class="dot" :class="sourceMeta(col.gen.justify.source).dot"></span>
+                        <span x-text="sourceMeta(col.gen.justify.source).label"></span>
+                      </span>
+                    </div>
+                    <p class="prose" x-text="col.gen.justify.text"></p>
+                  </div>
+                </template>
+
+                <!-- HANDOVER (B) — clinical triage handover note -->
+                <template x-if="col.gen.handover && (col.view === 'both' || col.view === 'handover')">
+                  <div class="reg-block">
+                    <div class="reg-label">
+                      <span class="eyebrow">Handover note</span>
+                      <span class="reg-actions">
+                        <button class="btn-ghost" type="button" aria-label="Print handover note"
+                                @click="printHandover(ci)">Print</button>
+                        <button class="btn-ghost" type="button" aria-label="Copy handover as text"
+                                @click="copyHandover(ci)" x-text="col.copied ? 'Copied ✓' : 'Copy'"></button>
+                        <span class="source">
+                          <span class="dot" :class="sourceMeta(col.gen.handover.source).dot"></span>
+                          <span x-text="sourceMeta(col.gen.handover.source).label"></span>
+                        </span>
+                      </span>
+                    </div>
+
+                    <div class="hnote" :class="{ 'print-target': col.printing }">
+                      <!-- header: title + generation time -->
+                      <div class="hnote__header">
+                        <span class="hnote__title">CTRSE TRIAGE HANDOVER</span>
+                        <span class="hnote__time mono" x-show="col.genTime" x-text="`Generated ${col.genTime}`"></span>
+                      </div>
+
+                      <!-- S -->
+                      <div class="hnote__sec">
+                        <span class="hnote__k">S</span>
+                        <div class="hnote__body">
+                          <div>
+                            <span class="badge badge--sm" x-text="`${col.detail?.predicted_level} · ${col.detail?.level_label}`" :style="`background:${col.detail?.level_colour}`"></span>
+                            <span class="conf__val ml2" :class="confCueClass(col.detail?.confidence_word)" x-text="col.detail?.confidence_word"></span>
+                          </div>
+                          <div class="hnote__line">
+                            <span x-show="col.detail?.age !== null"><span class="mono" x-text="col.detail?.age?.toFixed(0)"></span>y</span>
+                            <span x-show="col.detail?.active_chief_complaints?.length"> · c/o <span class="mono" x-text="col.detail?.active_chief_complaints[0]"></span><span
+                                  x-show="onsetFor(col, col.detail?.active_chief_complaints?.[0])"
+                                  x-text="' (' + onsetFor(col, col.detail?.active_chief_complaints?.[0]) + ')'"></span></span>
+                            <span x-show="col.detail?.arrival_mode"> · arrived by <span x-text="col.detail?.arrival_mode"></span></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- B -->
+                      <div class="hnote__sec">
+                        <span class="hnote__k">B</span>
+                        <div class="hnote__body">
+                          <div class="hnote__line">
+                            <span class="hnote__lbl">Triage vitals:</span>
+                            <template x-for="(v, i) in vitalsRow(col.detail)" :key="v.label">
+                              <span class="vitseg" :class="{ 'vitseg--abn': v.abn }">
+                                <span x-text="i > 0 ? '· ' : ''"></span><span class="vitseg__lbl" x-text="v.label"></span> <span class="mono" x-text="v.text"></span>
+                              </span>
+                            </template>
+                            <span class="empty-inline" x-show="vitalsRow(col.detail).length === 0">none recorded</span>
+                          </div>
+                          <div class="hnote__line hnote__missing" x-show="col.detail?.vitals_not_recorded?.length" x-cloak>
+                            <span class="hnote__lbl">Not recorded:</span>
+                            <span class="mono" x-text="col.detail?.vitals_not_recorded?.join(', ')"></span>
+                          </div>
+                          <!-- absence is a finding in a handover: the Allergies line always renders -->
+                          <div class="hnote__line">
+                            <span class="hnote__lbl">Allergies:</span>
+                            <span x-text="allergyLine(col)"></span>
+                          </div>
+                          <div class="hnote__line" x-show="hxFlags(col.detail).length" x-cloak>
+                            <span class="hnote__lbl">Hx:</span> <span class="mono" x-text="hxFlags(col.detail).join(' · ')"></span>
+                          </div>
+                          <div class="hnote__line" x-show="medsFlags(col.detail).length" x-cloak>
+                            <span class="hnote__lbl">Meds:</span> <span class="mono" x-text="medsFlags(col.detail).join(' · ')"></span>
+                          </div>
+                          <div class="hnote__line" x-show="edLine(col.detail)" x-cloak>
+                            <span class="hnote__lbl">ED:</span> <span class="mono" x-text="edLine(col.detail)"></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- A -->
+                      <div class="hnote__sec">
+                        <span class="hnote__k">A</span>
+                        <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.assessment"></div>
+                      </div>
+
+                      <!-- R -->
+                      <div class="hnote__sec">
+                        <span class="hnote__k">R</span>
+                        <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.recommendation"></div>
+                      </div>
+
+                      <!-- print-only disclaimer footer (screen shows the shared panel footer) -->
+                      <div class="hnote__printfoot" x-text="col.gen.handover.disclaimer"></div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- disclaimer footer (rendered ONCE) -->
+                <template x-if="col.gen.justify || col.gen.handover">
+                  <div class="disclaimer" x-text="(col.gen.justify || col.gen.handover).disclaimer"></div>
+                </template>
+              </div>
+            </section>
+          </div>
+        </template>
+      </main>
+    </div>
+
+    <!-- ============================ FOOTER ============================ -->
+    <footer class="footer">
+      <div>This describes the model&rsquo;s prediction of a triage assignment, not a clinical diagnosis. Limitations: the model predicts a triage nurse&rsquo;s ESI assignment, not physiological ground truth; explanations are grounded in the payload only.</div>
+    </footer>
+  </div>
+</body>
+</html>

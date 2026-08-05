@@ -1,0 +1,2088 @@
+{
+  "_meta": {
+    "source": "feature_cols.pkl + X_train.npy (fitted NB1 artefacts)",
+    "n_train_rows": 446421,
+    "n_tokens": 200,
+    "n_feature_cols_total": 552,
+    "prevalence_basis": "share = count / n_train_rows, count = rows where cc_<token>==1 in X_train",
+    "cap_complaints": 2,
+    "other_is_valid_fallback": true,
+    "notes": [
+      "The 17 conditioned tokens must be DERIVED in code (see §7), never emitted by the LLM (§8 guardrail #3).",
+      "The LLM emits a base concept (see emittable_bases) + evidence span; code resolves the conditioned form.",
+      "emittable_bases whose base_in_vocab=false have NO plain cc_ column: code MUST pick a conditioned form (with the documented default), it cannot fall back to a base column.",
+      "feature_cols total is 552 (200 cc_ + 281 CCS + 48 med + 13 categorical + 3 utilisation + 7 vital), not 553 as the spec prose rounds it; Phase 3 must assert length == len(feature_cols) == 552."
+    ]
+  },
+  "tokens": {
+    "abdominalcramping": {
+      "count": 478,
+      "share": 0.00107,
+      "cluster": "abdominal",
+      "conditioned": false
+    },
+    "abdominaldistention": {
+      "count": 496,
+      "share": 0.00111,
+      "cluster": "abdominal",
+      "conditioned": false
+    },
+    "abdominalpain": {
+      "count": 43464,
+      "share": 0.09736,
+      "cluster": "abdominal",
+      "conditioned": false
+    },
+    "abdominalpainpregnant": {
+      "count": 1664,
+      "share": 0.00373,
+      "cluster": null,
+      "conditioned": false
+    },
+    "abnormallab": {
+      "count": 2968,
+      "share": 0.00665,
+      "cluster": null,
+      "conditioned": false
+    },
+    "abscess": {
+      "count": 2820,
+      "share": 0.00632,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "addictionproblem": {
+      "count": 538,
+      "share": 0.00121,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "agitation": {
+      "count": 530,
+      "share": 0.00119,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "alcoholintoxication": {
+      "count": 12753,
+      "share": 0.02857,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "alcoholproblem": {
+      "count": 1789,
+      "share": 0.00401,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "allergicreaction": {
+      "count": 2633,
+      "share": 0.0059,
+      "cluster": null,
+      "conditioned": false
+    },
+    "alteredmentalstatus": {
+      "count": 6842,
+      "share": 0.01533,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "animalbite": {
+      "count": 1302,
+      "share": 0.00292,
+      "cluster": null,
+      "conditioned": false
+    },
+    "ankleinjury": {
+      "count": 1667,
+      "share": 0.00373,
+      "cluster": null,
+      "conditioned": false
+    },
+    "anklepain": {
+      "count": 2331,
+      "share": 0.00522,
+      "cluster": null,
+      "conditioned": false
+    },
+    "anxiety": {
+      "count": 2340,
+      "share": 0.00524,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "arminjury": {
+      "count": 611,
+      "share": 0.00137,
+      "cluster": null,
+      "conditioned": false
+    },
+    "armpain": {
+      "count": 3110,
+      "share": 0.00697,
+      "cluster": null,
+      "conditioned": false
+    },
+    "armswelling": {
+      "count": 583,
+      "share": 0.00131,
+      "cluster": null,
+      "conditioned": false
+    },
+    "assaultvictim": {
+      "count": 2562,
+      "share": 0.00574,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "asthma": {
+      "count": 1865,
+      "share": 0.00418,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "backpain": {
+      "count": 16498,
+      "share": 0.03696,
+      "cluster": null,
+      "conditioned": false
+    },
+    "bleeding/bruising": {
+      "count": 683,
+      "share": 0.00153,
+      "cluster": null,
+      "conditioned": false
+    },
+    "blurredvision": {
+      "count": 422,
+      "share": 0.00095,
+      "cluster": null,
+      "conditioned": false
+    },
+    "bodyfluidexposure": {
+      "count": 654,
+      "share": 0.00146,
+      "cluster": null,
+      "conditioned": false
+    },
+    "breastpain": {
+      "count": 415,
+      "share": 0.00093,
+      "cluster": null,
+      "conditioned": false
+    },
+    "breathingdifficulty": {
+      "count": 2623,
+      "share": 0.00588,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "breathingproblem": {
+      "count": 373,
+      "share": 0.00084,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "burn": {
+      "count": 534,
+      "share": 0.0012,
+      "cluster": null,
+      "conditioned": false
+    },
+    "cardiacarrest": {
+      "count": 381,
+      "share": 0.00085,
+      "cluster": null,
+      "conditioned": false
+    },
+    "cellulitis": {
+      "count": 174,
+      "share": 0.00039,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "chestpain": {
+      "count": 28439,
+      "share": 0.0637,
+      "cluster": "chest",
+      "conditioned": false
+    },
+    "chesttightness": {
+      "count": 881,
+      "share": 0.00197,
+      "cluster": "chest",
+      "conditioned": false
+    },
+    "chills": {
+      "count": 474,
+      "share": 0.00106,
+      "cluster": "fever",
+      "conditioned": false
+    },
+    "coldlikesymptoms": {
+      "count": 2588,
+      "share": 0.0058,
+      "cluster": null,
+      "conditioned": false
+    },
+    "confusion": {
+      "count": 613,
+      "share": 0.00137,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "conjunctivitis": {
+      "count": 351,
+      "share": 0.00079,
+      "cluster": null,
+      "conditioned": false
+    },
+    "constipation": {
+      "count": 1423,
+      "share": 0.00319,
+      "cluster": null,
+      "conditioned": false
+    },
+    "cough": {
+      "count": 9995,
+      "share": 0.02239,
+      "cluster": null,
+      "conditioned": false
+    },
+    "cyst": {
+      "count": 958,
+      "share": 0.00215,
+      "cluster": null,
+      "conditioned": false
+    },
+    "decreasedbloodsugar-symptomatic": {
+      "count": 937,
+      "share": 0.0021,
+      "cluster": "blood_sugar",
+      "conditioned": true,
+      "base_token": "decreasedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "derivation_rule": "LLM emits base 'decreasedbloodsugar' (hypoglycemia); code sets -symptomatic (the only low-blood-sugar form present). No plain base column exists."
+    },
+    "dehydration": {
+      "count": 520,
+      "share": 0.00116,
+      "cluster": null,
+      "conditioned": false
+    },
+    "dentalpain": {
+      "count": 3026,
+      "share": 0.00678,
+      "cluster": null,
+      "conditioned": false
+    },
+    "depression": {
+      "count": 1463,
+      "share": 0.00328,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "detoxevaluation": {
+      "count": 980,
+      "share": 0.0022,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "diarrhea": {
+      "count": 3478,
+      "share": 0.00779,
+      "cluster": null,
+      "conditioned": false
+    },
+    "dizziness": {
+      "count": 10169,
+      "share": 0.02278,
+      "cluster": null,
+      "conditioned": false
+    },
+    "drug/alcoholassessment": {
+      "count": 980,
+      "share": 0.0022,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "drugproblem": {
+      "count": 2181,
+      "share": 0.00489,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "dyspnea": {
+      "count": 2460,
+      "share": 0.00551,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "dysuria": {
+      "count": 1336,
+      "share": 0.00299,
+      "cluster": null,
+      "conditioned": false
+    },
+    "earpain": {
+      "count": 2581,
+      "share": 0.00578,
+      "cluster": null,
+      "conditioned": false
+    },
+    "earproblem": {
+      "count": 343,
+      "share": 0.00077,
+      "cluster": null,
+      "conditioned": false
+    },
+    "edema": {
+      "count": 678,
+      "share": 0.00152,
+      "cluster": null,
+      "conditioned": false
+    },
+    "elbowpain": {
+      "count": 519,
+      "share": 0.00116,
+      "cluster": null,
+      "conditioned": false
+    },
+    "elevatedbloodsugar-nosymptoms": {
+      "count": 1100,
+      "share": 0.00246,
+      "cluster": "blood_sugar",
+      "conditioned": true,
+      "base_token": "elevatedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "derivation_rule": "LLM emits base 'elevatedbloodsugar'; code sets -nosymptoms when high glucose is reported without symptoms. No plain base column exists."
+    },
+    "elevatedbloodsugar-symptomatic": {
+      "count": 1324,
+      "share": 0.00297,
+      "cluster": "blood_sugar",
+      "conditioned": true,
+      "base_token": "elevatedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "derivation_rule": "LLM emits base 'elevatedbloodsugar' (a.k.a. hyperglycemia) + symptom evidence; code sets -symptomatic when symptoms accompany the high glucose. No plain base column exists."
+    },
+    "emesis": {
+      "count": 9180,
+      "share": 0.02056,
+      "cluster": null,
+      "conditioned": false
+    },
+    "epigastricpain": {
+      "count": 738,
+      "share": 0.00165,
+      "cluster": "abdominal",
+      "conditioned": false
+    },
+    "epistaxis": {
+      "count": 1583,
+      "share": 0.00355,
+      "cluster": null,
+      "conditioned": false
+    },
+    "exposuretostd": {
+      "count": 250,
+      "share": 0.00056,
+      "cluster": null,
+      "conditioned": false
+    },
+    "extremitylaceration": {
+      "count": 1716,
+      "share": 0.00384,
+      "cluster": null,
+      "conditioned": false
+    },
+    "extremityweakness": {
+      "count": 672,
+      "share": 0.00151,
+      "cluster": null,
+      "conditioned": false
+    },
+    "eyeinjury": {
+      "count": 549,
+      "share": 0.00123,
+      "cluster": null,
+      "conditioned": false
+    },
+    "eyepain": {
+      "count": 1405,
+      "share": 0.00315,
+      "cluster": null,
+      "conditioned": false
+    },
+    "eyeproblem": {
+      "count": 1988,
+      "share": 0.00445,
+      "cluster": null,
+      "conditioned": false
+    },
+    "eyeredness": {
+      "count": 573,
+      "share": 0.00128,
+      "cluster": null,
+      "conditioned": false
+    },
+    "facialinjury": {
+      "count": 516,
+      "share": 0.00116,
+      "cluster": null,
+      "conditioned": false
+    },
+    "faciallaceration": {
+      "count": 539,
+      "share": 0.00121,
+      "cluster": null,
+      "conditioned": false
+    },
+    "facialpain": {
+      "count": 717,
+      "share": 0.00161,
+      "cluster": null,
+      "conditioned": false
+    },
+    "facialswelling": {
+      "count": 1284,
+      "share": 0.00288,
+      "cluster": null,
+      "conditioned": false
+    },
+    "fall": {
+      "count": 15093,
+      "share": 0.03381,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "fall>65": {
+      "count": 5847,
+      "share": 0.0131,
+      "cluster": "fall_trauma",
+      "conditioned": true,
+      "base_token": "fall",
+      "base_in_vocab": true,
+      "requires": "age",
+      "derivation_rule": "LLM emits base 'fall'; code sets fall>65 when age>65, else keeps cc_fall."
+    },
+    "fatigue": {
+      "count": 3153,
+      "share": 0.00706,
+      "cluster": null,
+      "conditioned": false
+    },
+    "femaleguproblem": {
+      "count": 2542,
+      "share": 0.00569,
+      "cluster": null,
+      "conditioned": false
+    },
+    "fever": {
+      "count": 412,
+      "share": 0.00092,
+      "cluster": "fever",
+      "conditioned": false
+    },
+    "fever-75yearsorolder": {
+      "count": 1038,
+      "share": 0.00233,
+      "cluster": "fever",
+      "conditioned": true,
+      "base_token": "fever",
+      "base_in_vocab": true,
+      "requires": "age",
+      "derivation_rule": "LLM emits base 'fever'; code sets fever-75yearsorolder when age>=75."
+    },
+    "fever-9weeksto74years": {
+      "count": 4887,
+      "share": 0.01095,
+      "cluster": "fever",
+      "conditioned": true,
+      "base_token": "fever",
+      "base_in_vocab": true,
+      "requires": "age",
+      "derivation_rule": "LLM emits base 'fever'; code sets fever-9weeksto74years when 9 weeks<=age<75 (all adults 18-74)."
+    },
+    "feverimmunocompromised": {
+      "count": 483,
+      "share": 0.00108,
+      "cluster": "fever",
+      "conditioned": false
+    },
+    "fingerinjury": {
+      "count": 1854,
+      "share": 0.00415,
+      "cluster": null,
+      "conditioned": false
+    },
+    "fingerpain": {
+      "count": 917,
+      "share": 0.00205,
+      "cluster": null,
+      "conditioned": false
+    },
+    "fingerswelling": {
+      "count": 476,
+      "share": 0.00107,
+      "cluster": null,
+      "conditioned": false
+    },
+    "flankpain": {
+      "count": 7147,
+      "share": 0.01601,
+      "cluster": null,
+      "conditioned": false
+    },
+    "follow-upcellulitis": {
+      "count": 762,
+      "share": 0.00171,
+      "cluster": "wound_skin",
+      "conditioned": true,
+      "base_token": "cellulitis",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "derivation_rule": "Follow-up visit for known cellulitis; code sets it when the note frames a cellulitis re-check, else keeps base cc_cellulitis."
+    },
+    "footinjury": {
+      "count": 1188,
+      "share": 0.00266,
+      "cluster": null,
+      "conditioned": false
+    },
+    "footpain": {
+      "count": 3927,
+      "share": 0.0088,
+      "cluster": null,
+      "conditioned": false
+    },
+    "footswelling": {
+      "count": 724,
+      "share": 0.00162,
+      "cluster": null,
+      "conditioned": false
+    },
+    "foreignbodyineye": {
+      "count": 325,
+      "share": 0.00073,
+      "cluster": null,
+      "conditioned": false
+    },
+    "fulltrauma": {
+      "count": 518,
+      "share": 0.00116,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "generalizedbodyaches": {
+      "count": 1874,
+      "share": 0.0042,
+      "cluster": null,
+      "conditioned": false
+    },
+    "gibleeding": {
+      "count": 2208,
+      "share": 0.00495,
+      "cluster": null,
+      "conditioned": false
+    },
+    "giproblem": {
+      "count": 1581,
+      "share": 0.00354,
+      "cluster": "abdominal",
+      "conditioned": false
+    },
+    "groinpain": {
+      "count": 846,
+      "share": 0.0019,
+      "cluster": null,
+      "conditioned": false
+    },
+    "hallucinations": {
+      "count": 666,
+      "share": 0.00149,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "handinjury": {
+      "count": 1578,
+      "share": 0.00353,
+      "cluster": null,
+      "conditioned": false
+    },
+    "handpain": {
+      "count": 2144,
+      "share": 0.0048,
+      "cluster": null,
+      "conditioned": false
+    },
+    "headache": {
+      "count": 718,
+      "share": 0.00161,
+      "cluster": "headache",
+      "conditioned": false
+    },
+    "headache-newonsetornewsymptoms": {
+      "count": 6937,
+      "share": 0.01554,
+      "cluster": "headache",
+      "conditioned": true,
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "history",
+      "derivation_rule": "LLM emits base 'headache' + onset/history span; code sets -newonsetornewsymptoms for new onset or new/changed symptoms."
+    },
+    "headache-recurrentorknowndxmigraines": {
+      "count": 1849,
+      "share": 0.00414,
+      "cluster": "headache",
+      "conditioned": true,
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "history",
+      "derivation_rule": "LLM emits base 'headache' + history span; code sets -recurrentorknowndxmigraines when recurrent or a known migraine dx is stated."
+    },
+    "headachere-evaluation": {
+      "count": 1994,
+      "share": 0.00447,
+      "cluster": "headache",
+      "conditioned": true,
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "derivation_rule": "Re-evaluation visit for a prior headache. Visit-context token (cf. woundre-evaluation), not age/history-conditioned; code sets it when the note frames this as a headache re-check/re-evaluation."
+    },
+    "headinjury": {
+      "count": 1953,
+      "share": 0.00437,
+      "cluster": null,
+      "conditioned": false
+    },
+    "headlaceration": {
+      "count": 613,
+      "share": 0.00137,
+      "cluster": null,
+      "conditioned": false
+    },
+    "hematuria": {
+      "count": 1294,
+      "share": 0.0029,
+      "cluster": null,
+      "conditioned": false
+    },
+    "hemoptysis": {
+      "count": 386,
+      "share": 0.00086,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "hippain": {
+      "count": 2355,
+      "share": 0.00528,
+      "cluster": null,
+      "conditioned": false
+    },
+    "homicidal": {
+      "count": 334,
+      "share": 0.00075,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "hyperglycemia": {
+      "count": 84,
+      "share": 0.00019,
+      "cluster": "blood_sugar",
+      "conditioned": false
+    },
+    "hypertension": {
+      "count": 3045,
+      "share": 0.00682,
+      "cluster": null,
+      "conditioned": false
+    },
+    "hypotension": {
+      "count": 1253,
+      "share": 0.00281,
+      "cluster": null,
+      "conditioned": false
+    },
+    "influenza": {
+      "count": 328,
+      "share": 0.00073,
+      "cluster": null,
+      "conditioned": false
+    },
+    "ingestion": {
+      "count": 72,
+      "share": 0.00016,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "insectbite": {
+      "count": 1003,
+      "share": 0.00225,
+      "cluster": null,
+      "conditioned": false
+    },
+    "irregularheartbeat": {
+      "count": 567,
+      "share": 0.00127,
+      "cluster": "cardiac_rhythm",
+      "conditioned": false
+    },
+    "jawpain": {
+      "count": 520,
+      "share": 0.00116,
+      "cluster": null,
+      "conditioned": false
+    },
+    "jointswelling": {
+      "count": 363,
+      "share": 0.00081,
+      "cluster": null,
+      "conditioned": false
+    },
+    "kneeinjury": {
+      "count": 863,
+      "share": 0.00193,
+      "cluster": null,
+      "conditioned": false
+    },
+    "kneepain": {
+      "count": 5102,
+      "share": 0.01143,
+      "cluster": null,
+      "conditioned": false
+    },
+    "laceration": {
+      "count": 3034,
+      "share": 0.0068,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "leginjury": {
+      "count": 692,
+      "share": 0.00155,
+      "cluster": null,
+      "conditioned": false
+    },
+    "legpain": {
+      "count": 7939,
+      "share": 0.01778,
+      "cluster": null,
+      "conditioned": false
+    },
+    "legswelling": {
+      "count": 3530,
+      "share": 0.00791,
+      "cluster": null,
+      "conditioned": false
+    },
+    "lethargy": {
+      "count": 966,
+      "share": 0.00216,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "lossofconsciousness": {
+      "count": 869,
+      "share": 0.00195,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "maleguproblem": {
+      "count": 2124,
+      "share": 0.00476,
+      "cluster": null,
+      "conditioned": false
+    },
+    "mass": {
+      "count": 335,
+      "share": 0.00075,
+      "cluster": null,
+      "conditioned": false
+    },
+    "medicalproblem": {
+      "count": 4603,
+      "share": 0.01031,
+      "cluster": null,
+      "conditioned": false
+    },
+    "medicalscreening": {
+      "count": 1039,
+      "share": 0.00233,
+      "cluster": null,
+      "conditioned": false
+    },
+    "medicationproblem": {
+      "count": 660,
+      "share": 0.00148,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "medicationrefill": {
+      "count": 1044,
+      "share": 0.00234,
+      "cluster": null,
+      "conditioned": false
+    },
+    "migraine": {
+      "count": 1326,
+      "share": 0.00297,
+      "cluster": "headache",
+      "conditioned": false
+    },
+    "modifiedtrauma": {
+      "count": 1044,
+      "share": 0.00234,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "motorcyclecrash": {
+      "count": 575,
+      "share": 0.00129,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "motorvehiclecrash": {
+      "count": 11849,
+      "share": 0.02654,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "multiplefalls": {
+      "count": 541,
+      "share": 0.00121,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "nasalcongestion": {
+      "count": 877,
+      "share": 0.00196,
+      "cluster": null,
+      "conditioned": false
+    },
+    "nausea": {
+      "count": 4155,
+      "share": 0.00931,
+      "cluster": null,
+      "conditioned": false
+    },
+    "nearsyncope": {
+      "count": 1240,
+      "share": 0.00278,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "neckpain": {
+      "count": 3190,
+      "share": 0.00715,
+      "cluster": null,
+      "conditioned": false
+    },
+    "neurologicproblem": {
+      "count": 2939,
+      "share": 0.00658,
+      "cluster": null,
+      "conditioned": false
+    },
+    "numbness": {
+      "count": 1284,
+      "share": 0.00288,
+      "cluster": null,
+      "conditioned": false
+    },
+    "oralswelling": {
+      "count": 459,
+      "share": 0.00103,
+      "cluster": null,
+      "conditioned": false
+    },
+    "otalgia": {
+      "count": 346,
+      "share": 0.00078,
+      "cluster": null,
+      "conditioned": false
+    },
+    "other": {
+      "count": 38504,
+      "share": 0.08625,
+      "cluster": null,
+      "conditioned": false
+    },
+    "overdose-accidental": {
+      "count": 527,
+      "share": 0.00118,
+      "cluster": "alcohol_substance",
+      "conditioned": true,
+      "base_token": "overdose",
+      "base_in_vocab": false,
+      "requires": "intent",
+      "derivation_rule": "LLM emits base 'overdose' + intent span; code sets -accidental when intent is accidental OR unstated (default). No plain cc_overdose column exists, so one of the two forms MUST be chosen."
+    },
+    "overdose-intentional": {
+      "count": 486,
+      "share": 0.00109,
+      "cluster": "alcohol_substance",
+      "conditioned": true,
+      "base_token": "overdose",
+      "base_in_vocab": false,
+      "requires": "intent",
+      "derivation_rule": "LLM emits base 'overdose' + intent span; code sets -intentional when intent is deliberate/self-harm."
+    },
+    "pain": {
+      "count": 344,
+      "share": 0.00077,
+      "cluster": null,
+      "conditioned": false
+    },
+    "palpitations": {
+      "count": 2749,
+      "share": 0.00616,
+      "cluster": "cardiac_rhythm",
+      "conditioned": false
+    },
+    "panicattack": {
+      "count": 609,
+      "share": 0.00136,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "pelvicpain": {
+      "count": 520,
+      "share": 0.00116,
+      "cluster": null,
+      "conditioned": false
+    },
+    "poisoning": {
+      "count": 901,
+      "share": 0.00202,
+      "cluster": "alcohol_substance",
+      "conditioned": false
+    },
+    "post-opproblem": {
+      "count": 794,
+      "share": 0.00178,
+      "cluster": null,
+      "conditioned": true,
+      "base_token": "post-opproblem",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "derivation_rule": "Visit-context compound (recent surgery / post-operative complication), NOT age/intent/history-conditioned. Self-based: emitted only when the note frames the visit as a post-op problem; code owns it so the LLM does not guess post-op status."
+    },
+    "psychiatricevaluation": {
+      "count": 5755,
+      "share": 0.01289,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "psychoticsymptoms": {
+      "count": 387,
+      "share": 0.00087,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "rapidheartrate": {
+      "count": 596,
+      "share": 0.00134,
+      "cluster": "cardiac_rhythm",
+      "conditioned": false
+    },
+    "rash": {
+      "count": 4684,
+      "share": 0.01049,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "rectalbleeding": {
+      "count": 188,
+      "share": 0.00042,
+      "cluster": null,
+      "conditioned": false
+    },
+    "rectalpain": {
+      "count": 613,
+      "share": 0.00137,
+      "cluster": null,
+      "conditioned": false
+    },
+    "respiratorydistress": {
+      "count": 412,
+      "share": 0.00092,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "ribinjury": {
+      "count": 373,
+      "share": 0.00084,
+      "cluster": null,
+      "conditioned": false
+    },
+    "ribpain": {
+      "count": 847,
+      "share": 0.0019,
+      "cluster": null,
+      "conditioned": false
+    },
+    "seizure-newonset": {
+      "count": 681,
+      "share": 0.00153,
+      "cluster": "seizure",
+      "conditioned": true,
+      "base_token": "seizure",
+      "base_in_vocab": false,
+      "requires": "history",
+      "derivation_rule": "LLM emits base 'seizure' + history span; code sets -newonset when NO prior seizure history is stated."
+    },
+    "seizure-priorhxof": {
+      "count": 2595,
+      "share": 0.00581,
+      "cluster": "seizure",
+      "conditioned": true,
+      "base_token": "seizure",
+      "base_in_vocab": false,
+      "requires": "history",
+      "derivation_rule": "LLM emits base 'seizure' + history span; code sets -priorhxof when a prior seizure history is stated. No singular cc_seizure column exists (only plural cc_seizures, n=127); code must choose a form or the rare plural fallback."
+    },
+    "seizures": {
+      "count": 127,
+      "share": 0.00028,
+      "cluster": "seizure",
+      "conditioned": false
+    },
+    "shortnessofbreath": {
+      "count": 19668,
+      "share": 0.04406,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "shoulderinjury": {
+      "count": 891,
+      "share": 0.002,
+      "cluster": null,
+      "conditioned": false
+    },
+    "shoulderpain": {
+      "count": 3362,
+      "share": 0.00753,
+      "cluster": null,
+      "conditioned": false
+    },
+    "sicklecellpain": {
+      "count": 929,
+      "share": 0.00208,
+      "cluster": null,
+      "conditioned": false
+    },
+    "sinusproblem": {
+      "count": 432,
+      "share": 0.00097,
+      "cluster": null,
+      "conditioned": false
+    },
+    "skinirritation": {
+      "count": 820,
+      "share": 0.00184,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "skinproblem": {
+      "count": 1018,
+      "share": 0.00228,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "sorethroat": {
+      "count": 6000,
+      "share": 0.01344,
+      "cluster": null,
+      "conditioned": false
+    },
+    "stdcheck": {
+      "count": 703,
+      "share": 0.00157,
+      "cluster": null,
+      "conditioned": false
+    },
+    "strokealert": {
+      "count": 1737,
+      "share": 0.00389,
+      "cluster": null,
+      "conditioned": false
+    },
+    "suicidal": {
+      "count": 6570,
+      "share": 0.01472,
+      "cluster": "psych",
+      "conditioned": false
+    },
+    "suture/stapleremoval": {
+      "count": 1375,
+      "share": 0.00308,
+      "cluster": null,
+      "conditioned": false
+    },
+    "swallowedforeignbody": {
+      "count": 288,
+      "share": 0.00065,
+      "cluster": null,
+      "conditioned": false
+    },
+    "syncope": {
+      "count": 4010,
+      "share": 0.00898,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "tachycardia": {
+      "count": 874,
+      "share": 0.00196,
+      "cluster": "cardiac_rhythm",
+      "conditioned": false
+    },
+    "testiclepain": {
+      "count": 614,
+      "share": 0.00138,
+      "cluster": null,
+      "conditioned": false
+    },
+    "thumbinjury": {
+      "count": 357,
+      "share": 0.0008,
+      "cluster": null,
+      "conditioned": false
+    },
+    "tickremoval": {
+      "count": 314,
+      "share": 0.0007,
+      "cluster": null,
+      "conditioned": false
+    },
+    "toeinjury": {
+      "count": 510,
+      "share": 0.00114,
+      "cluster": null,
+      "conditioned": false
+    },
+    "toepain": {
+      "count": 986,
+      "share": 0.00221,
+      "cluster": null,
+      "conditioned": false
+    },
+    "trauma": {
+      "count": 377,
+      "share": 0.00084,
+      "cluster": "fall_trauma",
+      "conditioned": false
+    },
+    "unresponsive": {
+      "count": 810,
+      "share": 0.00181,
+      "cluster": "syncope_altered_mental",
+      "conditioned": false
+    },
+    "uri": {
+      "count": 1430,
+      "share": 0.0032,
+      "cluster": null,
+      "conditioned": false
+    },
+    "urinaryfrequency": {
+      "count": 424,
+      "share": 0.00095,
+      "cluster": null,
+      "conditioned": false
+    },
+    "urinaryretention": {
+      "count": 870,
+      "share": 0.00195,
+      "cluster": null,
+      "conditioned": false
+    },
+    "urinarytractinfection": {
+      "count": 1918,
+      "share": 0.0043,
+      "cluster": null,
+      "conditioned": false
+    },
+    "vaginalbleeding": {
+      "count": 3259,
+      "share": 0.0073,
+      "cluster": null,
+      "conditioned": false
+    },
+    "vaginaldischarge": {
+      "count": 569,
+      "share": 0.00127,
+      "cluster": null,
+      "conditioned": false
+    },
+    "vaginalpain": {
+      "count": 307,
+      "share": 0.00069,
+      "cluster": null,
+      "conditioned": false
+    },
+    "weakness": {
+      "count": 5806,
+      "share": 0.01301,
+      "cluster": null,
+      "conditioned": false
+    },
+    "wheezing": {
+      "count": 463,
+      "share": 0.00104,
+      "cluster": "respiratory",
+      "conditioned": false
+    },
+    "withdrawal-alcohol": {
+      "count": 517,
+      "share": 0.00116,
+      "cluster": "alcohol_substance",
+      "conditioned": true,
+      "base_token": "withdrawal",
+      "base_in_vocab": false,
+      "requires": "substance",
+      "derivation_rule": "LLM emits base 'withdrawal' + substance span; code sets -alcohol when substance is alcohol (the only withdrawal form present). No plain base column exists."
+    },
+    "woundcheck": {
+      "count": 1884,
+      "share": 0.00422,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "woundinfection": {
+      "count": 1303,
+      "share": 0.00292,
+      "cluster": "wound_skin",
+      "conditioned": false
+    },
+    "woundre-evaluation": {
+      "count": 552,
+      "share": 0.00124,
+      "cluster": "wound_skin",
+      "conditioned": true,
+      "base_token": "wound",
+      "base_in_vocab": false,
+      "requires": "visit_context",
+      "derivation_rule": "Re-evaluation of a prior wound; code sets it for a wound re-check visit. Base concept 'wound' has no plain column (nearest: cc_woundcheck)."
+    },
+    "wristinjury": {
+      "count": 608,
+      "share": 0.00136,
+      "cluster": null,
+      "conditioned": false
+    },
+    "wristpain": {
+      "count": 1113,
+      "share": 0.00249,
+      "cluster": null,
+      "conditioned": false
+    }
+  },
+  "clusters": {
+    "respiratory": {
+      "description": "Breathing / dyspnoea complaints. Prefer the common token; the rest are rare alternates.",
+      "preferred_emit": "shortnessofbreath",
+      "members": [
+        {
+          "token": "shortnessofbreath",
+          "count": 19668,
+          "share": 0.04406,
+          "conditioned": false
+        },
+        {
+          "token": "breathingdifficulty",
+          "count": 2623,
+          "share": 0.00588,
+          "conditioned": false
+        },
+        {
+          "token": "dyspnea",
+          "count": 2460,
+          "share": 0.00551,
+          "conditioned": false
+        },
+        {
+          "token": "asthma",
+          "count": 1865,
+          "share": 0.00418,
+          "conditioned": false
+        },
+        {
+          "token": "wheezing",
+          "count": 463,
+          "share": 0.00104,
+          "conditioned": false
+        },
+        {
+          "token": "respiratorydistress",
+          "count": 412,
+          "share": 0.00092,
+          "conditioned": false
+        },
+        {
+          "token": "hemoptysis",
+          "count": 386,
+          "share": 0.00086,
+          "conditioned": false
+        },
+        {
+          "token": "breathingproblem",
+          "count": 373,
+          "share": 0.00084,
+          "conditioned": false
+        }
+      ]
+    },
+    "chest": {
+      "description": "Chest complaints.",
+      "preferred_emit": "chestpain",
+      "members": [
+        {
+          "token": "chestpain",
+          "count": 28439,
+          "share": 0.0637,
+          "conditioned": false
+        },
+        {
+          "token": "chesttightness",
+          "count": 881,
+          "share": 0.00197,
+          "conditioned": false
+        }
+      ]
+    },
+    "cardiac_rhythm": {
+      "description": "Fast/irregular heartbeat near-synonyms.",
+      "preferred_emit": "palpitations",
+      "members": [
+        {
+          "token": "palpitations",
+          "count": 2749,
+          "share": 0.00616,
+          "conditioned": false
+        },
+        {
+          "token": "tachycardia",
+          "count": 874,
+          "share": 0.00196,
+          "conditioned": false
+        },
+        {
+          "token": "rapidheartrate",
+          "count": 596,
+          "share": 0.00134,
+          "conditioned": false
+        },
+        {
+          "token": "irregularheartbeat",
+          "count": 567,
+          "share": 0.00127,
+          "conditioned": false
+        }
+      ]
+    },
+    "syncope_altered_mental": {
+      "description": "Collapse / reduced or altered consciousness.",
+      "preferred_emit": "alteredmentalstatus",
+      "members": [
+        {
+          "token": "alteredmentalstatus",
+          "count": 6842,
+          "share": 0.01533,
+          "conditioned": false
+        },
+        {
+          "token": "syncope",
+          "count": 4010,
+          "share": 0.00898,
+          "conditioned": false
+        },
+        {
+          "token": "nearsyncope",
+          "count": 1240,
+          "share": 0.00278,
+          "conditioned": false
+        },
+        {
+          "token": "lethargy",
+          "count": 966,
+          "share": 0.00216,
+          "conditioned": false
+        },
+        {
+          "token": "lossofconsciousness",
+          "count": 869,
+          "share": 0.00195,
+          "conditioned": false
+        },
+        {
+          "token": "unresponsive",
+          "count": 810,
+          "share": 0.00181,
+          "conditioned": false
+        },
+        {
+          "token": "confusion",
+          "count": 613,
+          "share": 0.00137,
+          "conditioned": false
+        }
+      ]
+    },
+    "abdominal": {
+      "description": "Abdominal pain near-synonyms.",
+      "preferred_emit": "abdominalpain",
+      "members": [
+        {
+          "token": "abdominalpain",
+          "count": 43464,
+          "share": 0.09736,
+          "conditioned": false
+        },
+        {
+          "token": "giproblem",
+          "count": 1581,
+          "share": 0.00354,
+          "conditioned": false
+        },
+        {
+          "token": "epigastricpain",
+          "count": 738,
+          "share": 0.00165,
+          "conditioned": false
+        },
+        {
+          "token": "abdominaldistention",
+          "count": 496,
+          "share": 0.00111,
+          "conditioned": false
+        },
+        {
+          "token": "abdominalcramping",
+          "count": 478,
+          "share": 0.00107,
+          "conditioned": false
+        }
+      ]
+    },
+    "headache": {
+      "description": "Headache complaints. Common forms are age/history-conditioned; LLM emits base 'headache'.",
+      "preferred_emit": "headache",
+      "members": [
+        {
+          "token": "headache-newonsetornewsymptoms",
+          "count": 6937,
+          "share": 0.01554,
+          "conditioned": true
+        },
+        {
+          "token": "headachere-evaluation",
+          "count": 1994,
+          "share": 0.00447,
+          "conditioned": true
+        },
+        {
+          "token": "headache-recurrentorknowndxmigraines",
+          "count": 1849,
+          "share": 0.00414,
+          "conditioned": true
+        },
+        {
+          "token": "migraine",
+          "count": 1326,
+          "share": 0.00297,
+          "conditioned": false
+        },
+        {
+          "token": "headache",
+          "count": 718,
+          "share": 0.00161,
+          "conditioned": false
+        }
+      ]
+    },
+    "seizure": {
+      "description": "Seizure complaints. LLM emits base 'seizure'; code derives new-onset vs prior-hx.",
+      "preferred_emit": "seizure",
+      "members": [
+        {
+          "token": "seizure-priorhxof",
+          "count": 2595,
+          "share": 0.00581,
+          "conditioned": true
+        },
+        {
+          "token": "seizure-newonset",
+          "count": 681,
+          "share": 0.00153,
+          "conditioned": true
+        },
+        {
+          "token": "seizures",
+          "count": 127,
+          "share": 0.00028,
+          "conditioned": false
+        }
+      ]
+    },
+    "fever": {
+      "description": "Fever complaints. Common forms are age-conditioned; LLM emits base 'fever'.",
+      "preferred_emit": "fever",
+      "members": [
+        {
+          "token": "fever-9weeksto74years",
+          "count": 4887,
+          "share": 0.01095,
+          "conditioned": true
+        },
+        {
+          "token": "fever-75yearsorolder",
+          "count": 1038,
+          "share": 0.00233,
+          "conditioned": true
+        },
+        {
+          "token": "feverimmunocompromised",
+          "count": 483,
+          "share": 0.00108,
+          "conditioned": false
+        },
+        {
+          "token": "chills",
+          "count": 474,
+          "share": 0.00106,
+          "conditioned": false
+        },
+        {
+          "token": "fever",
+          "count": 412,
+          "share": 0.00092,
+          "conditioned": false
+        }
+      ]
+    },
+    "alcohol_substance": {
+      "description": "Alcohol / drug / overdose / withdrawal cluster (behavioural + substance).",
+      "preferred_emit": "alcoholintoxication",
+      "members": [
+        {
+          "token": "alcoholintoxication",
+          "count": 12753,
+          "share": 0.02857,
+          "conditioned": false
+        },
+        {
+          "token": "drugproblem",
+          "count": 2181,
+          "share": 0.00489,
+          "conditioned": false
+        },
+        {
+          "token": "alcoholproblem",
+          "count": 1789,
+          "share": 0.00401,
+          "conditioned": false
+        },
+        {
+          "token": "drug/alcoholassessment",
+          "count": 980,
+          "share": 0.0022,
+          "conditioned": false
+        },
+        {
+          "token": "detoxevaluation",
+          "count": 980,
+          "share": 0.0022,
+          "conditioned": false
+        },
+        {
+          "token": "poisoning",
+          "count": 901,
+          "share": 0.00202,
+          "conditioned": false
+        },
+        {
+          "token": "medicationproblem",
+          "count": 660,
+          "share": 0.00148,
+          "conditioned": false
+        },
+        {
+          "token": "addictionproblem",
+          "count": 538,
+          "share": 0.00121,
+          "conditioned": false
+        },
+        {
+          "token": "overdose-accidental",
+          "count": 527,
+          "share": 0.00118,
+          "conditioned": true
+        },
+        {
+          "token": "withdrawal-alcohol",
+          "count": 517,
+          "share": 0.00116,
+          "conditioned": true
+        },
+        {
+          "token": "overdose-intentional",
+          "count": 486,
+          "share": 0.00109,
+          "conditioned": true
+        },
+        {
+          "token": "ingestion",
+          "count": 72,
+          "share": 0.00016,
+          "conditioned": false
+        }
+      ]
+    },
+    "blood_sugar": {
+      "description": "High/low blood-sugar complaints. Forms are symptom-conditioned; no plain base column.",
+      "preferred_emit": "elevatedbloodsugar",
+      "members": [
+        {
+          "token": "elevatedbloodsugar-symptomatic",
+          "count": 1324,
+          "share": 0.00297,
+          "conditioned": true
+        },
+        {
+          "token": "elevatedbloodsugar-nosymptoms",
+          "count": 1100,
+          "share": 0.00246,
+          "conditioned": true
+        },
+        {
+          "token": "decreasedbloodsugar-symptomatic",
+          "count": 937,
+          "share": 0.0021,
+          "conditioned": true
+        },
+        {
+          "token": "hyperglycemia",
+          "count": 84,
+          "share": 0.00019,
+          "conditioned": false
+        }
+      ]
+    },
+    "wound_skin": {
+      "description": "Wound / cellulitis / skin complaints incl. follow-up & re-evaluation visit forms.",
+      "preferred_emit": "rash",
+      "members": [
+        {
+          "token": "rash",
+          "count": 4684,
+          "share": 0.01049,
+          "conditioned": false
+        },
+        {
+          "token": "laceration",
+          "count": 3034,
+          "share": 0.0068,
+          "conditioned": false
+        },
+        {
+          "token": "abscess",
+          "count": 2820,
+          "share": 0.00632,
+          "conditioned": false
+        },
+        {
+          "token": "woundcheck",
+          "count": 1884,
+          "share": 0.00422,
+          "conditioned": false
+        },
+        {
+          "token": "woundinfection",
+          "count": 1303,
+          "share": 0.00292,
+          "conditioned": false
+        },
+        {
+          "token": "skinproblem",
+          "count": 1018,
+          "share": 0.00228,
+          "conditioned": false
+        },
+        {
+          "token": "skinirritation",
+          "count": 820,
+          "share": 0.00184,
+          "conditioned": false
+        },
+        {
+          "token": "follow-upcellulitis",
+          "count": 762,
+          "share": 0.00171,
+          "conditioned": true
+        },
+        {
+          "token": "woundre-evaluation",
+          "count": 552,
+          "share": 0.00124,
+          "conditioned": true
+        },
+        {
+          "token": "cellulitis",
+          "count": 174,
+          "share": 0.00039,
+          "conditioned": false
+        }
+      ]
+    },
+    "fall_trauma": {
+      "description": "Falls and trauma. fall>65 is age-conditioned on base 'fall'.",
+      "preferred_emit": "fall",
+      "members": [
+        {
+          "token": "fall",
+          "count": 15093,
+          "share": 0.03381,
+          "conditioned": false
+        },
+        {
+          "token": "motorvehiclecrash",
+          "count": 11849,
+          "share": 0.02654,
+          "conditioned": false
+        },
+        {
+          "token": "fall>65",
+          "count": 5847,
+          "share": 0.0131,
+          "conditioned": true
+        },
+        {
+          "token": "assaultvictim",
+          "count": 2562,
+          "share": 0.00574,
+          "conditioned": false
+        },
+        {
+          "token": "modifiedtrauma",
+          "count": 1044,
+          "share": 0.00234,
+          "conditioned": false
+        },
+        {
+          "token": "motorcyclecrash",
+          "count": 575,
+          "share": 0.00129,
+          "conditioned": false
+        },
+        {
+          "token": "multiplefalls",
+          "count": 541,
+          "share": 0.00121,
+          "conditioned": false
+        },
+        {
+          "token": "fulltrauma",
+          "count": 518,
+          "share": 0.00116,
+          "conditioned": false
+        },
+        {
+          "token": "trauma",
+          "count": 377,
+          "share": 0.00084,
+          "conditioned": false
+        }
+      ]
+    },
+    "psych": {
+      "description": "Psychiatric / behavioural-safety complaints (protocol-triaged).",
+      "preferred_emit": "suicidal",
+      "members": [
+        {
+          "token": "suicidal",
+          "count": 6570,
+          "share": 0.01472,
+          "conditioned": false
+        },
+        {
+          "token": "psychiatricevaluation",
+          "count": 5755,
+          "share": 0.01289,
+          "conditioned": false
+        },
+        {
+          "token": "anxiety",
+          "count": 2340,
+          "share": 0.00524,
+          "conditioned": false
+        },
+        {
+          "token": "depression",
+          "count": 1463,
+          "share": 0.00328,
+          "conditioned": false
+        },
+        {
+          "token": "hallucinations",
+          "count": 666,
+          "share": 0.00149,
+          "conditioned": false
+        },
+        {
+          "token": "panicattack",
+          "count": 609,
+          "share": 0.00136,
+          "conditioned": false
+        },
+        {
+          "token": "agitation",
+          "count": 530,
+          "share": 0.00119,
+          "conditioned": false
+        },
+        {
+          "token": "psychoticsymptoms",
+          "count": 387,
+          "share": 0.00087,
+          "conditioned": false
+        },
+        {
+          "token": "homicidal",
+          "count": 334,
+          "share": 0.00075,
+          "conditioned": false
+        }
+      ]
+    }
+  },
+  "conditioned_tokens": {
+    "fall>65": {
+      "base_token": "fall",
+      "base_in_vocab": true,
+      "requires": "age",
+      "count": 5847,
+      "share": 0.0131,
+      "derivation_rule": "LLM emits base 'fall'; code sets fall>65 when age>65, else keeps cc_fall."
+    },
+    "fever-75yearsorolder": {
+      "base_token": "fever",
+      "base_in_vocab": true,
+      "requires": "age",
+      "count": 1038,
+      "share": 0.00233,
+      "derivation_rule": "LLM emits base 'fever'; code sets fever-75yearsorolder when age>=75."
+    },
+    "fever-9weeksto74years": {
+      "base_token": "fever",
+      "base_in_vocab": true,
+      "requires": "age",
+      "count": 4887,
+      "share": 0.01095,
+      "derivation_rule": "LLM emits base 'fever'; code sets fever-9weeksto74years when 9 weeks<=age<75 (all adults 18-74)."
+    },
+    "overdose-intentional": {
+      "base_token": "overdose",
+      "base_in_vocab": false,
+      "requires": "intent",
+      "count": 486,
+      "share": 0.00109,
+      "derivation_rule": "LLM emits base 'overdose' + intent span; code sets -intentional when intent is deliberate/self-harm."
+    },
+    "overdose-accidental": {
+      "base_token": "overdose",
+      "base_in_vocab": false,
+      "requires": "intent",
+      "count": 527,
+      "share": 0.00118,
+      "derivation_rule": "LLM emits base 'overdose' + intent span; code sets -accidental when intent is accidental OR unstated (default). No plain cc_overdose column exists, so one of the two forms MUST be chosen."
+    },
+    "seizure-newonset": {
+      "base_token": "seizure",
+      "base_in_vocab": false,
+      "requires": "history",
+      "count": 681,
+      "share": 0.00153,
+      "derivation_rule": "LLM emits base 'seizure' + history span; code sets -newonset when NO prior seizure history is stated."
+    },
+    "seizure-priorhxof": {
+      "base_token": "seizure",
+      "base_in_vocab": false,
+      "requires": "history",
+      "count": 2595,
+      "share": 0.00581,
+      "derivation_rule": "LLM emits base 'seizure' + history span; code sets -priorhxof when a prior seizure history is stated. No singular cc_seizure column exists (only plural cc_seizures, n=127); code must choose a form or the rare plural fallback."
+    },
+    "headache-newonsetornewsymptoms": {
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "history",
+      "count": 6937,
+      "share": 0.01554,
+      "derivation_rule": "LLM emits base 'headache' + onset/history span; code sets -newonsetornewsymptoms for new onset or new/changed symptoms."
+    },
+    "headache-recurrentorknowndxmigraines": {
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "history",
+      "count": 1849,
+      "share": 0.00414,
+      "derivation_rule": "LLM emits base 'headache' + history span; code sets -recurrentorknowndxmigraines when recurrent or a known migraine dx is stated."
+    },
+    "headachere-evaluation": {
+      "base_token": "headache",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "count": 1994,
+      "share": 0.00447,
+      "derivation_rule": "Re-evaluation visit for a prior headache. Visit-context token (cf. woundre-evaluation), not age/history-conditioned; code sets it when the note frames this as a headache re-check/re-evaluation."
+    },
+    "elevatedbloodsugar-symptomatic": {
+      "base_token": "elevatedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "count": 1324,
+      "share": 0.00297,
+      "derivation_rule": "LLM emits base 'elevatedbloodsugar' (a.k.a. hyperglycemia) + symptom evidence; code sets -symptomatic when symptoms accompany the high glucose. No plain base column exists."
+    },
+    "elevatedbloodsugar-nosymptoms": {
+      "base_token": "elevatedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "count": 1100,
+      "share": 0.00246,
+      "derivation_rule": "LLM emits base 'elevatedbloodsugar'; code sets -nosymptoms when high glucose is reported without symptoms. No plain base column exists."
+    },
+    "decreasedbloodsugar-symptomatic": {
+      "base_token": "decreasedbloodsugar",
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "count": 937,
+      "share": 0.0021,
+      "derivation_rule": "LLM emits base 'decreasedbloodsugar' (hypoglycemia); code sets -symptomatic (the only low-blood-sugar form present). No plain base column exists."
+    },
+    "withdrawal-alcohol": {
+      "base_token": "withdrawal",
+      "base_in_vocab": false,
+      "requires": "substance",
+      "count": 517,
+      "share": 0.00116,
+      "derivation_rule": "LLM emits base 'withdrawal' + substance span; code sets -alcohol when substance is alcohol (the only withdrawal form present). No plain base column exists."
+    },
+    "post-opproblem": {
+      "base_token": "post-opproblem",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "count": 794,
+      "share": 0.00178,
+      "derivation_rule": "Visit-context compound (recent surgery / post-operative complication), NOT age/intent/history-conditioned. Self-based: emitted only when the note frames the visit as a post-op problem; code owns it so the LLM does not guess post-op status."
+    },
+    "follow-upcellulitis": {
+      "base_token": "cellulitis",
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "count": 762,
+      "share": 0.00171,
+      "derivation_rule": "Follow-up visit for known cellulitis; code sets it when the note frames a cellulitis re-check, else keeps base cc_cellulitis."
+    },
+    "woundre-evaluation": {
+      "base_token": "wound",
+      "base_in_vocab": false,
+      "requires": "visit_context",
+      "count": 552,
+      "share": 0.00124,
+      "derivation_rule": "Re-evaluation of a prior wound; code sets it for a wound re-check visit. Base concept 'wound' has no plain column (nearest: cc_woundcheck)."
+    }
+  },
+  "emittable_bases": {
+    "fall": {
+      "base_in_vocab": true,
+      "requires": "age",
+      "resolves_to": [
+        "fall>65"
+      ]
+    },
+    "fever": {
+      "base_in_vocab": true,
+      "requires": "age",
+      "resolves_to": [
+        "fever-9weeksto74years",
+        "fever-75yearsorolder"
+      ]
+    },
+    "overdose": {
+      "base_in_vocab": false,
+      "requires": "intent",
+      "resolves_to": [
+        "overdose-accidental",
+        "overdose-intentional"
+      ]
+    },
+    "seizure": {
+      "base_in_vocab": false,
+      "requires": "history",
+      "resolves_to": [
+        "seizure-priorhxof",
+        "seizure-newonset"
+      ]
+    },
+    "headache": {
+      "base_in_vocab": true,
+      "requires": "history",
+      "resolves_to": [
+        "headache-newonsetornewsymptoms",
+        "headachere-evaluation",
+        "headache-recurrentorknowndxmigraines"
+      ]
+    },
+    "elevatedbloodsugar": {
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "resolves_to": [
+        "elevatedbloodsugar-symptomatic",
+        "elevatedbloodsugar-nosymptoms"
+      ]
+    },
+    "decreasedbloodsugar": {
+      "base_in_vocab": false,
+      "requires": "symptoms",
+      "resolves_to": [
+        "decreasedbloodsugar-symptomatic"
+      ]
+    },
+    "withdrawal": {
+      "base_in_vocab": false,
+      "requires": "substance",
+      "resolves_to": [
+        "withdrawal-alcohol"
+      ]
+    },
+    "post-opproblem": {
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "resolves_to": [
+        "post-opproblem"
+      ]
+    },
+    "cellulitis": {
+      "base_in_vocab": true,
+      "requires": "visit_context",
+      "resolves_to": [
+        "follow-upcellulitis"
+      ]
+    },
+    "wound": {
+      "base_in_vocab": false,
+      "requires": "visit_context",
+      "resolves_to": [
+        "woundre-evaluation"
+      ]
+    }
+  }
+}

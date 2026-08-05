@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "source": "ordinal_encoder.pkl categories_ for 'arrivalmode'",
+    "purpose": "controlled extractor enum -> EXACT training string. A wrong-case string (e.g. 'Ambulance') encodes to NaN and silently drops the model's 4th-strongest feature.",
+    "case_quirk": "'ambulance' is lowercase; Car/Walk-in/Public Transportation/Wheelchair/Other are capitalised.",
+    "all_encoder_categories": [
+      "<NA>",
+      "Car",
+      "Other",
+      "Police",
+      "Public Transportation",
+      "Walk-in",
+      "Wheelchair",
+      "ambulance"
+    ],
+    "not_stated": "null / omit -> pass 'unknown' downstream (unknown_value=NaN); do NOT map to a real category.",
+    "unmapped_real_categories": [
+      "Police"
+    ],
+    "unmapped_note": "'Police' is a real training arrivalmode with no enum value in the §4 controlled set; police-transport arrivals should map to 'other'. '<NA>' is the encoder's missing sentinel (code 0), not an arrival mode."
+  },
+  "enum_to_training_string": {
+    "ambulance": "ambulance",
+    "car": "Car",
+    "walk_in": "Walk-in",
+    "public_transport": "Public Transportation",
+    "wheelchair": "Wheelchair",
+    "other": "Other"
+  }
+}

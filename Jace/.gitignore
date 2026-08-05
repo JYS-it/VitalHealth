@@ -1,0 +1,18 @@
+# Large model-fit arrays — build-time only. The deployed app runs off
+# vocab/precomputed_stats.json + ctrse_p1p4_model.pkl instead (see precompute_stats.py).
+*.npy
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Runtime output
+logs/
+
+# Secrets / local env — GEMINI_API_KEY is read from the environment, never committed
+.env
+*.key
+*.pem
+*.csv

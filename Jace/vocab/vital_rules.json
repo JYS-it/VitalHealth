@@ -1,0 +1,97 @@
+{
+  "_meta": {
+    "source": "ctrse_core.NORMAL (normal bands, incl. the dbp band) + NB1 unit facts",
+    "model_space_units": "triage_vital_temp is CELSIUS in model space (NB1 converts raw Fahrenheit). All other vitals are in the units below.",
+    "typed_not_extracted": "Vitals are typed with explicit units in the UI (§5); never parsed from prose. temp carries a unit toggle; o2 carries a device.",
+    "missing": "not recorded -> NaN in the feature vector (HGB handles natively)."
+  },
+  "vitals": {
+    "hr": {
+      "feature": "triage_vital_hr",
+      "unit": "bpm",
+      "normal": [
+        50,
+        110
+      ],
+      "plausible": [
+        20,
+        250
+      ]
+    },
+    "sbp": {
+      "feature": "triage_vital_sbp",
+      "unit": "mmHg",
+      "normal": [
+        90,
+        180
+      ],
+      "plausible": [
+        40,
+        300
+      ]
+    },
+    "dbp": {
+      "feature": "triage_vital_dbp",
+      "unit": "mmHg",
+      "normal": [
+        60,
+        90
+      ],
+      "plausible": [
+        20,
+        200
+      ]
+    },
+    "rr": {
+      "feature": "triage_vital_rr",
+      "unit": "breaths/min",
+      "normal": [
+        10,
+        24
+      ],
+      "plausible": [
+        4,
+        60
+      ]
+    },
+    "o2": {
+      "feature": "triage_vital_o2",
+      "unit": "%",
+      "normal": [
+        94,
+        100
+      ],
+      "plausible": [
+        50,
+        100
+      ],
+      "device_feature": "triage_vital_o2_device",
+      "device_note": "device (RA/NC/etc) is a separate categorical, not numeric"
+    },
+    "temp": {
+      "feature": "triage_vital_temp",
+      "unit": "C",
+      "normal": [
+        35.5,
+        38.0
+      ],
+      "plausible_c": [
+        30.0,
+        43.0
+      ],
+      "plausible_f": [
+        86.0,
+        109.4
+      ]
+    }
+  },
+  "temp_conversion": {
+    "model_unit": "C",
+    "f_to_c": "C = (F - 32) * 5 / 9",
+    "rule": "If entered in F, convert to C BEFORE writing triage_vital_temp and before the plausible-range check (use plausible_c).",
+    "example": {
+      "98.6F": 37.0,
+      "100.4F": 38.0
+    }
+  }
+}

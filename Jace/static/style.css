@@ -1,0 +1,491 @@
+/* ==========================================================================
+   CTRSE — bespoke design system (spec §4). Machine facts = mono, prose = sans.
+   All section spacing lives on ONE class family (.card/.panel/.stack/.sb-*) so
+   type-selector vs class padding never collide (§5 note).
+   ========================================================================== */
+
+/* --- §4.1 Tokens (verbatim) --- */
+:root{
+  /* Acuity (data-only saturated hues — from NB1 EDA palette) */
+  --p1:#d62728; --p2:#ff7f0e; --p3:#2ca02c; --p4:#1f77b4;
+  --p1-tint:#fdecec; --p2-tint:#fff2e6; --p3-tint:#eaf6ea; --p4-tint:#e9f1f8;
+
+  /* Neutral ink scale (chrome — quiet, cool) */
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#eef1f4;
+  --border:#e0e4e9; --border-strong:#cdd3db;
+  --text:#161b22; --text-muted:#5a6472; --text-faint:#8b94a1;
+
+  /* One restrained accent for interaction — slate, NOT blue (blue is P4 data) */
+  --accent:#334155; --accent-hover:#1e293b; --on-accent:#ffffff;
+
+  /* Status */
+  --pass:#1a7f4b; --pass-tint:#e7f4ec; --warn:#b7791f; --warn-tint:#fbf3e4;
+
+  /* Type */
+  --font-sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --fs-xs:.75rem; --fs-sm:.875rem; --fs-base:1rem; --fs-lg:1.125rem;
+  --fs-xl:1.5rem; --fs-2xl:2rem;
+  --lh-body:1.55; --lh-tight:1.25;
+
+  /* Spacing (4px base) */
+  --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem; --s6:2rem; --s8:3rem;
+
+  /* Radius & shadow (restrained — clinical, not playful) */
+  --r-sm:6px; --r:10px; --r-lg:14px; --r-pill:999px;
+  --sh-sm:0 1px 2px rgba(16,24,40,.06); --sh:0 4px 14px rgba(16,24,40,.08);
+}
+
+/* --- Reset --- */
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-sans);
+  font-size:var(--fs-base);
+  line-height:var(--lh-body);
+}
+[x-cloak]{display:none !important;}
+
+/* Mono utility — every machine fact carries this */
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-feature-settings:"tnum";}
+.eyebrow{
+  font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.06em;
+  color:var(--text-muted); font-weight:600;
+}
+
+/* Small layout utilities (keeps all styling out of inline attributes, spec §1) */
+.mb2{margin-bottom:var(--s2);}
+.ml2{margin-left:var(--s2);}
+.mr3{margin-right:var(--s3);}
+.contents{display:contents;}
+.row-between{display:flex; justify-content:space-between;}
+
+/* --- Focus rings (quality floor) --- */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm);
+}
+
+/* ==========================================================================
+   Shell / layout (§4.2)
+   ========================================================================== */
+.app{max-width:1280px; margin:0 auto; padding:0 var(--s5) var(--s8);}
+
+.header{
+  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; gap:var(--s4);
+  height:64px; padding:0 var(--s5);
+  background:rgba(246,247,249,.88); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);
+}
+.header__wrap{max-width:1280px; margin:0 auto; width:100%; display:flex; align-items:center; gap:var(--s4);}
+.brand{font-weight:700; font-size:var(--fs-lg); letter-spacing:.01em; white-space:nowrap;}
+.brand .sep{color:var(--text-faint); margin:0 var(--s2);}
+.scope-badge{
+  font-size:var(--fs-xs); color:var(--text-muted);
+  background:var(--surface-2); border:1px solid var(--border);
+  padding:var(--s1) var(--s3); border-radius:var(--r-pill); white-space:nowrap;
+}
+.header__meta{
+  margin-left:auto; display:flex; align-items:center; gap:var(--s4);
+  font-size:var(--fs-xs); color:var(--text-muted); white-space:nowrap;
+}
+.header__meta .k{color:var(--text-faint);}
+.dot{width:8px; height:8px; border-radius:50%; display:inline-block; vertical-align:middle;}
+.dot--live{background:var(--pass);} .dot--offline{background:var(--warn);}
+
+.layout{display:grid; grid-template-columns:300px 1fr; gap:var(--s5); padding-top:var(--s5);}
+
+/* Main holds 1 column (single mode) or 2 (compare, §3.1). Each .column is a full
+   Model + Gen-AI pair: side-by-side in single mode, stacked when comparing two patients. */
+.main{display:grid; grid-template-columns:1fr; gap:var(--s5); align-content:start;}
+.main.compare{grid-template-columns:1fr 1fr;}
+.column{display:grid; grid-template-columns:1fr 1fr; gap:var(--s5); align-content:start; min-width:0;}
+.main.compare .column{grid-template-columns:1fr;}
+.col-tag{margin-left:auto; font-size:var(--fs-xs); color:var(--text-faint); text-transform:none; letter-spacing:0;}
+
+/* ==========================================================================
+   Cards / panels — single spacing family
+   ========================================================================== */
+.card{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-lg); box-shadow:var(--sh-sm);
+  padding:var(--s5);
+}
+.panel{min-width:0;}
+.panel__title{display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s4);}
+.stack > * + *{margin-top:var(--s4);}
+.stack--tight > * + *{margin-top:var(--s2);}
+
+/* ==========================================================================
+   Sidebar (§4.2)
+   ========================================================================== */
+.sidebar{align-self:start; position:sticky; top:80px;}
+.sidebar__group + .sidebar__group{margin-top:var(--s5);}
+.arche-btn{
+  font-family:var(--font-sans); font-size:var(--fs-xs); font-weight:600;
+  color:var(--text); background:var(--surface-2);
+  border:1px solid var(--border); border-radius:var(--r-pill);
+  padding:var(--s1) var(--s3); cursor:pointer;
+}
+.arche-btn:hover{border-color:var(--border-strong);}
+.arche-btn[aria-pressed="true"]{background:var(--accent); color:var(--on-accent); border-color:var(--accent);}
+
+.filter-row{display:flex; flex-wrap:wrap; gap:var(--s1);}
+.filter-btn{
+  font-size:var(--fs-xs); font-weight:600; color:var(--text-muted);
+  background:transparent; border:1px solid var(--border);
+  border-radius:var(--r-sm); padding:var(--s1) var(--s2); cursor:pointer;
+}
+.filter-btn[aria-pressed="true"]{background:var(--surface-2); color:var(--text); border-color:var(--border-strong);}
+
+.compare-controls{display:flex; flex-wrap:wrap; gap:var(--s2); align-items:center;}
+.slot-hint{margin-top:var(--s2); font-size:var(--fs-xs); color:var(--text-faint);}
+
+.plist{list-style:none; margin:0; padding:0; max-height:60vh; overflow:auto;}
+.plist__item{
+  display:flex; align-items:center; gap:var(--s2);
+  width:100%; text-align:left; cursor:pointer;
+  background:transparent; border:0; border-radius:var(--r-sm);
+  padding:var(--s2) var(--s2); color:var(--text);
+  border:1px solid transparent;
+}
+.plist__item:hover{background:var(--surface-2);}
+.plist__item[aria-current="true"]{background:var(--surface-2); border-color:var(--border-strong);}
+.plist__lvl{width:10px; height:10px; border-radius:50%; flex:0 0 auto;}
+.plist__code{font-size:var(--fs-xs); font-weight:700; width:22px; flex:0 0 auto;}
+.plist__summary{font-size:var(--fs-xs); color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.count{font-size:var(--fs-xs); color:var(--text-faint);}
+
+/* ==========================================================================
+   Signature — acuity expression (§4.3)
+   ========================================================================== */
+.badge{
+  display:inline-block; color:var(--on-accent);
+  font-family:var(--font-sans); font-weight:700; font-size:var(--fs-xl);
+  letter-spacing:.02em; border-radius:var(--r); padding:var(--s2) var(--s4);
+}
+.badge--sm{font-size:var(--fs-base); padding:var(--s1) var(--s3);}
+
+/* Basis pill (§3.1) — muted metadata, NOT a second saturated acuity signal */
+.basis-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2); margin-top:var(--s2);}
+.basis-pill{
+  font-size:var(--fs-xs); font-weight:600; letter-spacing:.04em;
+  color:var(--text-muted); background:var(--surface-2);
+  border:1px solid var(--border); border-radius:var(--r-pill);
+  padding:var(--s1) var(--s3);
+}
+.basis-pill__ts{
+  font-size:var(--fs-xs); color:var(--warn); background:var(--warn-tint);
+  border-radius:var(--r-pill); padding:var(--s1) var(--s2);
+}
+
+.dist{margin-top:var(--s3);}
+.dist__bar{
+  display:flex; width:100%; height:14px; border-radius:var(--r-pill);
+  overflow:hidden; background:var(--surface-2); position:relative;
+}
+.dist__seg{height:100%; opacity:.45;}
+.dist__seg--pred{opacity:1;}
+.dist__tick{
+  position:absolute; top:-3px; bottom:-3px; width:2px;
+  background:var(--text); border-radius:1px;
+}
+.dist__read{
+  margin-top:var(--s2); display:flex; flex-wrap:wrap; gap:var(--s1) var(--s3);
+  font-size:var(--fs-xs); color:var(--text-muted);
+}
+.dist__read b{color:var(--text); font-weight:600;}
+.dist__note{margin-top:var(--s1); font-size:var(--fs-xs); color:var(--text-faint);}
+
+/* Confidence (§4.4) */
+.conf__val{font-family:var(--font-sans); font-size:var(--fs-sm); font-weight:600;}
+.conf--p1{color:var(--p1);} .conf--warn{color:var(--warn);}
+.conf--pass{color:var(--pass);} .conf--text{color:var(--text);}
+
+/* Red-flag banner (§4.4) — only when triggered */
+.redflag{
+  background:var(--p1-tint); border-left:3px solid var(--p1);
+  border-radius:var(--r-sm); padding:var(--s2) var(--s3);
+  font-family:var(--font-sans); font-weight:600; color:var(--text);
+  display:flex; align-items:center; gap:var(--s2);
+}
+
+/* Chips (§4.4) */
+.chips{display:flex; flex-wrap:wrap; gap:var(--s2);}
+.chip{
+  display:inline-flex; align-items:center; gap:var(--s1);
+  background:var(--surface-2); color:var(--text-muted);
+  font-size:var(--fs-xs); padding:var(--s1) var(--s3); border-radius:var(--r-pill);
+}
+.chip .mono{color:var(--text);}
+.chip--rf{background:var(--p1-tint); color:var(--p1);}
+.chip__stat{color:var(--text-faint);}
+.empty-inline{font-size:var(--fs-xs); color:var(--text-faint); font-style:italic;}
+
+/* Abnormal vitals (§4.4) */
+.vitals{display:flex; flex-wrap:wrap; gap:var(--s2);}
+.vpill{
+  display:inline-flex; align-items:center; gap:var(--s2);
+  background:var(--surface); border:1px solid var(--border-strong);
+  border-radius:var(--r-pill); padding:var(--s1) var(--s3);
+}
+.vpill__label{font-size:var(--fs-xs); color:var(--text-muted);}
+.vpill__num{font-size:var(--fs-sm); font-weight:600;}
+.vpill__dot{width:6px; height:6px; border-radius:50%; background:var(--p1);}
+
+/* Fact rows (age / arrival / dept / utilisation) */
+.facts{display:grid; grid-template-columns:auto 1fr; gap:var(--s1) var(--s4); align-items:baseline;}
+.facts dt{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);}
+.facts dd{margin:0; font-size:var(--fs-sm);}
+
+/* ==========================================================================
+   Gen-AI panel (§4.5)
+   ========================================================================== */
+.toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s3);}
+.segmented{display:inline-flex; background:var(--surface-2); border-radius:var(--r); padding:3px;}
+.segmented button{
+  font-family:var(--font-sans); font-size:var(--fs-sm); font-weight:600;
+  color:var(--text-muted); background:transparent; border:0;
+  padding:var(--s2) var(--s3); border-radius:calc(var(--r) - 3px); cursor:pointer;
+}
+.segmented button[aria-pressed="true"]{background:var(--surface); color:var(--accent); box-shadow:var(--sh-sm);}
+
+.btn-generate{
+  font-family:var(--font-sans); font-weight:600; font-size:var(--fs-sm);
+  color:var(--on-accent); background:var(--accent); border:0;
+  border-radius:var(--r); padding:var(--s2) var(--s5); cursor:pointer;
+}
+.btn-generate:hover{background:var(--accent-hover);}
+.btn-generate:disabled{opacity:.55; cursor:progress;}
+
+.source{display:inline-flex; align-items:center; gap:var(--s2); font-size:var(--fs-xs); color:var(--text-muted);}
+.source .dot--pass{background:var(--pass);} .source .dot--accent{background:var(--accent);} .source .dot--warn{background:var(--warn);}
+
+.guard{
+  display:inline-flex; align-items:center; gap:var(--s2);
+  font-size:var(--fs-xs); font-weight:600; padding:var(--s1) var(--s3); border-radius:var(--r-pill);
+}
+.guard--pass{background:var(--pass-tint); color:var(--pass);}
+.guard--flag{background:var(--warn-tint); color:var(--warn);}
+.guard--offline{background:var(--surface-2); color:var(--text-muted);}
+
+/* Adversarial guardrail control (§3.3) */
+.btn-ghost{
+  font-family:var(--font-sans); font-size:var(--fs-xs); font-weight:600;
+  color:var(--text-muted); background:transparent;
+  border:1px solid var(--border-strong); border-radius:var(--r-sm);
+  padding:var(--s1) var(--s3); cursor:pointer;
+}
+.btn-ghost:hover{border-color:var(--warn); color:var(--warn);}
+.synthetic-note{font-size:var(--fs-xs); color:var(--warn); font-style:italic;}
+.synthetic-candidate{
+  font-size:var(--fs-xs); color:var(--text-muted);
+  background:var(--warn-tint); border-left:3px solid var(--warn);
+  border-radius:var(--r-sm); padding:var(--s2) var(--s3);
+}
+
+/* Register blocks — the two Gen-AI outputs shown together (§3.2) */
+.reg-block + .reg-block{margin-top:var(--s4); padding-top:var(--s4); border-top:1px dashed var(--border);}
+.reg-label{display:flex; align-items:center; justify-content:space-between; gap:var(--s2); margin-bottom:var(--s2);}
+.reg-actions{display:inline-flex; align-items:center; gap:var(--s2);}
+
+.prose{font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body); max-width:62ch;}
+
+.sbar__body--llm{font-size:var(--fs-base); line-height:var(--lh-body);}
+.footnote{margin-top:var(--s3); font-size:var(--fs-xs); color:var(--text-faint);}
+
+/* Clinical triage handover note */
+.hnote{
+  border:1px solid var(--border-strong); border-radius:var(--r);
+  background:var(--surface); overflow:hidden;
+}
+.hnote__header{
+  display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--s2);
+  padding:var(--s2) var(--s3); background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.hnote__title{font-weight:700; font-size:var(--fs-xs); letter-spacing:.08em; color:var(--text);}
+.hnote__time{font-size:var(--fs-xs); color:var(--text-faint);}
+.hnote__sec{display:grid; grid-template-columns:1.4rem 1fr; gap:var(--s3); padding:var(--s3);}
+.hnote__sec + .hnote__sec{border-top:1px solid var(--border);}
+.hnote__k{font-weight:700; font-size:var(--fs-base); color:var(--accent); line-height:1.3;}
+.hnote__body{min-width:0; font-family:var(--font-sans); font-size:var(--fs-sm);}
+.hnote__body > * + *{margin-top:var(--s2);}
+.hnote__line{font-size:var(--fs-sm); line-height:var(--lh-body);}
+.hnote__lbl{color:var(--text-muted); margin-right:var(--s1);}
+.hnote__missing{color:var(--warn);}
+.vitseg{white-space:nowrap;}
+.vitseg__lbl{color:var(--text-muted);}
+.vitseg--abn{color:var(--p1); font-weight:600;}
+.vitseg--abn .vitseg__lbl{color:var(--p1);}
+.hnote__printfoot{display:none;}   /* print-only disclaimer (see @media print) */
+
+.disclaimer{
+  margin-top:var(--s4); padding-top:var(--s3); border-top:1px solid var(--border);
+  font-size:var(--fs-xs); color:var(--text-faint);
+}
+
+.empty-state{
+  color:var(--text-muted); font-size:var(--fs-sm);
+  display:flex; align-items:center; min-height:180px;
+}
+.msg-warn{color:var(--warn); font-size:var(--fs-sm);}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.footer{margin-top:var(--s6); padding-top:var(--s4); border-top:1px solid var(--border); color:var(--text-muted); font-size:var(--fs-xs);}
+.footer details{margin-top:var(--s2);}
+.footer summary{cursor:pointer; color:var(--accent); font-weight:600;}
+.footer details p{max-width:70ch;}
+
+/* ==========================================================================
+   Intake (§5) — two-zone input, confirmation traceability, result notice.
+   Existing tokens only; flag styling reuses the guard/warn family.
+   ========================================================================== */
+.mode-switch{margin-left:var(--s2);}
+
+.layout--intake{grid-template-columns:1fr;}
+.intake-col{display:grid; gap:var(--s5); align-content:start; min-width:0;}
+
+/* Stage 1 — the two zones read as distinct instruments */
+.izone{border:1px solid var(--border); border-radius:var(--r); padding:var(--s4); background:var(--surface);}
+.izone + .izone{margin-top:var(--s4);}
+.note-input{
+  width:100%; resize:vertical; min-height:96px;
+  font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body);
+  color:var(--text); background:var(--surface);
+  border:1px solid var(--border-strong); border-radius:var(--r-sm); padding:var(--s3);
+}
+.note-input:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+.seed-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2); margin-top:var(--s3);}
+
+.vit-grid{display:flex; flex-wrap:wrap; gap:var(--s3) var(--s5); margin-top:var(--s3);}
+.vfield{display:inline-flex; align-items:center; gap:var(--s2);}
+.vfield__lbl{font-size:var(--fs-xs); font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;}
+.vfield__pair{display:inline-flex; align-items:center; gap:var(--s1);}
+.vfield__sep{color:var(--text-faint);}
+.finput{
+  font-family:var(--font-mono); font-size:var(--fs-sm); color:var(--text);
+  background:var(--surface); border:1px solid var(--border-strong);
+  border-radius:var(--r-sm); padding:var(--s1) var(--s2); max-width:100%;
+}
+.finput--num{width:5.5rem;}
+select.finput{font-family:var(--font-mono);}
+
+/* Stage 2 — note view + span highlight (the signature interaction) */
+.note-view{
+  font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body);
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:var(--r); padding:var(--s3) var(--s4); white-space:pre-wrap;
+}
+.note-view mark{
+  background:var(--warn-tint); color:var(--text);
+  border-bottom:2px solid var(--accent); border-radius:2px; padding:0 1px;
+}
+
+.frows{display:grid; gap:var(--s3);}
+.frow{
+  display:grid; grid-template-columns:110px 1fr; gap:var(--s1) var(--s4);
+  align-items:center; padding:var(--s2) var(--s3);
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface);
+}
+.frow:hover{border-color:var(--border-strong); background:var(--surface-2);}
+.frow__label{align-self:center;}
+.frow__control{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2); min-width:0;}
+.frow__control--ro{font-size:var(--fs-sm);}
+.frow__src{grid-column:2; font-size:var(--fs-xs); color:var(--text-faint);}
+.not-stated{
+  font-size:var(--fs-xs); font-style:italic; color:var(--text-faint);
+  border:1px dashed var(--border-strong); border-radius:var(--r-pill); padding:var(--s1) var(--s3);
+}
+
+.flag{
+  grid-column:2; display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2) var(--s3);
+  font-size:var(--fs-xs); color:var(--warn); background:var(--warn-tint);
+  border-radius:var(--r-sm); padding:var(--s1) var(--s3);
+}
+.flag__mark{font-weight:700;}
+.ack{display:inline-flex; align-items:center; gap:var(--s2); font-size:var(--fs-xs); color:var(--text); cursor:pointer;}
+.ack input{accent-color:var(--accent);}
+.ack--gate{margin-top:var(--s2); font-weight:600;}
+
+.gnotices{border:1px solid var(--border); border-radius:var(--r); padding:var(--s3) var(--s4); background:var(--surface-2);}
+.gnotices .backstop-bar{margin-top:var(--s3);}
+.gnotices .synthetic-candidate{margin-top:var(--s2);}
+.gnotice-list{margin:0; padding-left:var(--s4); font-size:var(--fs-sm);}
+.gnotice-list li{margin:var(--s1) 0;}
+.gnotice-list li::marker{color:var(--warn);}
+
+.refusal{
+  background:var(--p1-tint); border-left:3px solid var(--p1);
+  border-radius:var(--r-sm); padding:var(--s3) var(--s4);
+  font-family:var(--font-sans); color:var(--text);
+  display:flex; align-items:baseline; gap:var(--s2);
+}
+
+.intake-result-bar{margin-top:var(--s3);}
+
+/* Honest-scope notice — quiet informational strip shown with every prediction */
+.scope-note{
+  display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2);
+  font-size:var(--fs-xs); color:var(--text-muted);
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:var(--r-sm); padding:var(--s2) var(--s3);
+}
+
+.derived-tag{
+  font-size:var(--fs-xs); font-weight:600; letter-spacing:.03em; text-transform:none;
+  color:var(--warn); background:var(--warn-tint);
+  border-radius:var(--r-pill); padding:var(--s1) var(--s2);
+}
+
+/* ==========================================================================
+   Responsive (§4.2) — collapse below 900px
+   ========================================================================== */
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;}
+  .main, .main.compare{grid-template-columns:1fr;}
+  .column, .main.compare .column{grid-template-columns:1fr;}
+  .sidebar{position:static;}
+  .plist{max-height:40vh;}
+  .header__meta{display:none;}
+  .mode-switch{margin-left:auto;}
+  .frow{grid-template-columns:1fr;}
+  .frow__src, .flag{grid-column:1;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important; animation:none !important; scroll-behavior:auto !important;}
+}
+
+/* ==========================================================================
+   Print (Handoff 2 §B1) — the handover note IS the printed page. All app chrome
+   hidden; monochrome; the S/B/A/R gutter-label layout preserved; disclaimer footer
+   included via .hnote__printfoot. The browser's print dialog provides PDF.
+   ========================================================================== */
+@media print{
+  body *{visibility:hidden;}
+  .print-target, .print-target *{visibility:visible;}
+  .print-target{
+    position:absolute; left:0; top:0; width:100%;
+    border:1px solid #000; border-radius:0; box-shadow:none;
+  }
+  /* monochrome: text black, backgrounds white, structure via grey rules */
+  .print-target, .print-target *{
+    color:#000 !important; background:#fff !important; box-shadow:none !important;
+  }
+  .print-target .hnote__header{border-bottom:1px solid #000;}
+  .print-target .hnote__sec + .hnote__sec{border-top:1px solid #888;}
+  .print-target .badge, .print-target .badge--sm{
+    border:1.5px solid #000; border-radius:4px; padding:1px 6px; font-weight:700;
+  }
+  .print-target .hnote__lbl, .print-target .vitseg__lbl, .print-target .hnote__time{color:#444 !important;}
+  .print-target .vitseg--abn{font-weight:700;}          /* abnormal emphasis survives in mono */
+  .print-target .hnote__printfoot{
+    display:block; padding:var(--s2) var(--s3); border-top:1px solid #000;
+    font-size:var(--fs-xs); color:#444 !important;
+  }
+}

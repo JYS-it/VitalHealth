@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "purpose": "Gate 2 (spec §2.1) note-shaped ablation on the REAL ctrse_p1p4_model.pkl. These numbers populate the Phase-4 provenance banner (§10).",
+    "prediction_chain": "argmax -> P1-threshold override (p1_threshold) -> red-flag floor (identical to ctrse_core.predict_level)",
+    "p1_threshold": 0.2137601155374617,
+    "n_test_rows": 111606,
+    "n_features": 552,
+    "note_shaping": {
+      "kept_note_features": 210,
+      "zeroed_flags": {
+        "ccs_history": 280,
+        "med_classes": 48
+      },
+      "nan_features": [
+        "n_edvisits",
+        "n_admissions",
+        "n_surgeries",
+        "ethnicity",
+        "race",
+        "lang",
+        "religion",
+        "maritalstatus",
+        "employstatus",
+        "insurance_status",
+        "previousdispo",
+        "arrivalmonth",
+        "arrivalday",
+        "arrivalhour_bin"
+      ],
+      "red_flags_stripped_by_note_shaping": []
+    },
+    "metrics": {
+      "balanced_accuracy": "sklearn balanced_accuracy_score",
+      "macro_f2": "sklearn fbeta_score(beta=2, average='macro')",
+      "recall_at_p1": "TP_P1 / actual_P1 (class 3)"
+    },
+    "label_noise_ceiling_pct": 80,
+    "label_noise_conflict_pct": 61.9,
+    "warnings": []
+  },
+  "full_records": {
+    "balanced_accuracy": 0.7289,
+    "macro_f2": 0.606,
+    "recall_at_p1": 0.8425
+  },
+  "note_shaped_with_vitals": {
+    "balanced_accuracy": 0.7067,
+    "macro_f2": 0.5888,
+    "recall_at_p1": 0.814
+  },
+  "note_shaped_no_vitals": {
+    "balanced_accuracy": 0.6774,
+    "macro_f2": 0.5295,
+    "recall_at_p1": 0.8435
+  },
+  "deltas_vs_full": {
+    "note_shaped_with_vitals": {
+      "balanced_accuracy": -0.0222,
+      "macro_f2": -0.0172,
+      "recall_at_p1": -0.0285
+    },
+    "note_shaped_no_vitals": {
+      "balanced_accuracy": -0.0515,
+      "macro_f2": -0.0765,
+      "recall_at_p1": 0.001
+    }
+  },
+  "filled_feature_count": {
+    "definition": "informative note-derived features per row = active cc_ (==1) + stated age/gender/arrival + typed vitals; zeroed CCS/meds flags and NaN demographics are defaults, not fills",
+    "of_total_features": 552,
+    "note_supply_capacity": 210,
+    "with_vitals": {
+      "median": 10,
+      "mean": 8.73,
+      "min": 3,
+      "max": 17
+    },
+    "without_vitals": {
+      "median": 4,
+      "mean": 4.13,
+      "min": 3,
+      "max": 10
+    }
+  }
+}

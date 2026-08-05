@@ -1,0 +1,14 @@
+# Runtime dependencies for the deployed CTRSE app (api.py + ctrse_core.py).
+# Versions pinned to the it3100 build environment. scikit-learn==1.5.1 is the critical
+# pin: a mismatch breaks unpickling ctrse_p1p4_model.pkl on the host.
+# shap is intentionally omitted — not a runtime dependency (SHAP is baked into
+# sample/patients.json at build time; note-derived predictions degrade gracefully).
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
+scikit-learn==1.5.1
+pandas==2.3.3
+numpy==1.26.4
+joblib==1.5.2
+google-genai==1.47.0
+python-multipart==0.0.20
+pydantic==2.13.4
