@@ -5,6 +5,45 @@ behind a single reverse-proxy gateway. Each app keeps its own dependencies,
 its own virtual environment, and its own run command — they are **not**
 merged into a single codebase and do not share a Python environment.
 
+## Quickstart (new clone)
+
+**Prerequisites:** Python 3.11 (tested; Jace also works on 3.9, its original
+target — anything in that range is fine) and Git.
+
+```bash
+git clone <this-repo-url>
+cd Integration
+python run_all.py
+```
+
+That one command sets up everything on a fresh clone: it creates a venv for
+each of the four processes, installs each one's `requirements.txt`, starts
+Jace, Jeslyn, and YS, then the gateway once all three backends are reachable,
+and opens **http://127.0.0.1:8080/** in your browser automatically. First run
+takes a few minutes (installing dependencies); later runs start in seconds
+since the venvs already exist.
+
+Want the AI-drafted-text features (care plans, EMC drafts, note extraction),
+not just the ML predictions? Add API keys before running — see
+[Environment variables](#environment-variables) below; the predictions work
+fine without them either way.
+
+Stop everything with **Ctrl+C** in the terminal running `run_all.py` — it
+tears down all four processes cleanly, including Flask's debug-reloader
+child process (which orphans itself on its port if killed the naive way).
+
+**Troubleshooting:**
+- *Port already in use* — `run_all.py` checks all four ports up front and
+  tells you exactly which app/port conflicts before doing anything; stop
+  whatever's already listening (`netstat -ano | findstr :5000` on Windows)
+  and re-run.
+- *A dependency install fails* — that app's own `requirements.txt` is the
+  source of truth; check its pinned versions (see
+  [Why separate environments](#why-separate-environments)) against your
+  Python version.
+- Prefer to run one app at a time instead of the combined script? See
+  [Manual / advanced](#manual--advanced-run-one-app-at-a-time) below.
+
 ## Applications
 
 | App | Framework | Purpose |
@@ -30,26 +69,11 @@ unpickling of `ctrse_p1p4_model.pkl`. Always install each app into its own
 venv. This is also why "one web app" here means a **gateway in front of four
 independent processes**, not one merged codebase.
 
-## Running behind the gateway (recommended)
+## How the gateway works
 
-Open four terminals, one per process, each `cd`'d into that app's directory
-with its venv activated:
-
-```bash
-# Terminal 1 — Jace (FastAPI), port 8000
-cd apps/Jace && uvicorn api:app --host 127.0.0.1 --port 8000
-
-# Terminal 2 — Jeslyn (Flask), port 5000
-cd apps/Jeslyn && python app.py
-
-# Terminal 3 — YS (Flask), port 5001
-cd apps/YS && PORT=5001 python app.py
-
-# Terminal 4 — gateway, port 8080 (the one URL users hit)
-cd apps/gateway && uvicorn main:app --host 127.0.0.1 --port 8080
-```
-
-Then open `http://127.0.0.1:8080/` — a landing page links to:
+`python run_all.py` (or `apps/gateway` started manually — see
+[Manual / advanced](#manual--advanced-run-one-app-at-a-time)) puts a single
+URL, `http://127.0.0.1:8080/`, in front of all three apps:
 
 - `/triage/` → Jace
 - `/stroke/` → Jeslyn
@@ -69,17 +93,29 @@ root-absolute ones (a deliberate, minimal change — see git history on
 `apps/Jace/static/`), which is what lets it work both standalone at `/` and
 proxied at `/triage/` with no backend routing changes.
 
-## Running each app standalone
+## Manual / advanced (run one app at a time)
 
-Every app can still be launched on its own, exactly as before the gateway
-existed — useful for developing or debugging one app in isolation.
+`run_all.py` is the recommended path (see Quickstart above), but every app
+can still be set up and launched on its own — useful for developing or
+debugging one app in isolation, or in an environment where running four
+processes from one script isn't wanted. Each app needs its own venv:
+
+```bash
+cd apps/<name>       # Jace, Jeslyn, YS, or gateway
+python -m venv .venv && .venv/Scripts/activate   # Windows; use .venv/bin/activate on POSIX
+pip install -r requirements.txt
+```
+
+Jace, Jeslyn, and YS each ship a `.env.example` — copy it to `.env` and fill
+in real keys if you want the GenAI features (optional; see
+[Environment variables](#environment-variables)). Note that only Jeslyn and
+YS load `.env` themselves; Jace reads `GEMINI_API_KEY` straight from the
+process environment, so export it in your shell before launching Jace
+standalone (`run_all.py` handles this for you automatically).
 
 ### apps/Jace (FastAPI)
 
 ```bash
-cd apps/Jace
-python -m venv .venv && .venv/Scripts/activate   # Windows; use .venv/bin/activate on POSIX
-pip install -r requirements.txt
 uvicorn api:app --reload
 ```
 
@@ -88,9 +124,6 @@ Serves the SPA at `http://127.0.0.1:8000/`. Tests: `pytest` from `apps/Jace`.
 ### apps/Jeslyn (Flask)
 
 ```bash
-cd apps/Jeslyn
-python -m venv .venv && .venv/Scripts/activate
-pip install -r requirements.txt
 python app.py
 ```
 
@@ -99,9 +132,6 @@ Defaults to `http://127.0.0.1:5000/`.
 ### apps/YS (Flask)
 
 ```bash
-cd apps/YS
-python -m venv .venv && .venv/Scripts/activate
-pip install -r requirements.txt
 PORT=5001 python app.py
 ```
 
@@ -110,9 +140,6 @@ Also defaults to port 5000, so set `PORT` if Jeslyn is already running.
 ### apps/gateway (FastAPI)
 
 ```bash
-cd apps/gateway
-python -m venv .venv && .venv/Scripts/activate
-pip install -r requirements.txt
 uvicorn main:app --port 8080
 ```
 
@@ -122,7 +149,10 @@ proxied route 404s while the landing page at `/` still works.
 ## Environment variables
 
 Each app reads its own secrets from the environment (or a local `.env`). No
-keys are committed; `.env` is gitignored.
+keys are committed; `.env` is gitignored. Jace, Jeslyn, and YS each ship a
+`.env.example` — copy it to `.env` and fill in real values. `run_all.py`
+reads all three automatically (see [Manual / advanced](#manual--advanced-run-one-app-at-a-time)
+for the one exception: Jace's own code doesn't load `.env` itself).
 
 | Variable | Used by | Notes |
 | --- | --- | --- |
