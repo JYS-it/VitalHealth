@@ -89,8 +89,8 @@ document.addEventListener('alpine:init', () => {
       });
       try {
         const [metaRes, patRes] = await Promise.all([
-          fetch('/api/meta'),
-          fetch('/api/patients'),
+          fetch('api/meta'),
+          fetch('api/patients'),
         ]);
         this.meta = await metaRes.json();
         const pat = await patRes.json();
@@ -101,7 +101,7 @@ document.addEventListener('alpine:init', () => {
       }
       // Controlled vocabulary for the confirm dropdowns — non-fatal if unavailable.
       try {
-        this.vocab = await (await fetch('/api/vocab')).json();
+        this.vocab = await (await fetch('api/vocab')).json();
       } catch (e) { this.vocab = null; }
     },
 
@@ -155,7 +155,7 @@ document.addEventListener('alpine:init', () => {
       col.error = '';
       col.loadingDetail = true;
       try {
-        const res = await fetch(`/api/patients/${encodeURIComponent(id)}`);
+        const res = await fetch(`api/patients/${encodeURIComponent(id)}`);
         if (!res.ok) {
           col.detail = null;
           col.error = 'That patient could not be loaded — pick another from the list.';
@@ -200,7 +200,7 @@ document.addEventListener('alpine:init', () => {
       const body = col.id
         ? { patient_id: col.id, use_case: uc, prefer_live: true }
         : { payload: col.payload, use_case: uc, prefer_live: true };
-      const res = await fetch('/api/explain', {
+      const res = await fetch('api/explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -212,7 +212,7 @@ document.addEventListener('alpine:init', () => {
     async runGuardrailTest(slot, uc) {
       const col = this.columns[slot];
       try {
-        const res = await fetch('/api/guardrail-test', {
+        const res = await fetch('api/guardrail-test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ use_case: uc || 'justify' }),
@@ -445,7 +445,7 @@ document.addEventListener('alpine:init', () => {
       it.extracting = true;
       it.extractError = '';
       try {
-        const res = await fetch('/api/extract', {
+        const res = await fetch('api/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note: it.note }),
@@ -559,7 +559,7 @@ document.addEventListener('alpine:init', () => {
     // a planted raw extraction where the LLM DID emit the injected token.
     async runExtractBackstop() {
       try {
-        const res = await fetch('/api/extract-guardrail-test', { method: 'POST' });
+        const res = await fetch('api/extract-guardrail-test', { method: 'POST' });
         this.intake.backstop = await res.json();
       } catch (e) {
         this.intake.extractError = 'Backstop test could not run — check the server.';
@@ -582,7 +582,7 @@ document.addEventListener('alpine:init', () => {
       it.predicting = true;
       it.predictError = '';
       try {
-        const res = await fetch('/api/predict', {
+        const res = await fetch('api/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this._confirmedRequest()),
@@ -652,7 +652,7 @@ document.addEventListener('alpine:init', () => {
         || JSON.stringify([...extracted.complaints].sort()) !== JSON.stringify([...corrected.complaints].sort());
       if (!changed) return;
       try {
-        const res = await fetch('/api/log-correction', {
+        const res = await fetch('api/log-correction', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

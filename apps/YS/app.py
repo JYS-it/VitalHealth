@@ -42,6 +42,24 @@ app = Flask(__name__)
 WORKFLOWS = {}
 
 
+class PrefixMiddleware:
+    """Makes url_for() emit paths prefixed with X-Forwarded-Prefix when this
+    app is proxied behind the gateway under a sub-path (e.g. /emc). A no-op
+    when the header is absent, so standalone runs are unaffected."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get("HTTP_X_FORWARDED_PREFIX", "")
+        if prefix:
+            environ["SCRIPT_NAME"] = prefix
+        return self.wsgi_app(environ, start_response)
+
+
+app.wsgi_app = PrefixMiddleware(app.wsgi_app)
+
+
 def load_assets():
     model_payload = joblib.load(MODEL_PATH)
     preprocess_payload = joblib.load(PREPROCESS_PATH)

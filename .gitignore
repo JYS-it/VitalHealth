@@ -1,0 +1,20 @@
+# Python bytecode / caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets / local env — API keys are read from the environment, never committed
+.env
+*.key
+*.pem
+
+# Editor / IDE
+.vs/
+
+# Note: each app may add its own .gitignore for app-specific artefacts
+# (e.g. apps/Jace ignores *.npy build arrays and logs/).
