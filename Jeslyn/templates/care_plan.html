@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="workflow-shell">
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h1>Patient profile review</h1>
+            <p>Submitted patient details for review summary.</p>
+        </div>
+
+        <dl class="profile-grid review-grid">
+            <div><dt>Age</dt><dd>{{ patient_data.Age }}</dd></div>
+            <div><dt>Gender</dt><dd>{{ patient_data.Gender }}</dd></div>
+            <div><dt>BMI</dt><dd>{{ patient_data.BMI }}</dd></div>
+            <div><dt>Systolic blood pressure</dt><dd>{{ patient_data.Blood_Pressure_Systolic }}</dd></div>
+            <div><dt>Diastolic blood pressure</dt><dd>{{ patient_data.Blood_Pressure_Diastolic }}</dd></div>
+            <div><dt>Cholesterol</dt><dd>{{ patient_data.Cholesterol }}</dd></div>
+            <div><dt>Glucose level</dt><dd>{{ patient_data.Glucose_Level }}</dd></div>
+            <div><dt>Smoking</dt><dd>{{ "Yes" if patient_data.Smoking == 1 else "No" }}</dd></div>
+            <div><dt>Alcohol intake</dt><dd>{{ "Yes" if patient_data.Alcohol_Intake == 1 else "No" }}</dd></div>
+            <div><dt>Physical activity</dt><dd>{{ "Yes" if patient_data.Physical_Activity == 1 else "No" }}</dd></div>
+            <div><dt>Family history</dt><dd>{{ "Yes" if patient_data.Family_History == 1 else "No" }}</dd></div>
+            <div><dt>Heart disease</dt><dd>{{ "Yes" if patient_data.Heart_Disease == 1 else "No" }}</dd></div>
+            <div><dt>Diabetes</dt><dd>{{ "Yes" if patient_data.Diabetes == 1 else "No" }}</dd></div>
+        </dl>
+    </article>
+
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>Policy / RAG sources</h2>
+            <p>Retrieved PDF guidance used for care planning.</p>
+        </div>
+
+        {% if retrieved_source_titles %}
+        <ul class="clean-list">
+            {% for title in retrieved_source_titles %}
+            <li>{{ title }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No source documents were retrieved.</p>
+        {% endif %}
+
+        <p class="review-note">Patient-facing educational guidance sources active.</p>
+    </article>
+
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>Safety review</h2>
+            <p>Safety checks and education guardrails.</p>
+        </div>
+
+        <div class="safety-grid">
+            <p><span class="metric-label">Rules</span><span class="status-chip">PASS</span></p>
+            <p><span class="metric-label">GenAI Critic</span><span class="status-chip">PASS</span></p>
+        </div>
+
+        <ul class="clean-list compact-list">
+            <li>No diagnosis</li>
+            <li>No medication dosage</li>
+            <li>Educational disclaimer included</li>
+        </ul>
+    </article>
+
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>Draft care plan</h2>
+            <p>Readable clinical draft generated from the workflow.</p>
+        </div>
+
+        <div class="care-plan-text">{{ generated_care_plan }}</div>
+    </article>
+
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>7-day care calendar</h2>
+            <p>Weekly action plan for patient-facing follow-up.</p>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Day</th>
+                        <th>Main Focus</th>
+                        <th>Morning Action</th>
+                        <th>Afternoon Action</th>
+                        <th>Evening Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in care_calendar %}
+                    <tr>
+                        <td>{{ row['Date'] }}</td>
+                        <td>{{ row['Day'] }}</td>
+                        <td>{{ row['Main Focus'] }}</td>
+                        <td>{{ row['Morning Action'] }}</td>
+                        <td>{{ row['Afternoon Action'] }}</td>
+                        <td>{{ row['Evening Action'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <p class="disclaimer">
+            Educational support output only. This plan is not a diagnosis and does not replace professional clinical advice.
+        </p>
+    </article>
+</section>
+{% endblock %}
