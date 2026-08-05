@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero card">
+    <h1>Stroke Risk Prediction and Care Planning</h1>
+    <p>
+        This web application uses a Logistic Regression model to estimate stroke risk from patient features,
+        then uses a PDF-based Retrieval-Augmented Generation workflow to provide educational care planning guidance.
+    </p>
+    <a class="btn btn-primary" href="{{ url_for('prediction') }}">Start Prediction</a>
+</section>
+
+<section class="card two-col">
+    <div>
+        <h2>What this app does</h2>
+        <ul>
+            <li>Predicts stroke risk category and probability using a trained Logistic Regression model.</li>
+            <li>Retrieves relevant guidance from sourced healthcare PDF documents.</li>
+            <li>Generates a patient-friendly care plan and a 7-day action calendar.</li>
+        </ul>
+    </div>
+    <div>
+        <h2>Important note</h2>
+        <p>
+            This tool is for educational support only. It does not diagnose stroke and does not replace advice from a
+            qualified healthcare professional.
+        </p>
+    </div>
+</section>
+{% endblock %}
