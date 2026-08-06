@@ -29,6 +29,8 @@ sys.stdout.reconfigure(line_buffering=True)
 
 ROOT = Path(__file__).resolve().parent
 IS_WINDOWS = sys.platform.startswith("win")
+MIN_PYTHON = (3, 11)
+MAX_PYTHON = (3, 12)
 
 # Order matters: backends first, gateway last.
 APPS = [
@@ -69,6 +71,39 @@ def venv_python(app_dir: Path) -> Path:
     if IS_WINDOWS:
         return app_dir / ".venv" / "Scripts" / "python.exe"
     return app_dir / ".venv" / "bin" / "python"
+
+
+def supported_python(version: tuple[int, int]) -> bool:
+    return MIN_PYTHON <= version <= MAX_PYTHON
+
+
+def require_supported_launcher_python():
+    version = sys.version_info[:2]
+    if supported_python(version):
+        return
+    print(
+        "VitalHealth requires Python 3.11 or 3.12. "
+        f"This launcher is running under Python {version[0]}.{version[1]}.\n"
+        "Install Python 3.12, then run: py -3.12 run_all.py",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def venv_version(py: Path) -> tuple[int, int] | None:
+    """Read a venv interpreter's major/minor version without importing apps."""
+    result = subprocess.run(
+        [str(py), "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        major, minor = result.stdout.strip().split(".", maxsplit=1)
+        return int(major), int(minor)
+    except ValueError:
+        return None
 
 
 def port_in_use(port: int) -> bool:
@@ -116,7 +151,13 @@ def ensure_app_ready(app: dict):
     app_dir = app["dir"]
     py = venv_python(app_dir)
     if py.exists():
-        return
+        version = venv_version(py)
+        if version and supported_python(version):
+            return
+        raise RuntimeError(
+            f"{app['name']} has an incompatible or broken virtual environment at {py.parent.parent}. "
+            "Delete that .venv and re-run this script with Python 3.12."
+        )
     print(f"[{app['name']}] no venv found - setting up (first run only, may take a few minutes)...")
     subprocess.run([sys.executable, "-m", "venv", ".venv"], cwd=app_dir, check=True)
     subprocess.run(
@@ -182,10 +223,15 @@ def kill_tree(proc: subprocess.Popen):
 
 
 def main():
+    require_supported_launcher_python()
     preflight_check_ports()
 
-    for app in APPS:
-        ensure_app_ready(app)
+    try:
+        for app in APPS:
+            ensure_app_ready(app)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"Setup failed: {exc}", file=sys.stderr)
+        return 1
 
     procs = []
     try:
