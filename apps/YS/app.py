@@ -43,6 +43,34 @@ app = Flask(__name__)
 WORKFLOWS = {}
 
 
+def _prefixed_url_for(endpoint: str, **values) -> str:
+    """Build URLs that keep the gateway sub-path when proxied."""
+    from flask import url_for
+
+    built = url_for(endpoint, **values)
+    prefix = (
+        request.headers.get("X-Forwarded-Prefix")
+        or request.environ.get("HTTP_X_FORWARDED_PREFIX")
+        or request.environ.get("SCRIPT_NAME")
+        or ""
+    ).rstrip("/")
+    if not prefix:
+        return built
+    if built == prefix or built.startswith(prefix + "/"):
+        return built
+    if built.startswith("/"):
+        return f"{prefix}{built}"
+    return built
+
+
+app.jinja_env.globals["url_for"] = _prefixed_url_for
+
+
+@app.context_processor
+def _inject_prefixed_url_for():
+    return {"url_for": _prefixed_url_for}
+
+
 class PrefixMiddleware:
     """Makes url_for() emit paths prefixed with X-Forwarded-Prefix when this
     app is proxied behind the gateway under a sub-path (e.g. /emc). A no-op

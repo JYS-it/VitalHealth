@@ -8,6 +8,7 @@
     --border: #d6dfe8;
     --border-strong: #bfccdb;
     --shadow-card: 0 2px 8px rgba(15, 42, 71, 0.06);
+    --shadow-card-hover: 0 8px 20px rgba(15, 42, 71, 0.1);
     --accent: #0f6075;
     --accent-hover: #0c4f60;
     --accent-soft: #d8edf3;
@@ -22,11 +23,17 @@
     box-sizing: border-box;
 }
 
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 body {
     margin: 0;
     font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
     color: var(--text-primary);
     background: var(--bg-page);
+    line-height: 1.5;
 }
 
 .container {
@@ -34,8 +41,17 @@ body {
     margin: 0 auto;
 }
 
+/* ==========================================================================
+   Shared VitalHealth navigation style
+   ========================================================================== */
+
 .site-header {
-    background: var(--bg-card);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(246, 247, 249, 0.92);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
 }
 
@@ -44,7 +60,7 @@ body {
     justify-content: space-between;
     align-items: flex-start;
     gap: 20px;
-    padding: 20px 0 14px;
+    padding: 8px 0 6px;
 }
 
 .brand-block {
@@ -52,12 +68,23 @@ body {
     gap: 4px;
 }
 
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
 .brand {
     text-decoration: none;
-    font-size: 1.45rem;
+    font-size: 1.35rem;
     font-weight: 700;
-    letter-spacing: 0.1px;
-    color: #17334d;
+    letter-spacing: 0.01em;
+    color: #143447;
+}
+
+.brand:hover {
+    color: var(--accent);
 }
 
 .brand-subtitle {
@@ -66,31 +93,85 @@ body {
     font-size: 0.92rem;
 }
 
+.scope-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #eef1f4;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
 .nav-wrap {
-    padding: 0 0 14px;
+    padding: 4px 0 10px;
 }
 
 .navbar {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
 .navbar a {
-    text-decoration: none;
-    color: #2b4158;
-    border: 1px solid var(--border);
-    background: #f8fafc;
-    border-radius: 8px;
-    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--text-secondary);
     font-size: 0.88rem;
-    font-weight: 500;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.16s ease;
 }
 
 .navbar a:hover {
-    border-color: var(--border-strong);
-    background: #f2f6fb;
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #eef7fa;
 }
+
+.navbar a.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: #8ebccd;
+}
+
+/* Keep this in case your old subnav still exists somewhere */
+.subnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.subnav a {
+    text-decoration: none;
+    color: var(--text-secondary);
+    border: 1px solid #dbe5ee;
+    background: #fbfdff;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.subnav a:hover {
+    border-color: #b8ccda;
+    color: #1f3f5a;
+}
+
+/* ==========================================================================
+   Main layout
+   ========================================================================== */
 
 .main-content {
     padding: 18px 0 26px;
@@ -157,6 +238,10 @@ body {
     gap: 16px;
 }
 
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -182,6 +267,7 @@ select {
     font-size: 0.9rem;
     color: var(--text-primary);
     background: #ffffff;
+    font-family: inherit;
 }
 
 input:focus,
@@ -196,9 +282,14 @@ select:focus {
     margin-top: 4px;
 }
 
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
 .btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     border: none;
     border-radius: 8px;
     padding: 9px 14px;
@@ -206,6 +297,7 @@ select:focus {
     font-size: 0.87rem;
     text-decoration: none;
     cursor: pointer;
+    font-family: inherit;
 }
 
 .btn-primary,
@@ -240,6 +332,10 @@ select:focus {
     font-size: 0.88rem;
     line-height: 1.45;
 }
+
+/* ==========================================================================
+   Alerts and result display
+   ========================================================================== */
 
 .alert {
     border-radius: 8px;
@@ -301,6 +397,10 @@ select:focus {
     font-size: 0.9rem;
 }
 
+/* ==========================================================================
+   Profile review
+   ========================================================================== */
+
 .profile-grid {
     margin: 0;
     display: grid;
@@ -333,6 +433,10 @@ select:focus {
     color: #17334d;
     font-weight: 600;
 }
+
+/* ==========================================================================
+   Lists and safety
+   ========================================================================== */
 
 .clean-list {
     margin: 0;
@@ -372,6 +476,10 @@ select:focus {
     letter-spacing: 0.4px;
     font-family: "IBM Plex Mono", monospace;
 }
+
+/* ==========================================================================
+   Care plan and tables
+   ========================================================================== */
 
 .care-plan-text {
     white-space: pre-wrap;
@@ -413,6 +521,10 @@ th {
     text-transform: uppercase;
 }
 
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
 .site-footer {
     border-top: 1px solid var(--border);
     background: var(--bg-card);
@@ -420,6 +532,267 @@ th {
     padding: 12px 0 18px;
     font-size: 0.82rem;
 }
+
+.site-footer p {
+    margin: 0;
+}
+
+/* ==========================================================================
+   Vita assistant for Stroke Assessment
+   ========================================================================== */
+
+.vita {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    display: grid;
+    justify-items: end;
+    gap: 12px;
+}
+
+.vita__bubble {
+    width: 64px;
+    height: 64px;
+    border: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #90d5e5, #2b90ab 70%, #1e6d83 100%);
+    box-shadow: 0 10px 24px rgba(16, 55, 74, 0.24);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: vita-float 2.2s ease-in-out infinite;
+}
+
+.vita__bubble:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 14px 28px rgba(16, 55, 74, 0.28);
+}
+
+.vita__face {
+    width: 34px;
+    height: 30px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 6px;
+}
+
+.vita__eyes {
+    display: flex;
+    gap: 8px;
+}
+
+.vita__eyes i {
+    display: block;
+    width: 5px;
+    height: 5px;
+    background: #ffffff;
+    border-radius: 50%;
+}
+
+.vita__mouth {
+    width: 13px;
+    height: 5px;
+    border-radius: 0 0 8px 8px;
+    background: #ffffff;
+    transform-origin: center top;
+    transition: transform 0.18s ease, height 0.18s ease;
+}
+
+.vita--opening .vita__mouth,
+.vita--open .vita__mouth {
+    height: 9px;
+    transform: scaleY(1.1);
+}
+
+.vita__panel {
+    width: min(400px, calc(100vw - 2rem));
+    max-height: min(72vh, 620px);
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 14px 30px rgba(16, 24, 40, 0.16);
+    border: 1px solid #cfe0eb;
+    background: #ffffff;
+    display: grid;
+    grid-template-rows: auto auto minmax(180px, 1fr) auto;
+    gap: 12px;
+}
+
+.vita__panel[hidden] {
+    display: none;
+}
+
+.vita__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.vita__head h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #143447;
+}
+
+.vita__head p {
+    margin: 2px 0 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.vita__close {
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 5px 9px;
+    cursor: pointer;
+}
+
+.vita__close:hover {
+    border-color: #8ebccd;
+    color: var(--accent);
+}
+
+.vita__quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.vita__quick-btn {
+    border: 1px solid #c4dae6;
+    background: #f3fafc;
+    color: #2b5569;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.vita__quick-btn:hover {
+    border-color: #8ebccd;
+    background: #e7f4f8;
+}
+
+.vita__messages {
+    overflow: auto;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    padding-right: 2px;
+}
+
+.vita__msg {
+    display: flex;
+}
+
+.vita__msg p {
+    margin: 0;
+    max-width: 90%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.vita__msg--bot p {
+    background: #eef7fb;
+    color: #183647;
+    border: 1px solid #d2e5ef;
+}
+
+.vita__msg--user {
+    justify-content: flex-end;
+}
+
+.vita__msg--user p {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.vita__typing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 2px;
+}
+
+.vita__typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #7fa9bc;
+    animation: vita-typing 1s infinite ease-in-out;
+}
+
+.vita__typing span:nth-child(2) {
+    animation-delay: 0.12s;
+}
+
+.vita__typing span:nth-child(3) {
+    animation-delay: 0.24s;
+}
+
+.vita__composer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+}
+
+.vita__composer input {
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 10px;
+    font-size: 0.86rem;
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@keyframes vita-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes vita-typing {
+    0%,
+    80%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+
+    40% {
+        transform: translateY(-3px);
+        opacity: 1;
+    }
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
 
 @media (max-width: 1060px) {
     .review-grid {
@@ -433,8 +806,16 @@ th {
         align-items: flex-start;
     }
 
-    .header-badges {
-        justify-content: flex-start;
+    .brand-row {
+        align-items: flex-start;
+    }
+
+    .scope-badge {
+        white-space: normal;
+    }
+
+    .navbar a {
+        flex: 1 1 160px;
     }
 
     .two-col,
@@ -450,5 +831,25 @@ th {
 
     .main-content {
         padding-top: 14px;
+    }
+
+    .vita {
+        right: 12px;
+        bottom: 12px;
+    }
+
+    .vita__panel {
+        width: min(420px, calc(100vw - 1.25rem));
+        max-height: 70vh;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+        scroll-behavior: auto !important;
     }
 }

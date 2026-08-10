@@ -5,14 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css">
+  <script defer src="/vh-assets/vita.js"></script>
 </head>
-<body>
-  <header class="topbar">
-    <div><h1>IIP-EMC Clinical Copilot</h1><p>Clinician-reviewed electronic medical certificate workflow</p></div>
-    <div class="header-status"><span class="pill">{{ feature_count }} symptom inputs</span><span class="badge {{ 'pass' if genai_configured else 'pending' }}">{{ 'GenAI configured' if genai_configured else 'GenAI not configured' }}</span></div>
+<body data-vitalhealth-section="emc">
+  <header class="site-header clinical-header">
+    <div class="container header-wrap">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a class="brand" href="/triage/">VitalHealth</a>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
+      </div>
+    </div>
+    <div class="container nav-wrap">
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a href="/triage/">Clinical Triage</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a class="active" href="/emc/">EMC Workflow</a>
+        <a href="/stroke/care-plan">Results</a>
+      </nav>
+    </div>
   </header>
-  <main class="layout">
-    <section class="intake">
+  <main class="container main-content">
+    <section class="workflow-shell workflow-shell--emc">
+      <article class="card panel-card workflow-card intake-card">
       <form method="post" action="{{ url_for('start') }}" class="form-grid workflow-form">
         <div class="section-heading"><h2>Patient intake</h2><span>Required fields</span></div>
         <label>Patient full name<input name="patient_name" value="Jenny Lee" required></label>
@@ -43,21 +61,21 @@
         </details>
         <button class="primary wide" type="submit">Create clinician review draft</button>
       </form>
-    </section>
-    <section class="workbench">
+      </article>
+      <article class="card panel-card workflow-card workbench-card">
       <div class="output-header"><h2>Clinician review</h2>{% if message %}<span class="notice">{{ message }}</span>{% endif %}</div>
       {% if not workflow %}
       <div class="empty">No active certificate draft.</div>
       {% else %}
-      <div class="status-row"><span class="badge {{ status_class(workflow.draft.mode) }}">{{ workflow.draft.mode }}</span><span class="badge {{ status_class(workflow.issue_status) }}">{{ workflow.issue_status }}</span><span class="badge {{ status_class(workflow.gate.local.verdict) }}">Safety: {{ workflow.gate.local.verdict }}</span></div>
+      <div class="status-row"><span class="badge {{ status_class(workflow.issue_status) }}">{{ workflow.issue_status }}</span><span class="badge {{ status_class(workflow.gate.local.verdict) }}">Safety Check: {{ workflow.gate.local.verdict }}</span></div>
       <div class="review-grid">
-        <article><h3>ML review context</h3><strong>{{ workflow.internal.model_label }}</strong><div class="score-row"><span>{{ workflow.internal.model_score }}%</span><span>Model score</span></div><div class="score-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ workflow.internal.model_score }}"><span style="width: {{ [workflow.internal.model_score, 100]|min }}%"></span></div><p>{{ workflow.internal.score_label }}</p><p>Manual clinician review required</p></article>
+        <article><h3>Assessment summary</h3><strong>Workflow output score</strong><div class="score-row"><span>{{ workflow.internal.model_score }}%</span><span>Assessment indicator</span></div><div class="score-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ workflow.internal.model_score }}"><span style="width: {{ [workflow.internal.model_score, 100]|min }}%"></span></div><p>{{ workflow.internal.score_label }}</p><p>Clinician review required</p></article>
         <article><h3>Policy sources</h3><p>EMC-001, EMC-002, EMC-003, EMC-004, EMC-005</p><p>Patient-facing privacy and disclosure controls active</p></article>
-        <article><h3>Safety review</h3><p><strong>Rules:</strong> <span class="badge {{ status_class(workflow.gate.local.verdict) }}">{{ workflow.gate.local.verdict }}</span></p><p><strong>GenAI critic:</strong> <span class="badge {{ status_class(workflow.gate.critic.verdict) }}">{{ workflow.gate.critic.verdict }}</span></p><p>{{ workflow.gate.critic.mode }}</p></article>
+        <article><h3>Safety review</h3><p><strong>Rules:</strong> <span class="badge {{ status_class(workflow.gate.local.verdict) }}">{{ workflow.gate.local.verdict }}</span></p><p><strong>Automated critic:</strong> <span class="badge {{ status_class(workflow.gate.critic.verdict) }}">{{ workflow.gate.critic.verdict }}</span></p><p>Safety checks completed for clinician review.</p></article>
       </div>
       {% if workflow.note_extraction.proposals %}<section class="box"><h3>Note extraction proposals</h3><pre>{{ workflow.note_extraction.proposals|tojson(indent=2) }}</pre></section>{% endif %}
       <section class="box"><h3>Draft EMC</h3><div class="certificate">{{ render_certificate(workflow.draft.text) }}</div></section>
-      <section class="box clinician-only"><h3>Internal model context</h3><p><strong>Alternatives:</strong> {% for item in workflow.internal.alternatives %}{{ item.alternative_condition }} ({{ item.confidence }}%){% if not loop.last %}, {% endif %}{% endfor %}</p><p><strong>Active inputs:</strong> {{ workflow.internal.active_symptoms|join(', ') or 'None selected' }}</p></section>
+      <section class="box clinician-only"><h3>Clinician context details</h3><p><strong>Alternative considerations:</strong> {% for item in workflow.internal.alternatives %}{{ item.alternative_condition }} ({{ item.confidence }}%){% if not loop.last %}, {% endif %}{% endfor %}</p><p><strong>Active intake findings:</strong> {{ workflow.internal.active_symptoms|join(', ') or 'None selected' }}</p></section>
       {% if not workflow.gate.approval_allowed %}<section class="box safety-block"><h3>Approval is blocked by safety review</h3><p>{{ workflow.gate.critic.summary }}</p>{% if workflow.gate.local.issues or workflow.gate.critical_critic_issues %}<ul>{% for issue in workflow.gate.local.issues + workflow.gate.critical_critic_issues %}<li>{{ issue.category }}: {{ issue.detail }}</li>{% endfor %}</ul>{% endif %}</section>{% endif %}
       {% if not workflow.final %}
       <div class="actions">
@@ -69,8 +87,14 @@
       <section class="box final"><h3>Final approved EMC</h3><div class="certificate">{{ render_certificate(workflow.final) }}</div><p>Certificate ID: {{ workflow.metadata.certificate_id }}</p><p>Audit record: {{ workflow.audit_path }}</p></section>
       {% endif %}
       {% endif %}
+      </article>
     </section>
   </main>
+  <footer class="site-footer">
+    <div class="container">
+      <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
+    </div>
+  </footer>
   <div class="loading-overlay" id="loading-overlay" hidden aria-live="polite" aria-busy="true">
     <div class="loading-dialog"><span class="loading-label">Processing clinical workflow</span><div class="skeleton title"></div><div class="skeleton line"></div><div class="skeleton line short"></div></div>
   </div>

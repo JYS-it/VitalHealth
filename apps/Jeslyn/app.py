@@ -24,6 +24,32 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-this-in-production")
 
 
+def _prefixed_url_for(endpoint: str, **values) -> str:
+    """Build URLs that keep the gateway sub-path when proxied."""
+    built = url_for(endpoint, **values)
+    prefix = (
+        request.headers.get("X-Forwarded-Prefix")
+        or request.environ.get("HTTP_X_FORWARDED_PREFIX")
+        or request.environ.get("SCRIPT_NAME")
+        or ""
+    ).rstrip("/")
+    if not prefix:
+        return built
+    if built == prefix or built.startswith(prefix + "/"):
+        return built
+    if built.startswith("/"):
+        return f"{prefix}{built}"
+    return built
+
+
+app.jinja_env.globals["url_for"] = _prefixed_url_for
+
+
+@app.context_processor
+def _inject_prefixed_url_for():
+    return {"purl": _prefixed_url_for}
+
+
 class PrefixMiddleware:
     """Makes url_for() emit paths prefixed with X-Forwarded-Prefix when this
     app is proxied behind the gateway under a sub-path (e.g. /stroke). A
@@ -455,7 +481,7 @@ def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_
 
 @app.route("/")
 def home():
-    return render_template("home.html", page_title="Home")
+    return redirect(url_for("prediction"))
 
 
 @app.route("/prediction", methods=["GET", "POST"])

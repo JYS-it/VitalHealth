@@ -61,7 +61,8 @@ document.addEventListener('alpine:init', () => {
     error: '',
 
     // ---- surface mode + intake (§5) ----
-    mode: 'browse',            // 'browse' | 'intake'
+    mode: 'dashboard',         // 'dashboard' | 'browse' | 'intake'
+    activeNav: 'dashboard',    // 'dashboard' | 'triage' | 'results'
     vocab: null,               // { complaints: [...], arrival_modes: [...] } from /api/vocab
     intake: makeIntake(),
     seeds: [
@@ -103,20 +104,51 @@ document.addEventListener('alpine:init', () => {
       try {
         this.vocab = await (await fetch('api/vocab')).json();
       } catch (e) { this.vocab = null; }
+      this.syncSharedSection();
+    },
+
+    syncSharedSection(section = null) {
+      if (!document.body || !document.body.dataset) return;
+      document.body.dataset.vitalhealthSection = section || this.activeNav || this.mode || 'dashboard';
     },
 
     // ---- surface mode switch ----
     setMode(m) {
       if (m === this.mode) return;
       this.mode = m;
-      this.compareMode = false;
-      this.columns = [makeColumn()];
-      this.activeSlot = 0;
+      if (m !== 'browse') {
+        this.compareMode = false;
+        this.activeSlot = 0;
+      }
       // returning to a finished intake: re-seat its result in column 0
       if (m === 'intake' && this.intake.stage === 'result' && this.intake.result) {
         this.columns[0].detail = this.intake.result;
         this.columns[0].payload = this.intake.result.payload || null;
       }
+    },
+
+    openDashboard() {
+      this.activeNav = 'dashboard';
+      this.setMode('dashboard');
+      this.syncSharedSection('dashboard');
+    },
+
+    openTriage() {
+      this.activeNav = 'triage';
+      this.setMode('browse');
+      this.syncSharedSection('clinical triage');
+    },
+
+    openIntake() {
+      this.activeNav = 'triage';
+      this.setMode('intake');
+      this.syncSharedSection('clinical triage intake');
+    },
+
+    openResults() {
+      this.activeNav = 'results';
+      this.setMode('browse');
+      this.syncSharedSection('results');
     },
 
     get filteredPatients() {

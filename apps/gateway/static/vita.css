@@ -1,0 +1,245 @@
+.vita-shell {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  display: grid;
+  justify-items: end;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.vita-shell * {
+  box-sizing: border-box;
+}
+
+.vita-fab {
+  pointer-events: auto;
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #6ea8ff, var(--vh-primary) 70%, var(--vh-primary-hover) 100%);
+  box-shadow: 0 12px 26px rgba(21, 87, 176, 0.25);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  animation: vita-float 2.4s ease-in-out infinite;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.vita-fab:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 16px 32px rgba(21, 87, 176, 0.3);
+}
+
+.vita-face {
+  width: 36px;
+  height: 32px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.18);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+}
+
+.vita-eyes {
+  display: flex;
+  gap: 8px;
+}
+
+.vita-eyes i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  display: block;
+}
+
+.vita-mouth {
+  width: 13px;
+  height: 5px;
+  border-radius: 0 0 8px 8px;
+  background: #fff;
+  transition: transform 0.18s ease, height 0.18s ease;
+  transform-origin: center top;
+}
+
+.vita-shell.vita-shell--open .vita-mouth,
+.vita-shell.vita-shell--opening .vita-mouth {
+  height: 9px;
+  transform: scaleY(1.15);
+}
+
+.vita-panel {
+  pointer-events: auto;
+  width: min(420px, calc(100vw - 1.25rem));
+  max-height: min(72vh, 620px);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.vita-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--vh-border);
+  cursor: grab;
+}
+
+.vita-shell--dragging .vita-head,
+.vita-shell--dragging .vita-fab {
+  cursor: grabbing;
+}
+
+.vita-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--vh-text);
+}
+
+.vita-head p {
+  margin: 2px 0 0;
+  color: var(--vh-text-muted);
+  font-size: 0.82rem;
+}
+
+.vita-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vita-chip {
+  border: 1px solid #cbd9ee;
+  background: #f8fbff;
+  color: var(--vh-text);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vita-chip:hover {
+  border-color: var(--vh-primary);
+  color: var(--vh-primary);
+  background: var(--vh-primary-soft);
+}
+
+.vita-messages {
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  padding-right: 0.1rem;
+}
+
+.vita-msg {
+  display: flex;
+}
+
+.vita-msg p {
+  margin: 0;
+  max-width: 92%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.vita-msg--bot p {
+  background: #f3f7fc;
+  color: var(--vh-text);
+  border: 1px solid #dbe6f2;
+}
+
+.vita-msg--user {
+  justify-content: flex-end;
+}
+
+.vita-msg--user p {
+  background: var(--vh-primary);
+  color: #fff;
+}
+
+.vita-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.vita-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vh-primary);
+  animation: vita-bob 1s infinite ease-in-out;
+}
+
+.vita-typing span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.vita-typing span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.vita-composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.vita-composer input {
+  width: 100%;
+  border: 1px solid var(--vh-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  color: var(--vh-text);
+  background: #fff;
+}
+
+.vita-composer input:focus {
+  outline: 2px solid rgba(31, 111, 235, 0.18);
+  border-color: var(--vh-primary);
+}
+
+.vita-send {
+  min-width: 76px;
+}
+
+@keyframes vita-float {
+  0%,
+  100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes vita-bob {
+  0%,
+  80%,
+  100% { transform: translateY(0); opacity: 0.45; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+
+@media (max-width: 620px) {
+  .vita-shell {
+    right: 0.75rem;
+    bottom: 0.75rem;
+  }
+
+  .vita-panel {
+    width: min(100vw - 1.5rem, 420px);
+    max-height: 68vh;
+  }
+}

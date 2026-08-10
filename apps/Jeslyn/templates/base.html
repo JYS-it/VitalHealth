@@ -3,27 +3,30 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ page_title }} | Stroke Assessment</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <title>{{ page_title }} | VitalHealth</title>
+    <link rel="stylesheet" href="{{ purl('static', filename='style.css') }}" />
+    <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css" />
+    <script defer src="/vh-assets/vita.js"></script>
 </head>
-<body>
+
+<body data-vitalhealth-section="stroke">
     <header class="site-header clinical-header">
         <div class="container header-wrap">
             <div class="brand-block">
-                <a class="brand" href="{{ url_for('home') }}">Stroke Assessment</a>
-                <p class="brand-subtitle">ML-assisted stroke risk prediction and RAG-enhanced care planning workflow</p>
+                <div class="brand-row">
+                    <a class="brand" href="../triage/">VitalHealth</a>
+                    <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+                </div>
             </div>
-
         </div>
 
         <div class="container nav-wrap">
-            <nav class="navbar" aria-label="Primary">
-                <a href="{{ url_for('home') }}">Home</a>
-                <a href="{{ url_for('prediction') }}">Prediction</a>
-                <a href="{{ url_for('care_plan') }}">Care Plan</a>
+            <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+                <a href="../triage/">Home</a>
+                <a href="../triage/">Clinical Triage</a>
+                <a class="active" href="{{ purl('prediction') }}">Stroke Assessment</a>
+                <a href="../emc/">EMC Workflow</a>
+                <a href="{{ purl('care_plan') }}">Results</a>
             </nav>
         </div>
     </header>
@@ -34,7 +37,7 @@
 
     <footer class="site-footer">
         <div class="container">
-            <p>Educational project. This app does not replace professional medical advice.</p>
+            <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
         </div>
     </footer>
 </body>

@@ -5,7 +5,7 @@
     <article class="card panel-card workflow-card">
         <div class="panel-head">
             <h1>Patient intake</h1>
-            <p>Enter structured patient data for model evaluation.</p>
+            <p>Enter structured patient data for risk assessment.</p>
         </div>
 
         {% if error_message %}
@@ -97,7 +97,7 @@
     <article class="card panel-card workflow-card">
         <div class="panel-head">
             <h2>Prediction summary</h2>
-            <p>Model output for clinician interpretation.</p>
+            <p>Risk assessment output for clinician interpretation.</p>
         </div>
 
         <div class="metric-list">
@@ -105,7 +105,7 @@
             <p><span class="metric-label">Model-estimated risk probability</span><span class="metric-value">{{ prediction_result.risk_probability_percent }}%</span></p>
         </div>
 
-        <p class="review-note">Model score; not clinical certainty.</p>
+        <p class="review-note">Assessment output; not clinical certainty.</p>
         <p class="review-note">Clinician review recommended.</p>
 
         <p class="disclaimer">
@@ -113,8 +113,8 @@
         </p>
 
         <div class="cta-block">
-            <p class="cta-helper">Continue to generate a RAG-enhanced care plan based on this assessment.</p>
-            <a class="btn btn-primary btn-cta" href="{{ url_for('care_plan') }}">Generate Care Plan</a>
+            <p class="cta-helper">Continue to generate source-supported care planning guidance based on this assessment.</p>
+            <a class="btn btn-primary btn-cta" href="{{ purl('care_plan') }}">Generate Care Plan</a>
         </div>
     </article>
     {% endif %}

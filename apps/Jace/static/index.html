@@ -3,39 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CTRSE — triage acuity</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
-  <script defer src="app.js?v=2"></script>
+  <title>VitalHealth — integrated healthcare dashboard</title>
+  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css">
+  <script defer src="app.js?v=3"></script>
+  <script defer src="/vh-assets/vita.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
-<body x-data="ctrseApp()" x-init="init()">
+<body x-data="ctrseApp()" x-init="init()" data-vitalhealth-section="dashboard">
 
   <!-- ============================ HEADER ============================ -->
   <header class="header">
     <div class="header__wrap">
-      <span class="brand">CTRSE <span class="sep">&#9656;</span> triage acuity</span>
-      <span class="scope-badge">decision support &middot; predicts a triage assignment, not a diagnosis</span>
-      <div class="segmented mode-switch" role="group" aria-label="Surface">
-        <button type="button" :aria-pressed="mode==='browse'" @click="setMode('browse')">Browse patients</button>
-        <button type="button" :aria-pressed="mode==='intake'" @click="setMode('intake')">Triage intake</button>
+      <div class="header__top">
+        <div class="brand-group">
+          <span class="brand">VitalHealth</span>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
       </div>
-      <div class="header__meta" x-show="meta">
-        <span><span class="k">model</span> <span class="mono" x-text="meta?.model_name"></span></span>
-        <span><span class="k">thr&nbsp;P1</span> <span class="mono" x-text="meta ? meta.thr_p1.toFixed(4) : ''"></span></span>
-        <span><span class="k">features</span> <span class="mono" x-text="meta?.feature_count"></span></span>
-        <span>
-          <span class="dot" :class="meta?.gemini_available ? 'dot--live' : 'dot--offline'"></span>
-          <span x-text="meta?.gemini_available ? 'live model available' : 'offline session'"></span>
-        </span>
-      </div>
+
+      <nav class="global-nav" aria-label="VitalHealth navigation">
+        <button type="button" class="nav-chip"
+                :class="{ 'nav-chip--active': activeNav==='dashboard' }"
+                :aria-pressed="activeNav==='dashboard'"
+          @click="openDashboard()">Home</button>
+        <button type="button" class="nav-chip"
+                :class="{ 'nav-chip--active': activeNav==='triage' }"
+                :aria-pressed="activeNav==='triage'"
+                @click="openTriage()">Clinical Triage</button>
+        <a class="nav-chip" href="/stroke/">Stroke Assessment</a>
+        <a class="nav-chip" href="/emc/">EMC Workflow</a>
+        <button type="button" class="nav-chip"
+                :class="{ 'nav-chip--active': activeNav==='results' }"
+                :aria-pressed="activeNav==='results'"
+                @click="openResults()">Results</button>
+      </nav>
     </div>
   </header>
 
   <div class="app">
-    <div class="layout" :class="{ 'layout--intake': mode === 'intake' }">
+    <section class="dashboard card" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard">
+      <div class="dashboard__head">
+        <h1>VitalHealth</h1>
+        <p>Integrated educational clinical workflow support platform</p>
+      </div>
+
+      <div class="dashboard__grid">
+        <article class="feature-card feature-card--primary">
+          <h2>Clinical Triage</h2>
+          <p>Assess patient triage priority using intake details and clinician notes.</p>
+          <div class="feature-card__actions">
+            <button class="btn-generate" type="button" @click="openTriage()">Open Clinical Triage</button>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <h2>Stroke Assessment</h2>
+          <p>Estimate stroke risk and generate educational care planning guidance.</p>
+          <div class="feature-card__actions">
+            <a class="btn-generate" href="/stroke/">Open Stroke Assessment</a>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <h2>Electronic Medical Certificate</h2>
+          <p>Prepare and review electronic medical certificate drafts for clinician approval.</p>
+          <div class="feature-card__actions">
+            <a class="btn-generate" href="/emc/">Open EMC Workflow</a>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <h2>Assessment Results</h2>
+          <p>Review generated assessments, care plans, and workflow outputs.</p>
+          <div class="feature-card__actions">
+            <button class="btn-generate" type="button" @click="openResults()">Open Results</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
+
+      <section class="workspace-switch card" aria-label="Clinical triage workspace controls">
+        <div class="segmented" role="group" aria-label="Clinical triage view">
+          <button type="button" :aria-pressed="mode==='browse'" @click="openTriage()">Patient Browser</button>
+          <button type="button" :aria-pressed="mode==='intake'" @click="openIntake()">Triage Intake</button>
+          <button type="button" :aria-pressed="activeNav==='results'" @click="openResults()">Results</button>
+        </div>
+      </section>
 
       <!-- ============================ SIDEBAR ============================ -->
       <aside class="sidebar card" aria-label="Patient selector" x-show="mode === 'browse'">
@@ -677,8 +733,9 @@
 
     <!-- ============================ FOOTER ============================ -->
     <footer class="footer">
-      <div>This describes the model&rsquo;s prediction of a triage assignment, not a clinical diagnosis. Limitations: the model predicts a triage nurse&rsquo;s ESI assignment, not physiological ground truth; explanations are grounded in the payload only.</div>
+      <div>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</div>
     </footer>
+
   </div>
 </body>
 </html>
