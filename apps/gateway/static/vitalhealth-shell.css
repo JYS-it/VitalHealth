@@ -8,9 +8,10 @@
   --vh-text-muted: #5f6f82;
   --vh-border: #d8e1ec;
   --vh-primary: #1f6feb;
-  --vh-primary-hover: #1557b0;
+  --vh-primary-hover: #2a7af0;
   --vh-primary-soft: #eaf2ff;
   --vh-accent: #f59e0b;
+  --vh-accent-hover: #d97706;
   --vh-accent-soft: #fff4df;
   --vh-shadow: 0 2px 10px rgba(20, 33, 61, 0.06);
   --vh-shadow-hover: 0 10px 24px rgba(20, 33, 61, 0.10);
@@ -98,7 +99,7 @@ a {
   border-radius: 999px;
   border: 1px solid var(--vh-border);
   background: var(--vh-accent-soft);
-  color: #8a5a00;
+  color: #7a4f00;
   box-shadow: 0 1px 2px rgba(20, 33, 61, 0.04);
   font-size: 0.9rem;
   white-space: nowrap;
@@ -134,7 +135,7 @@ a {
 .navbar a:hover {
   border-color: var(--vh-primary);
   color: var(--vh-primary);
-  background: var(--vh-primary-soft);
+  background: linear-gradient(135deg, var(--vh-primary-soft) 0%, var(--vh-accent-soft) 100%);
 }
 
 .nav-chip--active,
@@ -143,13 +144,14 @@ a {
   background: var(--vh-primary-soft);
   color: var(--vh-primary);
   border-color: #aac5f6;
+  box-shadow: inset 0 -2px 0 0 rgba(245, 158, 11, 0.35);
 }
 
 .chip-accent,
 .status-accent {
   background: var(--vh-accent-soft);
-  color: #8a5a00;
-  border-color: #f1d59d;
+  color: #7a4f00;
+  border-color: #efcd86;
 }
 
 .card,
@@ -174,7 +176,7 @@ a {
 .panel-card:hover,
 .workflow-card:hover,
 .box:hover {
-  border-color: #bfd0e6;
+  border-color: #efcd86;
 }
 
 .card,
@@ -246,9 +248,9 @@ button:hover {
 }
 
 .btn-ghost:hover {
-  border-color: var(--vh-primary);
-  color: var(--vh-primary);
-  background: var(--vh-primary-soft);
+  border-color: var(--vh-accent);
+  color: #8a5500;
+  background: var(--vh-accent-soft);
 }
 
 .site-footer,

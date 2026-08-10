@@ -42,45 +42,47 @@
   </header>
 
   <div class="app">
-    <section class="dashboard card" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard">
-      <div class="dashboard__head">
-        <h1>VitalHealth</h1>
-        <p>Integrated educational clinical workflow support platform</p>
-      </div>
+    <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard home">
+      <article class="home-hero card">
+        <p class="hero-kicker">VitalHealth portal</p>
+        <h1>Welcome, <span x-text="welcomeName()"></span>!</h1>
+        <h2>Choose a healthcare workflow to begin.</h2>
+        <p>
+          VitalHealth brings clinical triage, stroke assessment, and medical certificate workflows into
+          one guided platform.
+        </p>
+      </article>
 
-      <div class="dashboard__grid">
-        <article class="feature-card feature-card--primary">
-          <h2>Clinical Triage</h2>
+      <div class="workflow-bubbles" aria-label="Primary workflows">
+        <button class="workflow-bubble workflow-bubble--triage" type="button" @click="openTriage()">
+          <span class="bubble-icon" aria-hidden="true">CT</span>
+          <h3>Clinical Triage</h3>
           <p>Assess patient triage priority using intake details and clinician notes.</p>
-          <div class="feature-card__actions">
-            <button class="btn-generate" type="button" @click="openTriage()">Open Clinical Triage</button>
-          </div>
-        </article>
+          <span class="bubble-cta">Start Triage</span>
+        </button>
 
-        <article class="feature-card">
-          <h2>Stroke Assessment</h2>
+        <a class="workflow-bubble workflow-bubble--stroke" href="/stroke/">
+          <span class="bubble-icon" aria-hidden="true">SA</span>
+          <h3>Stroke Assessment</h3>
           <p>Estimate stroke risk and generate educational care planning guidance.</p>
-          <div class="feature-card__actions">
-            <a class="btn-generate" href="/stroke/">Open Stroke Assessment</a>
-          </div>
-        </article>
+          <span class="bubble-cta">Start Stroke Assessment</span>
+        </a>
 
-        <article class="feature-card">
-          <h2>Electronic Medical Certificate</h2>
+        <a class="workflow-bubble workflow-bubble--emc" href="/emc/">
+          <span class="bubble-icon" aria-hidden="true">EMC</span>
+          <h3>Electronic Medical Certificate</h3>
           <p>Prepare and review electronic medical certificate drafts for clinician approval.</p>
-          <div class="feature-card__actions">
-            <a class="btn-generate" href="/emc/">Open EMC Workflow</a>
-          </div>
-        </article>
-
-        <article class="feature-card">
-          <h2>Assessment Results</h2>
-          <p>Review generated assessments, care plans, and workflow outputs.</p>
-          <div class="feature-card__actions">
-            <button class="btn-generate" type="button" @click="openResults()">Open Results</button>
-          </div>
-        </article>
+          <span class="bubble-cta">Start EMC Workflow</span>
+        </a>
       </div>
+
+      <article class="results-quick card" aria-label="Results quick access">
+        <div>
+          <h3>Assessment Results</h3>
+          <p>View previous assessments and workflow outputs.</p>
+        </div>
+        <button class="btn-ghost" type="button" @click="openResults()">Open Results</button>
+      </article>
     </section>
 
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>

@@ -19,7 +19,7 @@
   height: 64px;
   border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #6ea8ff, var(--vh-primary) 70%, var(--vh-primary-hover) 100%);
+  background: radial-gradient(circle at 26% 28%, #8cb9ff, var(--vh-primary) 66%, var(--vh-primary-hover) 100%);
   box-shadow: 0 12px 26px rgba(21, 87, 176, 0.25);
   display: grid;
   place-items: center;
@@ -30,7 +30,7 @@
 
 .vita-fab:hover {
   transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 16px 32px rgba(21, 87, 176, 0.3);
+  box-shadow: 0 16px 32px rgba(21, 87, 176, 0.25), 0 0 0 3px rgba(245, 158, 11, 0.18);
 }
 
 .vita-face {
@@ -95,6 +95,21 @@
   cursor: grab;
 }
 
+.vita-head h3 {
+  position: relative;
+}
+
+.vita-head h3::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--vh-accent);
+  vertical-align: middle;
+}
+
 .vita-shell--dragging .vita-head,
 .vita-shell--dragging .vita-fab {
   cursor: grabbing;
@@ -119,8 +134,8 @@
 }
 
 .vita-chip {
-  border: 1px solid #cbd9ee;
-  background: #f8fbff;
+  border: 1px solid #ecd4ab;
+  background: #fff8eb;
   color: var(--vh-text);
   border-radius: 999px;
   padding: 6px 10px;
@@ -130,9 +145,9 @@
 }
 
 .vita-chip:hover {
-  border-color: var(--vh-primary);
-  color: var(--vh-primary);
-  background: var(--vh-primary-soft);
+  border-color: var(--vh-accent);
+  color: #8a5500;
+  background: var(--vh-accent-soft);
 }
 
 .vita-messages {
@@ -157,9 +172,13 @@
 }
 
 .vita-msg--bot p {
-  background: #f3f7fc;
+  background: linear-gradient(135deg, #f3f7fc 0%, #fff8ec 100%);
   color: var(--vh-text);
-  border: 1px solid #dbe6f2;
+  border: 1px solid #dbe3ee;
+}
+
+.vita-msg--user p {
+  background: linear-gradient(135deg, var(--vh-primary) 0%, #2f7ef1 100%);
 }
 
 .vita-msg--user {

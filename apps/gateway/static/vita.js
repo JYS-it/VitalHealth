@@ -279,7 +279,7 @@
     });
 
     renderQuickPrompts();
-    addMessage('bot', 'Hi, I\'m Vita. I can help you navigate VitalHealth and explain the workflow in simple terms.');
+    addMessage('bot', 'Hi, I\'m Vita. I can guide you through VitalHealth workflows in simple steps.');
     panel.style.display = 'none';
     panel.setAttribute('aria-hidden', 'true');
     setLoading(false);

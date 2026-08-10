@@ -26,6 +26,7 @@ function makeColumn() {
     printing: false,                         // marks this column's hnote as the print target
     copied: false,                           // transient "Copied ✓" feedback
     error: '',
+    viewerName: 'guest',
   };
 }
 
@@ -149,6 +150,11 @@ document.addEventListener('alpine:init', () => {
       this.activeNav = 'results';
       this.setMode('browse');
       this.syncSharedSection('results');
+    },
+
+    welcomeName() {
+      const name = String(this.viewerName || '').trim();
+      return name || 'guest';
     },
 
     get filteredPatients() {
