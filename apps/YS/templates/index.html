@@ -31,8 +31,12 @@
         <label class="wide">Clinician note<textarea name="clinician_note" rows="3" placeholder="Optional note for proposed-field extraction"></textarea></label>
         <label class="check wide"><input type="checkbox" name="diagnosis_disclosure_consent"> Diagnosis disclosure approved for the patient-facing EMC</label>
         <details class="symptoms wide" open>
-          <summary>Symptoms <span id="symptom-count">0 / {{ max_selected_symptoms }} selected</span></summary>
+          <summary>Symptoms <span id="symptom-count">0 selected</span></summary>
           <input class="search" id="symptom-search" type="search" placeholder="Filter symptoms" aria-label="Filter symptoms">
+          <div class="symptom-actions" aria-label="Symptom selection controls">
+            <button type="button" id="select-all-symptoms">Select all</button>
+            <button type="button" id="clear-all-symptoms">Clear all</button>
+          </div>
           <div class="check-grid" id="symptom-grid">
             {% for field, label in symptom_fields %}<label class="check symptom"><input type="checkbox" name="{{ field }}"> {{ label }}</label>{% endfor %}
           </div>
@@ -75,14 +79,20 @@
     if (search) search.addEventListener('input', () => document.querySelectorAll('.symptom').forEach((item) => { item.hidden = !item.textContent.toLowerCase().includes(search.value.toLowerCase()); }));
     const symptomInputs = Array.from(document.querySelectorAll('#symptom-grid input[type="checkbox"]'));
     const symptomCount = document.getElementById('symptom-count');
-    const maximumSymptoms = {{ max_selected_symptoms }};
-    const updateSymptomLimit = () => {
+    const updateSymptomCount = () => {
       const selected = symptomInputs.filter((input) => input.checked).length;
-      if (symptomCount) symptomCount.textContent = `${selected} / ${maximumSymptoms} selected`;
-      symptomInputs.forEach((input) => { input.disabled = !input.checked && selected >= maximumSymptoms; });
+      if (symptomCount) symptomCount.textContent = `${selected} selected`;
     };
-    symptomInputs.forEach((input) => input.addEventListener('change', updateSymptomLimit));
-    updateSymptomLimit();
+    symptomInputs.forEach((input) => input.addEventListener('change', updateSymptomCount));
+    document.getElementById('select-all-symptoms')?.addEventListener('click', () => {
+      symptomInputs.forEach((input) => { input.checked = true; });
+      updateSymptomCount();
+    });
+    document.getElementById('clear-all-symptoms')?.addEventListener('click', () => {
+      symptomInputs.forEach((input) => { input.checked = false; });
+      updateSymptomCount();
+    });
+    updateSymptomCount();
     document.querySelectorAll('.workflow-form').forEach((form) => form.addEventListener('submit', () => {
       if (!form.checkValidity()) return;
       const overlay = document.getElementById('loading-overlay');

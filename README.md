@@ -146,6 +146,34 @@ uvicorn main:app --port 8080
 Only useful once at least one backend is also running; otherwise every
 proxied route 404s while the landing page at `/` still works.
 
+## Shared PostgreSQL records
+
+VitalHealth can write durable, cross-module records to one PostgreSQL database
+without coupling the apps' model code. The shared schema contains `patients`,
+`clinical_records`, and append-only `audit_events` tables. It stores:
+
+- EMC workflow snapshots, approval/rejection events, and redacted audit data;
+- stroke risk assessments and generated care plans; and
+- triage assessments and clinician extraction corrections.
+
+The apps remain usable without a database. Set `DATABASE_URL` in each of
+`apps/Jace/.env`, `apps/Jeslyn/.env`, and `apps/YS/.env` to enable persistent
+records. Use the same URL in all three files. Do not put it in the gateway;
+the gateway has no clinical business logic and does not access records.
+
+For a local PostgreSQL installation, add the same URL to the three existing
+app `.env` files. Once `run_all.py` has built the app environments, initialise
+or upgrade the schema after a storage-package update:
+
+```powershell
+apps\Jace\.venv\Scripts\python.exe -m vitalhealth_storage
+```
+
+This command is idempotent. It also creates the record-history indexes and
+database-enforced append-only audit-event trigger. For a production deployment,
+use a managed PostgreSQL service, encrypted connections, backups, and a proper
+migration review before changing the schema.
+
 ## Environment variables
 
 Each app reads its own secrets from the environment (or a local `.env`). No
@@ -160,4 +188,5 @@ for the one exception: Jace's own code doesn't load `.env` itself).
 | `OPENROUTER_API_KEY` | YS | OpenRouter-hosted models via the `openai` client |
 | `OPENROUTER_MODEL` | YS | Optional; defaults to `openai/gpt-4o-mini` |
 | `SECRET_KEY` | Jeslyn | Flask session secret; defaults to a placeholder in development |
+| `DATABASE_URL` | Jace, Jeslyn, YS | One shared PostgreSQL URL for durable clinical records and audit events |
 | `TRIAGE_UPSTREAM` / `STROKE_UPSTREAM` / `EMC_UPSTREAM` | gateway | Optional; override where each prefix proxies to (default `127.0.0.1:8000` / `:5000` / `:5001`) |

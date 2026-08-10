@@ -12,3 +12,4 @@ joblib==1.5.2
 google-genai==1.47.0
 python-multipart==0.0.20
 pydantic==2.13.4
+-e ../..

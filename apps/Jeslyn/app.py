@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import joblib
 import pandas as pd
 from pypdf import PdfReader
+from vitalhealth_storage import get_store
 
 try:
     import google.generativeai as genai
@@ -17,6 +18,7 @@ except Exception:
 
 # Load environment variables from .env
 load_dotenv()
+SHARED_STORE = get_store()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-this-in-production")
@@ -421,6 +423,36 @@ def parse_patient_form(form_data) -> dict:
     }
 
 
+def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_calendar=None):
+    """Store the assessment independently of the browser session when enabled."""
+    output = {"prediction": prediction_result}
+    if care_plan is not None:
+        output["care_plan"] = care_plan
+    if care_calendar is not None:
+        output["care_calendar"] = care_calendar
+    record_id = session.get("database_record_id")
+    if record_id:
+        SHARED_STORE.safe_update_record(record_id, status="CARE_PLAN_READY" if care_plan else "ASSESSED", output_payload=output)
+    else:
+        record_id = SHARED_STORE.safe_create_record(
+            source_app="stroke",
+            record_type="stroke_risk_assessment",
+            status="ASSESSED",
+            input_payload=patient_data,
+            output_payload=output,
+            model_version="stroke_logistic_model",
+        )
+        if record_id:
+            session["database_record_id"] = record_id
+    SHARED_STORE.safe_append_audit_event(
+        source_app="stroke",
+        event_type="stroke_care_plan_generated" if care_plan else "stroke_assessed",
+        record_id=record_id,
+        payload={"risk_category": prediction_result["risk_category"]},
+    )
+    return record_id
+
+
 @app.route("/")
 def home():
     return render_template("home.html", page_title="Home")
@@ -461,6 +493,7 @@ def prediction():
             # Store in session for care-plan route.
             session["patient_data"] = patient_data
             session["prediction_result"] = prediction_result
+            persist_stroke_record(patient_data, prediction_result)
 
         except Exception as exc:
             error_message = f"Could not process prediction: {exc}"
@@ -493,6 +526,7 @@ def care_plan():
     generated_care_plan = generate_care_plan_with_gemini(rag_prompt)
 
     care_calendar = build_7_day_care_calendar(patient_data)
+    persist_stroke_record(patient_data, prediction_result, generated_care_plan, care_calendar)
 
     return render_template(
         "care_plan.html",

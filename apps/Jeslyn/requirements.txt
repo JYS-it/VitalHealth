@@ -1,7 +1,10 @@
 Flask>=3.0.0
 pandas>=2.0.0
-scikit-learn>=1.3.0
+# The saved LogisticRegression and StandardScaler artefacts were trained with
+# scikit-learn 1.5.1. Loading them under a newer release is unsafe.
+scikit-learn==1.5.1
 joblib>=1.3.0
 pypdf>=4.0.0
 python-dotenv>=1.0.0
 google-generativeai>=0.8.0
+-e ../..

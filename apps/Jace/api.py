@@ -19,10 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import ctrse_core as core
+from vitalhealth_storage import get_store
 
 # Resolve everything relative to this file so the app is CWD-independent
 # (equivalent to `core.init('.')` when launched from the project directory).
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+SHARED_STORE = get_store()
 SAMPLE_DIR = os.path.join(APP_DIR, "sample")
 STATIC_DIR = os.path.join(APP_DIR, "static")
 
@@ -264,6 +266,20 @@ def post_log_correction(rec: CorrectionRecord):
     with open(_CORRECTION_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     _correction_count += 1
+    record_id = SHARED_STORE.safe_create_record(
+        source_app="triage",
+        record_type="extraction_correction",
+        status="CORRECTED",
+        input_payload={"note": rec.note, "extracted": rec.extracted},
+        output_payload={"corrected": rec.corrected, "prediction": rec.prediction},
+        model_version="ctrse_p1p4",
+    )
+    SHARED_STORE.safe_append_audit_event(
+        source_app="triage",
+        event_type="extraction_corrected",
+        record_id=record_id,
+        payload={"timestamp": rec.timestamp, "prediction": rec.prediction},
+    )
     return {"logged": True, "count": _correction_count}
 
 
@@ -280,7 +296,22 @@ def post_predict(req: PredictRequest):
         "complaints": [{"token": c.token, "evidence": c.evidence} for c in req.complaints],
         "vitals": req.vitals.model_dump() if req.vitals is not None else {},
     }
-    return core.predict_from_fields(fields)
+    result = core.predict_from_fields(fields)
+    record_id = SHARED_STORE.safe_create_record(
+        source_app="triage",
+        record_type="triage_assessment",
+        status="REFUSED" if result.get("refused") else "ASSESSED",
+        input_payload=fields,
+        output_payload=result,
+        model_version="ctrse_p1p4",
+    )
+    SHARED_STORE.safe_append_audit_event(
+        source_app="triage",
+        event_type="triage_assessed",
+        record_id=record_id,
+        payload={"predicted_level": result.get("predicted_level")},
+    )
+    return result
 
 
 @app.post("/api/extract")

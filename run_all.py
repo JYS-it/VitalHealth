@@ -14,6 +14,7 @@ child process that survives a plain terminate() and orphans itself on its
 port — confirmed the hard way during development of this script.
 """
 import os
+import hashlib
 import socket
 import subprocess
 import sys
@@ -31,6 +32,7 @@ ROOT = Path(__file__).resolve().parent
 IS_WINDOWS = sys.platform.startswith("win")
 MIN_PYTHON = (3, 11)
 MAX_PYTHON = (3, 12)
+STARTUP_TIMEOUT_SECONDS = 120.0
 
 # Order matters: backends first, gateway last.
 APPS = [
@@ -112,7 +114,7 @@ def port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def wait_for_port(port: int, timeout: float = 30.0) -> bool:
+def wait_for_port(port: int, timeout: float = STARTUP_TIMEOUT_SECONDS) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if port_in_use(port):
@@ -153,6 +155,8 @@ def ensure_app_ready(app: dict):
     if py.exists():
         version = venv_version(py)
         if version and supported_python(version):
+            ensure_requirements_current(app, py)
+            ensure_shared_storage(app, py)
             return
         raise RuntimeError(
             f"{app['name']} has an incompatible or broken virtual environment at {py.parent.parent}. "
@@ -160,12 +164,62 @@ def ensure_app_ready(app: dict):
         )
     print(f"[{app['name']}] no venv found - setting up (first run only, may take a few minutes)...")
     subprocess.run([sys.executable, "-m", "venv", ".venv"], cwd=app_dir, check=True)
+    install_requirements(app, py)
+    ensure_shared_storage(app, py)
+    print(f"[{app['name']}] setup complete.")
+
+
+def requirements_fingerprint(app_dir: Path) -> str:
+    """Track dependency changes so existing venvs are upgraded once."""
+    digest = hashlib.sha256()
+    for path in (app_dir / "requirements.txt", ROOT / "pyproject.toml"):
+        if path.exists():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def install_requirements(app: dict, py: Path):
     subprocess.run(
         [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements.txt"],
-        cwd=app_dir,
+        cwd=app["dir"],
         check=True,
     )
-    print(f"[{app['name']}] setup complete.")
+    (py.parent.parent / ".vitalhealth_requirements.sha256").write_text(
+        requirements_fingerprint(app["dir"]), encoding="utf-8"
+    )
+
+
+def ensure_requirements_current(app: dict, py: Path):
+    stamp = py.parent.parent / ".vitalhealth_requirements.sha256"
+    expected = requirements_fingerprint(app["dir"])
+    current = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
+    if current == expected:
+        return
+    print(f"[{app['name']}] requirements changed - updating its virtual environment...")
+    install_requirements(app, py)
+
+
+def ensure_shared_storage(app: dict, py: Path):
+    """Upgrade pre-existing backend environments after shared code is added.
+
+    The gateway has no clinical-record dependency. The three backend
+    requirements files install this package on a fresh setup; this small check
+    also repairs virtual environments created before the package was added.
+    """
+    if app["name"] == "gateway":
+        return
+    probe = subprocess.run(
+        [str(py), "-c", "import vitalhealth_storage"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if probe.returncode == 0:
+        return
+    print(f"[{app['name']}] installing shared database package...")
+    subprocess.run(
+        [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-e", str(ROOT)],
+        check=True,
+    )
 
 
 def stream_output(name: str, proc: subprocess.Popen):

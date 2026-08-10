@@ -12,6 +12,7 @@ venv/
 .env
 *.key
 *.pem
+*.egg-info/
 
 # Editor / IDE
 .vs/

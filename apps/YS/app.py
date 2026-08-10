@@ -12,9 +12,11 @@ from flask import Flask, render_template, request
 from markupsafe import Markup, escape
 from openai import OpenAI
 from dotenv import load_dotenv
+from vitalhealth_storage import get_store
 
 
 load_dotenv()
+SHARED_STORE = get_store()
 APP_TITLE = "IIP-EMC Clinical Copilot"
 PROMPT_VERSION = "webapp_genai_emc_v4.0-grounded"
 GENAI_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
@@ -36,7 +38,6 @@ STYLE_INSTRUCTIONS = {
 }
 FORBIDDEN_TERMS = ["model confidence", "confidence percentage", "differential", "classifier", "algorithm", "audit", "prompt version", "machine learning"]
 DERIVED_FEATURES = {"Age", "Gender", "Duration", "Medical_History"}
-MAX_SELECTED_SYMPTOMS = 10
 
 app = Flask(__name__)
 WORKFLOWS = {}
@@ -199,12 +200,6 @@ def collect_features(form, metadata):
             values[feature] = 1 if form.get("medical_history") == "on" else 0
         else:
             values[feature] = 1 if form.get(feature) == "on" else 0
-    selected_symptoms = [
-        feature for feature in FEATURE_LAYOUT
-        if feature not in DERIVED_FEATURES and values[feature] == 1
-    ]
-    if len(selected_symptoms) > MAX_SELECTED_SYMPTOMS:
-        raise ValueError(f"Select no more than {MAX_SELECTED_SYMPTOMS} symptoms.")
     return values
 
 
@@ -429,7 +424,54 @@ def make_audit(workflow):
 def store(workflow):
     workflow_id = uuid.uuid4().hex
     WORKFLOWS[workflow_id] = workflow
+    persist_workflow(workflow_id, workflow, "emc_draft_created")
     return workflow_id
+
+
+def workflow_snapshot(workflow):
+    """Persist clinical facts and outputs, never the live provider API key."""
+    return {
+        "style": workflow["style"],
+        "metadata": workflow["metadata"],
+        "features": workflow["features"],
+        "prediction": workflow["payload"],
+        "evidence": workflow["evidence"],
+        "draft": workflow["draft"],
+        "review_gate": workflow["gate"],
+        "note_extraction": workflow["note_extraction"],
+        "revision_history": workflow["revision_history"],
+        "final": workflow["final"],
+        "issue_status": workflow["issue_status"],
+    }
+
+
+def persist_workflow(workflow_id, workflow, event_type):
+    """Mirror an EMC workflow to PostgreSQL when DATABASE_URL is configured."""
+    snapshot = workflow_snapshot(workflow)
+    record_id = workflow.get("database_record_id")
+    if record_id:
+        SHARED_STORE.safe_update_record(record_id, status=workflow["issue_status"], output_payload=snapshot)
+    else:
+        record_id = SHARED_STORE.safe_create_record(
+            source_app="emc",
+            record_type="electronic_medical_certificate",
+            status=workflow["issue_status"],
+            input_payload={"metadata": workflow["metadata"], "features": workflow["features"]},
+            output_payload=snapshot,
+            model_version=PROMPT_VERSION,
+            patient_external_id=workflow["metadata"]["patient_id"],
+            patient_name=workflow["metadata"]["patient_name"],
+        )
+        if record_id:
+            workflow["database_record_id"] = record_id
+    SHARED_STORE.safe_append_audit_event(
+        source_app="emc",
+        event_type=event_type,
+        record_id=record_id,
+        actor_reference=workflow["metadata"].get("attending_clinician_name"),
+        payload={"workflow_id": workflow_id, "status": workflow["issue_status"]},
+    )
+    return record_id
 
 
 def status_class(value):
@@ -448,7 +490,7 @@ app.jinja_env.globals.update(status_class=status_class)
 
 def render_state(workflow_id=None, message=None):
     workflow = WORKFLOWS.get(workflow_id)
-    return render_template("index.html", title=APP_TITLE, today=date.today().isoformat(), symptom_fields=symptom_fields(), style_options=STYLE_OPTIONS, workflow=workflow, workflow_id=workflow_id, message=message, model_metadata=MODEL_METADATA, feature_count=len(FEATURE_LAYOUT), max_selected_symptoms=MAX_SELECTED_SYMPTOMS, render_certificate=render_certificate, legacy_schema=any(feature in FEATURE_LAYOUT for feature in ("Gender", "Duration", "Medical_History")), genai_configured=bool(get_api_key()))
+    return render_template("index.html", title=APP_TITLE, today=date.today().isoformat(), symptom_fields=symptom_fields(), style_options=STYLE_OPTIONS, workflow=workflow, workflow_id=workflow_id, message=message, model_metadata=MODEL_METADATA, feature_count=len(FEATURE_LAYOUT), render_certificate=render_certificate, legacy_schema=any(feature in FEATURE_LAYOUT for feature in ("Gender", "Duration", "Medical_History")), genai_configured=bool(get_api_key()))
 
 
 @app.get("/")
@@ -487,6 +529,7 @@ def revise(workflow_id):
     workflow["draft"] = generate_draft(workflow["evidence"], workflow["style"], workflow["api_key"], instructions, workflow["draft"]["text"])
     workflow["gate"] = review_gate(deterministic_review(workflow["draft"]["text"], workflow["evidence"], workflow["payload"]), critic_review(workflow["draft"]["text"], workflow["evidence"], workflow["api_key"]))
     workflow["internal"] = internal_summary(workflow["payload"], workflow["evidence"], workflow["gate"])
+    persist_workflow(workflow_id, workflow, "emc_draft_revised")
     return render_state(workflow_id, "Draft regenerated from clinician instructions.")
 
 
@@ -515,8 +558,15 @@ def approve(workflow_id):
         return render_state(workflow_id, "Final issue is blocked by the final safety review.")
     workflow["final"], workflow["final_gate"], workflow["issue_status"] = result["text"], final_gate, "APPROVED_FOR_ISSUE"
     audit = make_audit(workflow)
-    joblib.dump(audit, AUDIT_PATH)
-    workflow["audit_path"] = AUDIT_PATH
+    record_id = persist_workflow(workflow_id, workflow, "emc_approved")
+    SHARED_STORE.safe_append_audit_event(
+        source_app="emc", event_type="emc_audit_snapshot", record_id=record_id, payload=audit
+    )
+    if record_id:
+        workflow["audit_path"] = f"shared-database:{record_id}"
+    else:
+        joblib.dump(audit, AUDIT_PATH)
+        workflow["audit_path"] = AUDIT_PATH
     return render_state(workflow_id, "Final EMC generated after clinician approval.")
 
 
@@ -525,6 +575,7 @@ def reject(workflow_id):
     workflow = WORKFLOWS[workflow_id]
     workflow["metadata"]["clinician_review_status"] = "REJECTED"
     workflow["issue_status"] = "REJECTED"
+    persist_workflow(workflow_id, workflow, "emc_rejected")
     return render_state(workflow_id, "Draft rejected. Add clinician revision instructions to prepare a new draft.")
 
 
