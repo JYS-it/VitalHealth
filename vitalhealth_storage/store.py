@@ -74,6 +74,15 @@ schema_migrations = Table(
     Column("applied_at", DateTime(timezone=True), nullable=False),
 )
 
+users = Table(
+    "users",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("email", String(255), unique=True, nullable=False, index=True),
+    Column("password_hash", String(255), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -200,6 +209,32 @@ class ClinicalStore:
                 )
             )
             return patient_id
+
+    def create_user(self, *, email: str, password_hash: str) -> str:
+        """Insert a new user. Raises on a duplicate email rather than
+        swallowing the error — unlike the safe_* wrappers below, auth has
+        no valid fallback when persistence fails."""
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        user_id = str(uuid.uuid4())
+        with self.engine.begin() as connection:
+            connection.execute(
+                users.insert().values(
+                    id=user_id,
+                    email=email.strip().lower(),
+                    password_hash=password_hash,
+                    created_at=_utcnow(),
+                )
+            )
+        return user_id
+
+    def get_user_by_email(self, email: str) -> Any:
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        with self.engine.begin() as connection:
+            return connection.execute(
+                users.select().where(users.c.email == email.strip().lower())
+            ).mappings().first()
 
     def create_record(
         self,

@@ -79,7 +79,10 @@ URL, `http://127.0.0.1:8080/`, in front of all three apps:
 - `/stroke/` → Jeslyn
 - `/emc/` → YS
 
-The gateway only forwards HTTP requests; it contains no business logic. See
+The gateway forwards HTTP requests and contains no *clinical* business
+logic — the one exception is login (see [Authentication](#authentication)
+below), since it's the natural place for a single sign-on across all three
+apps. See
 [apps/gateway/main.py](apps/gateway/main.py) for how routing and prefix
 headers work, and the `PrefixMiddleware` class near the top of
 [apps/Jeslyn/app.py](apps/Jeslyn/app.py) and
@@ -92,6 +95,32 @@ Jace's static frontend uses paths relative to its own page rather than
 root-absolute ones (a deliberate, minimal change — see git history on
 `apps/Jace/static/`), which is what lets it work both standalone at `/` and
 proxied at `/triage/` with no backend routing changes.
+
+## Authentication
+
+The gateway owns login for all three apps: log in once at `/login` and the
+session works for `/triage/`, `/stroke/`, and `/emc/` alike, since they're
+all only reachable through the gateway's one origin
+(`http://127.0.0.1:8080/`).
+
+- `/register` — self-service signup (email + password, no admin approval).
+- `/login` / `/logout` — session start/end.
+- Sessions are a signed, expiring cookie (`itsdangerous`, 12-hour default),
+  verified statelessly on every proxied request — the database is only
+  queried at login and register, not on every request.
+- Passwords are hashed with `bcrypt`.
+- Unauthenticated browser requests to a proxied route redirect to `/login`;
+  unauthenticated API-style requests get a `401` instead.
+- The gateway forwards the logged-in user's identity to backends via
+  `X-Vitalhealth-User` / `X-Vitalhealth-User-Email` headers. This is
+  optional for the backends to read — none of them currently require it.
+- There's a single role: authentication is "logged in or not," with no
+  per-user permissions.
+- **Caveat:** this only protects requests that go through the gateway.
+  Running a backend standalone (see
+  [Manual / advanced](#manual--advanced-run-one-app-at-a-time) below) is not
+  authenticated — the same class of limitation as `X-Forwarded-Prefix`
+  already being a no-op when a backend is run outside the gateway.
 
 ## Manual / advanced (run one app at a time)
 
@@ -139,6 +168,9 @@ Also defaults to port 5000, so set `PORT` if Jeslyn is already running.
 
 ### apps/gateway (FastAPI)
 
+Copy `apps/gateway/.env.example` to `apps/gateway/.env` and set `DATABASE_URL`
+first (required for login — see [Authentication](#authentication)), then:
+
 ```bash
 uvicorn main:app --port 8080
 ```
@@ -156,10 +188,19 @@ without coupling the apps' model code. The shared schema contains `patients`,
 - stroke risk assessments and generated care plans; and
 - triage assessments and clinician extraction corrections.
 
-The apps remain usable without a database. Set `DATABASE_URL` in each of
-`apps/Jace/.env`, `apps/Jeslyn/.env`, and `apps/YS/.env` to enable persistent
-records. Use the same URL in all three files. Do not put it in the gateway;
-the gateway has no clinical business logic and does not access records.
+The three clinical apps remain usable without a database: `DATABASE_URL` is
+optional for `apps/Jace/.env`, `apps/Jeslyn/.env`, and `apps/YS/.env`, and
+predictions still work without it (persistence writes just no-op). Use the
+same URL in all three files.
+
+The gateway is different: `DATABASE_URL` is a **hard requirement** for it
+(`apps/gateway/.env`), because it uses the shared database for exactly one
+thing — the `users` table backing login (see
+[Authentication](#authentication) below). It still has no clinical-record
+business logic and never touches `patients`, `clinical_records`, or
+`audit_events`. Without `DATABASE_URL` set, nobody can log in and every
+proxied route (`/triage/*`, `/stroke/*`, `/emc/*`) becomes permanently
+inaccessible, even though the landing page at `/` still renders.
 
 For a local PostgreSQL installation, add the same URL to the three existing
 app `.env` files. Once `run_all.py` has built the app environments, initialise
@@ -188,5 +229,7 @@ for the one exception: Jace's own code doesn't load `.env` itself).
 | `OPENROUTER_API_KEY` | YS | OpenRouter-hosted models via the `openai` client |
 | `OPENROUTER_MODEL` | YS | Optional; defaults to `openai/gpt-4o-mini` |
 | `SECRET_KEY` | Jeslyn | Flask session secret; defaults to a placeholder in development |
-| `DATABASE_URL` | Jace, Jeslyn, YS | One shared PostgreSQL URL for durable clinical records and audit events |
+| `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL. Optional for the three clinical apps (durable clinical records/audit events); required for the gateway (the `users` table backing login) |
+| `SESSION_SECRET` | gateway | Signs the login session cookie; defaults to a placeholder in development — set a long random value in production |
+| `SESSION_COOKIE_SECURE` | gateway | Optional; set to `true` once the gateway is served over HTTPS |
 | `TRIAGE_UPSTREAM` / `STROKE_UPSTREAM` / `EMC_UPSTREAM` | gateway | Optional; override where each prefix proxies to (default `127.0.0.1:8000` / `:5000` / `:5001`) |
