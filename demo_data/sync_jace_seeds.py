@@ -29,7 +29,11 @@ from characters import CHARACTERS  # noqa: E402
 
 def main():
     seeds = [
-        {"label": character["display_name"], "note": character["clinician_note"]}
+        {
+            "label": character["display_name"],
+            "note": character["clinician_note"],
+            "vitals": character["triage"]["vitals"],
+        }
         for character in CHARACTERS
     ]
     body = json.dumps(seeds, indent=2)

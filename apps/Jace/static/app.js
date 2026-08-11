@@ -444,8 +444,20 @@ document.addEventListener('alpine:init', () => {
     },
 
     seedCharacter(i) {
-      this.intake.note = this.characterSeeds[i].note;
+      const s = this.characterSeeds[i];
+      this.intake.note = s.note;
       this.intake.extractError = '';
+      // Vitals are typed, never extracted from the note (see the eyebrow
+      // label above the vitals grid) -- fill them directly from the demo
+      // character's own data instead, so one click prepares the whole form.
+      if (s.vitals) {
+        this.intake.noVitals = false;
+        Object.assign(this.intake.vitals, {
+          hr: s.vitals.hr, sbp: s.vitals.sbp, dbp: s.vitals.dbp,
+          rr: s.vitals.rr, o2: s.vitals.o2,
+          temp: s.vitals.temp, temp_unit: s.vitals.temp_unit,
+        });
+      }
     },
 
     // Stage 1 -> 2. Sends ONLY the note — typed vitals never touch the LLM (§5).
