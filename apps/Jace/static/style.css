@@ -57,20 +57,20 @@ body{
   color:var(--text-muted); font-weight:600;
 }
 
-/* Small layout utilities (keeps all styling out of inline attributes, spec §1) */
+/* Small layout utilities */
 .mb2{margin-bottom:var(--s2);}
 .ml2{margin-left:var(--s2);}
 .mr3{margin-right:var(--s3);}
 .contents{display:contents;}
 .row-between{display:flex; justify-content:space-between;}
 
-/* --- Focus rings (quality floor) --- */
+/* --- Focus rings --- */
 a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-visible{
   outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm);
 }
 
 /* ==========================================================================
-   Shell / layout (§4.2)
+   Shell / layout
    ========================================================================== */
 .app{max-width:1280px; margin:0 auto; padding:0 var(--s5) var(--s8);}
 
@@ -330,9 +330,6 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 }
 
 .layout{display:grid; grid-template-columns:300px 1fr; gap:var(--s5); padding-top:var(--s5);}
-
-/* Main holds 1 column (single mode) or 2 (compare, §3.1). Each .column is a full
-   Model + Gen-AI pair: side-by-side in single mode, stacked when comparing two patients. */
 .main{display:grid; grid-template-columns:1fr; gap:var(--s5); align-content:start;}
 .main.compare{grid-template-columns:1fr 1fr;}
 .column{display:grid; grid-template-columns:1fr 1fr; gap:var(--s5); align-content:start; min-width:0;}
@@ -340,7 +337,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .col-tag{margin-left:auto; font-size:var(--fs-xs); color:var(--text-faint); text-transform:none; letter-spacing:0;}
 
 /* ==========================================================================
-   Cards / panels — single spacing family
+   Cards / panels
    ========================================================================== */
 .card{
   background:var(--surface); border:1px solid var(--border);
@@ -353,7 +350,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .stack--tight > * + *{margin-top:var(--s2);}
 
 /* ==========================================================================
-   Sidebar (§4.2)
+   Sidebar
    ========================================================================== */
 .sidebar{align-self:start; position:sticky; top:80px;}
 .sidebar__group + .sidebar__group{margin-top:var(--s5);}
@@ -393,7 +390,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .count{font-size:var(--fs-xs); color:var(--text-faint);}
 
 /* ==========================================================================
-   Signature — acuity expression (§4.3)
+   Signature — acuity expression
    ========================================================================== */
 .badge{
   display:inline-block; color:var(--on-accent);
@@ -402,7 +399,6 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 }
 .badge--sm{font-size:var(--fs-base); padding:var(--s1) var(--s3);}
 
-/* Basis pill (§3.1) — muted metadata, NOT a second saturated acuity signal */
 .basis-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2); margin-top:var(--s2);}
 .basis-pill{
   font-size:var(--fs-xs); font-weight:600; letter-spacing:.04em;
@@ -433,12 +429,12 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .dist__read b{color:var(--text); font-weight:600;}
 .dist__note{margin-top:var(--s1); font-size:var(--fs-xs); color:var(--text-faint);}
 
-/* Confidence (§4.4) */
+/* Confidence */
 .conf__val{font-family:var(--font-sans); font-size:var(--fs-sm); font-weight:600;}
 .conf--p1{color:var(--p1);} .conf--warn{color:var(--warn);}
 .conf--pass{color:var(--pass);} .conf--text{color:var(--text);}
 
-/* Red-flag banner (§4.4) — only when triggered */
+/* Red-flag banner */
 .redflag{
   background:var(--p1-tint); border-left:3px solid var(--p1);
   border-radius:var(--r-sm); padding:var(--s2) var(--s3);
@@ -446,7 +442,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   display:flex; align-items:center; gap:var(--s2);
 }
 
-/* Chips (§4.4) */
+/* Chips */
 .chips{display:flex; flex-wrap:wrap; gap:var(--s2);}
 .chip{
   display:inline-flex; align-items:center; gap:var(--s1);
@@ -458,7 +454,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .chip__stat{color:var(--text-faint);}
 .empty-inline{font-size:var(--fs-xs); color:var(--text-faint); font-style:italic;}
 
-/* Abnormal vitals (§4.4) */
+/* Abnormal vitals */
 .vitals{display:flex; flex-wrap:wrap; gap:var(--s2);}
 .vpill{
   display:inline-flex; align-items:center; gap:var(--s2);
@@ -469,13 +465,12 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .vpill__num{font-size:var(--fs-sm); font-weight:600;}
 .vpill__dot{width:6px; height:6px; border-radius:50%; background:var(--p1);}
 
-/* Fact rows (age / arrival / dept / utilisation) */
 .facts{display:grid; grid-template-columns:auto 1fr; gap:var(--s1) var(--s4); align-items:baseline;}
 .facts dt{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);}
 .facts dd{margin:0; font-size:var(--fs-sm);}
 
 /* ==========================================================================
-   Gen-AI panel (§4.5)
+   Gen-AI panel
    ========================================================================== */
 .toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s3);}
 .segmented{display:inline-flex; background:var(--surface-2); border-radius:var(--r); padding:3px;}
@@ -507,7 +502,6 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .guard--flag{background:var(--warn-tint); color:var(--warn);}
 .guard--offline{background:var(--surface-2); color:var(--text-muted);}
 
-/* Adversarial guardrail control (§3.3) */
 .btn-ghost{
   font-family:var(--font-sans); font-size:var(--fs-xs); font-weight:600;
   color:var(--text-muted); background:transparent;
@@ -522,7 +516,6 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   border-radius:var(--r-sm); padding:var(--s2) var(--s3);
 }
 
-/* Register blocks — the two Gen-AI outputs shown together (§3.2) */
 .reg-block + .reg-block{margin-top:var(--s4); padding-top:var(--s4); border-top:1px dashed var(--border);}
 .reg-label{display:flex; align-items:center; justify-content:space-between; gap:var(--s2); margin-bottom:var(--s2);}
 .reg-actions{display:inline-flex; align-items:center; gap:var(--s2);}
@@ -555,7 +548,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .vitseg__lbl{color:var(--text-muted);}
 .vitseg--abn{color:var(--p1); font-weight:600;}
 .vitseg--abn .vitseg__lbl{color:var(--p1);}
-.hnote__printfoot{display:none;}   /* print-only disclaimer (see @media print) */
+.hnote__printfoot{display:none;}
 
 .disclaimer{
   margin-top:var(--s4); padding-top:var(--s3); border-top:1px solid var(--border);
@@ -577,15 +570,13 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .footer details p{max-width:70ch;}
 
 /* ==========================================================================
-   Intake (§5) — two-zone input, confirmation traceability, result notice.
-   Existing tokens only; flag styling reuses the guard/warn family.
+   Intake
    ========================================================================== */
 .mode-switch{margin-left:var(--s2);}
 
 .layout--intake{grid-template-columns:1fr;}
 .intake-col{display:grid; gap:var(--s5); align-content:start; min-width:0;}
 
-/* Stage 1 — the two zones read as distinct instruments */
 .izone{border:1px solid var(--border); border-radius:var(--r); padding:var(--s4); background:var(--surface);}
 .izone + .izone{margin-top:var(--s4);}
 .note-input{
@@ -610,7 +601,6 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .finput--num{width:5.5rem;}
 select.finput{font-family:var(--font-mono);}
 
-/* Stage 2 — note view + span highlight (the signature interaction) */
 .note-view{
   font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body);
   background:var(--surface-2); border:1px solid var(--border);
@@ -663,7 +653,6 @@ select.finput{font-family:var(--font-mono);}
 
 .intake-result-bar{margin-top:var(--s3);}
 
-/* Honest-scope notice — quiet informational strip shown with every prediction */
 .scope-note{
   display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2);
   font-size:var(--fs-xs); color:var(--text-muted);
@@ -678,7 +667,7 @@ select.finput{font-family:var(--font-mono);}
 }
 
 /* ==========================================================================
-   Responsive (§4.2) — collapse below 900px
+   Responsive
    ========================================================================== */
 @media (max-width:900px){
   .header{height:auto; padding:var(--s3) var(--s4);}
@@ -713,9 +702,7 @@ select.finput{font-family:var(--font-mono);}
 }
 
 /* ==========================================================================
-   Print (Handoff 2 §B1) — the handover note IS the printed page. All app chrome
-   hidden; monochrome; the S/B/A/R gutter-label layout preserved; disclaimer footer
-   included via .hnote__printfoot. The browser's print dialog provides PDF.
+   Print
    ========================================================================== */
 @media print{
   body *{visibility:hidden;}
@@ -724,7 +711,6 @@ select.finput{font-family:var(--font-mono);}
     position:absolute; left:0; top:0; width:100%;
     border:1px solid #000; border-radius:0; box-shadow:none;
   }
-  /* monochrome: text black, backgrounds white, structure via grey rules */
   .print-target, .print-target *{
     color:#000 !important; background:#fff !important; box-shadow:none !important;
   }
@@ -734,9 +720,52 @@ select.finput{font-family:var(--font-mono);}
     border:1.5px solid #000; border-radius:4px; padding:1px 6px; font-weight:700;
   }
   .print-target .hnote__lbl, .print-target .vitseg__lbl, .print-target .hnote__time{color:#444 !important;}
-  .print-target .vitseg--abn{font-weight:700;}          /* abnormal emphasis survives in mono */
+  .print-target .vitseg--abn{font-weight:700;}
   .print-target .hnote__printfoot{
     display:block; padding:var(--s2) var(--s3); border-top:1px solid #000;
     font-size:var(--fs-xs); color:#444 !important;
   }
+}
+
+/* ==========================================================================
+   Signed-in / logout status
+   ========================================================================== */
+.header__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.auth-status__user {
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Works even if the logout link does not have the class yet */
+.auth-status__logout,
+.auth-status a[href="/logout"] {
+  color: #334155;
+  font-weight: 800;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.auth-status__logout:hover,
+.auth-status a[href="/logout"]:hover {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  background: transparent;
 }

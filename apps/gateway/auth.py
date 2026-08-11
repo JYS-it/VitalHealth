@@ -6,6 +6,7 @@ the database is only touched at login (verify password) and register
 (create user) — every subsequent proxied request is authenticated purely by
 verifying the session cookie's signature and expiry in-process.
 """
+from __future__ import annotations
 import os
 
 import bcrypt

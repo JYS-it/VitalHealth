@@ -5,7 +5,7 @@ then relays the response back unchanged. Each backend keeps running as its own
 process so the three apps can keep their own dependencies while sharing one URL.
 
 Routing:
-    /                         -> gateway landing page
+    /                          -> gateway landing page
     /login, /register, /logout -> session management
     /triage/*                  -> Jace   (FastAPI, CTRSE triage acuity)
     /stroke/*                  -> Jeslyn (Flask, stroke risk + care plan)
@@ -17,12 +17,20 @@ Authentication:
     user's identity using X-Vitalhealth-User and X-Vitalhealth-User-Email.
 """
 
+from __future__ import annotations
+
 import html
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import httpx
 from dotenv import load_dotenv
@@ -30,12 +38,19 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import IntegrityError
 from vitalhealth_storage import get_store
+
+try:
+    from sqlalchemy.exc import IntegrityError
+except Exception:
+    class IntegrityError(Exception):
+        """Fallback when SQLAlchemy is not installed in the active gateway environment."""
+
+        pass
 
 import auth
 
-load_dotenv()
+load_dotenv(PROJECT_ROOT / ".env")
 
 app = FastAPI(title="VitalHealth gateway")
 
@@ -43,6 +58,14 @@ BASE_DIR = Path(__file__).resolve().parent
 app.mount("/vh-assets", StaticFiles(directory=BASE_DIR / "static"), name="vh-assets")
 
 SHARED_STORE = get_store()
+DATABASE_ERROR: Optional[str] = None
+
+try:
+    SHARED_STORE.initialize()
+except RuntimeError as exc:
+    DATABASE_ERROR = str(exc)
+except Exception as exc:
+    DATABASE_ERROR = f"{type(exc).__name__}: {exc}"
 
 BACKENDS = {
     "triage": os.environ.get("TRIAGE_UPSTREAM", "http://127.0.0.1:8000"),
@@ -97,7 +120,6 @@ def _vita_section_guidance(active_section: str) -> str:
 
 
 def _vita_local_reply(message: str, active_section: str) -> str:
-    """Return a deterministic local Vita reply when no model provider is available."""
     text = (message or "").strip().lower()
     section = (active_section or "dashboard").strip().lower()
 
@@ -162,7 +184,10 @@ async def _vita_live_reply(message: str, active_section: str) -> Optional[str]:
 
     if should_try_gemini and gemini_key:
         gemini_model = os.getenv("VITA_GEMINI_MODEL", "gemini-2.5-flash")
-        gemini_base = os.getenv("VITA_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
+        gemini_base = os.getenv(
+            "VITA_GEMINI_BASE_URL",
+            "https://generativelanguage.googleapis.com/v1beta",
+        )
 
         gemini_payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
@@ -243,110 +268,216 @@ async def _vita_live_reply(message: str, active_section: str) -> Optional[str]:
 _client = httpx.AsyncClient(follow_redirects=False, timeout=30.0)
 
 _SHARED_CSS = """
+:root {
+    --vh-blue: #1f6feb;
+    --vh-blue-dark: #1557b0;
+    --vh-orange: #f59e0b;
+    --vh-orange-dark: #d97706;
+    --vh-navy: #14213d;
+    --vh-muted: #5f6f82;
+    --vh-border: #d8e1ec;
+    --vh-card: #ffffff;
+    --vh-soft-blue: #eaf2ff;
+    --vh-soft-orange: #fff4df;
+}
+* {
+    box-sizing: border-box;
+}
 body {
+    min-height: 100vh;
+    margin: 0;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    max-width: 720px;
-    margin: 4rem auto;
-    padding: 0 1.5rem;
-    color: #14213d;
-    background: #f5f7fa;
+    color: var(--vh-navy);
+    background:
+        radial-gradient(circle at top left, rgba(255, 244, 223, 0.95), transparent 34rem),
+        linear-gradient(135deg, #f59e0b 0%, #ffb238 42%, #f7fbff 42%, #f5f7fa 100%);
+}
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 2rem 1rem;
+}
+.auth-card {
+    width: min(460px, 100%);
+    background: var(--vh-card);
+    border: 1px solid rgba(216, 225, 236, 0.95);
+    border-radius: 28px;
+    padding: 2.25rem;
+    box-shadow: 0 24px 60px rgba(20, 33, 61, 0.18);
+}
+.auth-logo {
+    width: min(260px, 82%);
+    height: auto;
+    display: block;
+    margin: 0 auto 1.25rem;
+    border-radius: 18px;
+}
+.auth-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: var(--vh-soft-orange);
+    color: #9a5d00;
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-bottom: 0.85rem;
 }
 h1 {
-    margin-bottom: 0.25rem;
+    margin: 0 0 0.4rem;
+    font-size: clamp(1.9rem, 4vw, 2.4rem);
+    line-height: 1.05;
 }
 p.sub {
-    color: #5f6f82;
-    margin-top: 0;
+    color: var(--vh-muted);
+    margin: 0 0 1.5rem;
+    line-height: 1.55;
+}
+form {
+    margin-top: 1.25rem;
+}
+label {
+    display: block;
+    margin: 1rem 0 0.35rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--vh-navy);
+}
+input[type=email],
+input[type=password] {
+    width: 100%;
+    padding: 0.8rem 0.9rem;
+    border: 1.5px solid var(--vh-border);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--vh-navy);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+input[type=email]:focus,
+input[type=password]:focus {
+    border-color: var(--vh-blue);
+    box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.13);
+}
+button {
+    width: 100%;
+    margin-top: 1.45rem;
+    padding: 0.85rem 1.25rem;
+    border: none;
+    border-radius: 14px;
+    background: var(--vh-blue);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(31, 111, 235, 0.28);
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+button:hover {
+    background: var(--vh-blue-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 16px 34px rgba(31, 111, 235, 0.33);
+}
+.error {
+    background: #fdecec;
+    color: #b91c1c;
+    border: 1px solid #f4b4b4;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.92rem;
+}
+.hint {
+    margin: 1.25rem 0 0;
+    font-size: 0.93rem;
+    color: var(--vh-muted);
+    text-align: center;
+}
+.hint a {
+    color: var(--vh-blue);
+    font-weight: 800;
+}
+.topbar {
+    width: min(960px, calc(100% - 2rem));
+    margin: 1.5rem auto 0;
+    text-align: right;
+    font-size: 0.9rem;
+    color: var(--vh-muted);
+}
+.topbar a {
+    color: var(--vh-blue);
+    font-weight: 800;
+}
+.landing-page {
+    min-height: 100vh;
+    padding: 1.5rem 1rem 3rem;
+}
+.landing-shell {
+    width: min(900px, 100%);
+    margin: 2rem auto 0;
+}
+.landing-card {
+    background: var(--vh-card);
+    border: 1px solid var(--vh-border);
+    border-radius: 28px;
+    padding: 2rem;
+    box-shadow: 0 24px 60px rgba(20, 33, 61, 0.12);
+}
+.landing-logo {
+    width: min(300px, 82%);
+    height: auto;
+    display: block;
+    margin-bottom: 1rem;
+    border-radius: 18px;
+}
+.workflow-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
 }
 .card {
     display: block;
-    border: 1px solid #d8e1ec;
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
-    margin: 1rem 0;
+    border: 1px solid var(--vh-border);
+    border-radius: 18px;
+    padding: 1.2rem;
     text-decoration: none;
     color: inherit;
     background: #ffffff;
     box-shadow: 0 2px 10px rgba(20, 33, 61, 0.06);
 }
 .card:hover {
-    border-color: #1f6feb;
+    border-color: var(--vh-blue);
 }
 .card h2 {
-    margin: 0 0 0.25rem 0;
+    margin: 0 0 0.35rem 0;
     font-size: 1.1rem;
 }
 .card p {
     margin: 0;
-    color: #5f6f82;
+    color: var(--vh-muted);
     font-size: 0.95rem;
-}
-form {
-    margin-top: 1.5rem;
-}
-label {
-    display: block;
-    margin: 1rem 0 0.25rem;
-    font-size: 0.9rem;
-    color: #14213d;
-}
-input[type=email],
-input[type=password] {
-    width: 100%;
-    padding: 0.65rem;
-    border: 1px solid #d8e1ec;
-    border-radius: 8px;
-    font-size: 1rem;
-    box-sizing: border-box;
-}
-button {
-    margin-top: 1.5rem;
-    padding: 0.7rem 1.25rem;
-    border: none;
-    border-radius: 8px;
-    background: #1f6feb;
-    color: #fff;
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-button:hover {
-    background: #1557b0;
-}
-.error {
-    background: #fdecec;
-    color: #b91c1c;
-    border: 1px solid #f4b4b4;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-top: 1rem;
-    font-size: 0.9rem;
-}
-.hint {
-    margin-top: 1rem;
-    font-size: 0.9rem;
-    color: #5f6f82;
-}
-.hint a {
-    color: #1f6feb;
-    font-weight: 700;
-}
-.topbar {
-    text-align: right;
-    font-size: 0.9rem;
-    color: #5f6f82;
-    margin-bottom: 1rem;
-}
-.topbar a {
-    color: #1f6feb;
-    font-weight: 700;
+    line-height: 1.5;
 }
 .footer {
     margin-top: 2rem;
-    font-size: 0.8rem;
-    color: #5f6f82;
-    border-top: 1px solid #d8e1ec;
+    font-size: 0.82rem;
+    color: var(--vh-muted);
+    border-top: 1px solid var(--vh-border);
     padding-top: 1rem;
+}
+@media (max-width: 760px) {
+    .workflow-links {
+        grid-template-columns: 1fr;
+    }
+    .auth-card,
+    .landing-card {
+        padding: 1.5rem;
+        border-radius: 22px;
+    }
 }
 """
 
@@ -356,11 +487,20 @@ def _authenticated_user(request: Request) -> dict | None:
 
 
 def _safe_next_path(next_path: str) -> str:
-    """Only redirect to a same-origin path."""
     if next_path.startswith("/") and not next_path.startswith("//"):
         return next_path
 
-    return "/"
+    return "/triage/"
+
+
+def _database_error_message() -> str | None:
+    if not DATABASE_ERROR:
+        return None
+
+    return (
+        "Shared database is not configured. Please check DATABASE_URL, PostgreSQL, "
+        "and whether the VitalHealth database tables have been initialised."
+    )
 
 
 def _render_landing(user: dict | None) -> str:
@@ -375,32 +515,45 @@ def _render_landing(user: dict | None) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth</title>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/login.png">
   <style>{_SHARED_CSS}</style>
 </head>
 
-<body>
+<body class="landing-page">
   <div class="topbar">{topbar}</div>
-  <h1>VitalHealth</h1>
-  <p class="sub">Integrated educational clinical workflow support platform.</p>
 
-  <a class="card" href="/triage/">
-    <h2>Clinical Triage</h2>
-    <p>Supports triage priority assessment from intake details and clinician notes.</p>
-  </a>
+  <main class="landing-shell">
+    <section class="landing-card">
+      <img class="landing-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-  <a class="card" href="/stroke/">
-    <h2>Stroke Assessment</h2>
-    <p>Estimates stroke risk and generates educational care planning guidance.</p>
-  </a>
+      <span class="auth-kicker">Integrated healthcare workflow support</span>
+      <h1>Welcome to VitalHealth</h1>
+      <p class="sub">
+        Access clinical triage, stroke assessment, and electronic medical certificate workflows from one portal.
+      </p>
 
-  <a class="card" href="/emc/">
-    <h2>EMC Workflow</h2>
-    <p>Prepares electronic medical certificate drafts for clinician review and approval.</p>
-  </a>
+      <div class="workflow-links">
+        <a class="card" href="/triage/">
+          <h2>Clinical Triage</h2>
+          <p>Assess triage priority from intake details and clinician notes.</p>
+        </a>
 
-  <p class="footer">
-    VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.
-  </p>
+        <a class="card" href="/stroke/prediction">
+          <h2>Stroke Assessment</h2>
+          <p>Estimate stroke risk and generate educational care planning guidance.</p>
+        </a>
+
+        <a class="card" href="/emc/">
+          <h2>EMC Workflow</h2>
+          <p>Prepare electronic medical certificate drafts for clinician review.</p>
+        </a>
+      </div>
+
+      <p class="footer">
+        VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.
+      </p>
+    </section>
+  </main>
 </body>
 </html>
 """
@@ -417,28 +570,34 @@ def _render_login(error: str | None, next_path: str, email: str) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Log in - VitalHealth</title>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/login.png">
   <style>{_SHARED_CSS}</style>
 </head>
 
-<body>
-  <h1>Log in</h1>
-  <p class="sub">One login for triage, stroke assessment, and EMC workflow.</p>
+<body class="auth-page">
+  <main class="auth-card">
+    <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-  {error_html}
+    <span class="auth-kicker">Secure staff access</span>
+    <h1>Welcome back</h1>
+    <p class="sub">Sign in to continue to VitalHealth workflows.</p>
 
-  <form method="post" action="/login">
-    <input type="hidden" name="next" value="{next_field}">
+    {error_html}
 
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email" value="{email_value}" required autofocus>
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{next_field}">
 
-    <label for="password">Password</label>
-    <input type="password" id="password" name="password" required>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="{email_value}" required autofocus>
 
-    <button type="submit">Log in</button>
-  </form>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required>
 
-  <p class="hint">No account yet? <a href="/register">Register</a></p>
+      <button type="submit">Log in</button>
+    </form>
+
+    <p class="hint">No account yet? <a href="/register">Register</a></p>
+  </main>
 </body>
 </html>
 """
@@ -454,29 +613,35 @@ def _render_register(error: str | None, email: str) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Register - VitalHealth</title>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/login.png">
   <style>{_SHARED_CSS}</style>
 </head>
 
-<body>
-  <h1>Register</h1>
-  <p class="sub">Create an account to use VitalHealth.</p>
+<body class="auth-page">
+  <main class="auth-card">
+    <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-  {error_html}
+    <span class="auth-kicker">Create staff access</span>
+    <h1>Create account</h1>
+    <p class="sub">Register to access VitalHealth clinical workflow tools.</p>
 
-  <form method="post" action="/register">
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email" value="{email_value}" required autofocus>
+    {error_html}
 
-    <label for="password">Password</label>
-    <input type="password" id="password" name="password" required minlength="8">
+    <form method="post" action="/register">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="{email_value}" required autofocus>
 
-    <label for="confirm">Confirm password</label>
-    <input type="password" id="confirm" name="confirm" required minlength="8">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required minlength="8">
 
-    <button type="submit">Register</button>
-  </form>
+      <label for="confirm">Confirm password</label>
+      <input type="password" id="confirm" name="confirm" required minlength="8">
 
-  <p class="hint">Already have an account? <a href="/login">Log in</a></p>
+      <button type="submit">Register</button>
+    </form>
+
+    <p class="hint">Already have an account? <a href="/login">Log in</a></p>
+  </main>
 </body>
 </html>
 """
@@ -497,14 +662,19 @@ def _set_session_cookie(response: Response, user_id: str, email: str) -> None:
 
 
 @app.get("/")
-async def landing(request: Request) -> HTMLResponse:
-    return HTMLResponse(_render_landing(_authenticated_user(request)))
+async def landing(request: Request):
+    user = _authenticated_user(request)
+
+    if user:
+        return RedirectResponse(url="/triage/", status_code=303)
+
+    return HTMLResponse(_render_landing(user))
 
 
 @app.get("/login")
 async def login_form(request: Request) -> HTMLResponse:
     error = request.query_params.get("error", "")
-    next_path = _safe_next_path(request.query_params.get("next", "/"))
+    next_path = _safe_next_path(request.query_params.get("next", "/triage/"))
     email = request.query_params.get("email", "")
 
     return HTMLResponse(_render_login(error or None, next_path, email))
@@ -516,9 +686,19 @@ async def login_submit(request: Request):
 
     email = str(form.get("email", "")).strip()
     password = str(form.get("password", ""))
-    next_path = _safe_next_path(str(form.get("next", "") or "/"))
+    next_path = _safe_next_path(str(form.get("next", "") or "/triage/"))
 
-    user = SHARED_STORE.get_user_by_email(email) if email else None
+    db_error = _database_error_message()
+
+    if db_error:
+        query = f"error={quote(db_error)}&next={quote(next_path)}&email={quote(email)}"
+        return RedirectResponse(url=f"/login?{query}", status_code=303)
+
+    try:
+        user = SHARED_STORE.get_user_by_email(email) if email else None
+    except Exception:
+        query = f"error={quote('Could not connect to the shared database.')}&next={quote(next_path)}&email={quote(email)}"
+        return RedirectResponse(url=f"/login?{query}", status_code=303)
 
     if not user or not auth.verify_password(password, user["password_hash"]):
         query = f"error={quote('Incorrect email or password.')}&next={quote(next_path)}&email={quote(email)}"
@@ -550,6 +730,11 @@ async def register_submit(request: Request):
         query = f"error={quote(message)}&email={quote(email)}"
         return RedirectResponse(url=f"/register?{query}", status_code=303)
 
+    db_error = _database_error_message()
+
+    if db_error:
+        return fail(db_error)
+
     if not email or "@" not in email:
         return fail("Enter a valid email address.")
 
@@ -566,8 +751,10 @@ async def register_submit(request: Request):
         )
     except IntegrityError:
         return fail("Email already registered.")
+    except Exception:
+        return fail("Could not create the account. Please check the shared database setup.")
 
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url="/triage/", status_code=303)
     _set_session_cookie(response, user_id, email.strip().lower())
 
     return response
@@ -575,10 +762,31 @@ async def register_submit(request: Request):
 
 @app.api_route("/logout", methods=["GET", "POST"])
 async def logout():
-    response = RedirectResponse(url="/", status_code=303)
+    response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie(auth.COOKIE_NAME, path="/")
 
     return response
+
+@app.get("/api/me")
+async def current_user(request: Request):
+    user = _authenticated_user(request)
+
+    if not user:
+        return {
+            "authenticated": False,
+            "email": None,
+            "display_name": "guest",
+        }
+
+    email = str(user.get("email", "")).strip()
+    name_part = email.split("@", 1)[0] if email else "user"
+    display_name = name_part.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
+
+    return {
+        "authenticated": True,
+        "email": email,
+        "display_name": display_name or email or "user",
+    }
 
 
 @app.post("/api/vita/chat")
@@ -617,23 +825,18 @@ async def vita_chat(payload: VitaChatRequest):
         active_section=active_section,
     )
 
-    if local_reply:
-        return {
-            "success": True,
-            "data": {"reply": local_reply},
-            "error": None,
-        }
-
     return {
         "success": True,
-        "data": {"reply": VITA_FALLBACK},
+        "data": {"reply": local_reply or VITA_FALLBACK},
         "error": None,
     }
 
 
 @app.api_route("/{prefix}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def redirect_bare_prefix(prefix: str):
-    """Force a trailing slash so relative asset/API paths resolve correctly."""
+    if prefix == "stroke":
+        return RedirectResponse(url="/stroke/prediction", status_code=307)
+
     if prefix in BACKENDS:
         return RedirectResponse(url=f"/{prefix}/", status_code=307)
 
@@ -647,11 +850,18 @@ async def proxy(prefix: str, path: str, request: Request):
     if upstream is None:
         return Response(status_code=404)
 
+    if prefix == "stroke" and path.strip("/") == "":
+        return RedirectResponse(url="/stroke/prediction", status_code=307)
+
     user = _authenticated_user(request)
 
     if user is None:
         if "text/html" in request.headers.get("accept", ""):
-            next_path = quote(f"/{prefix}/{path}")
+            next_path_value = f"/{prefix}/{path}"
+            if request.query_params:
+                next_path_value += f"?{request.query_params}"
+
+            next_path = quote(next_path_value)
             return RedirectResponse(url=f"/login?next={next_path}", status_code=303)
 
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
@@ -671,13 +881,33 @@ async def proxy(prefix: str, path: str, request: Request):
 
     body = await request.body()
 
-    upstream_response = await _client.request(
-        request.method,
-        url,
-        params=request.query_params,
-        headers=forward_headers,
-        content=body,
-    )
+    request_timeout = None
+    if prefix == "stroke" and path.strip("/").startswith("care-plan"):
+        # Care-plan generation may take longer because the stroke app calls an LLM.
+        request_timeout = httpx.Timeout(180.0, connect=10.0, read=180.0)
+
+    try:
+        upstream_response = await _client.request(
+            request.method,
+            url,
+            params=request.query_params,
+            headers=forward_headers,
+            content=body,
+            timeout=request_timeout,
+        )
+    except httpx.RequestError:
+        if "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse(
+                "<h1>Service temporarily unavailable</h1>"
+                "<p>The selected workflow service is currently unreachable. "
+                "Please try again shortly.</p>",
+                status_code=502,
+            )
+
+        return JSONResponse(
+            {"detail": "Upstream workflow service is currently unavailable."},
+            status_code=502,
+        )
 
     response_headers = {
         k: v for k, v in upstream_response.headers.items()
@@ -690,13 +920,6 @@ async def proxy(prefix: str, path: str, request: Request):
     if prefix == "stroke" and "text/html" in content_type:
         stroke_html = content.decode("utf-8", errors="replace")
 
-        # Rewrite only Stroke app internal links.
-        # Keep platform-level routes untouched:
-        # /triage/    = main dashboard / Clinical Triage
-        # /emc/       = EMC workflow
-        # /api/       = Vita/chat API
-        # /vh-assets/ = shared shell assets
-        # /stroke/    = already prefixed
         stroke_html = re.sub(
             r'(href|src|action)="/(?!(?:stroke/|triage/|emc/|api/|vh-assets/|"))',
             r'\1="/stroke/',
@@ -708,7 +931,6 @@ async def proxy(prefix: str, path: str, request: Request):
     if prefix == "emc" and "text/html" in content_type:
         emc_html = content.decode("utf-8", errors="replace")
 
-        # Normalize old EMC headers to use the same brand logo element as other pages.
         if "brand-logo" not in emc_html:
             emc_html = re.sub(
                 r'<a\s+class="brand"\s+href="/triage/">\s*VitalHealth\s*</a>',
@@ -719,7 +941,6 @@ async def proxy(prefix: str, path: str, request: Request):
                 flags=re.IGNORECASE,
             )
 
-        # Remove stale top-level Results nav item if an older EMC template is served.
         emc_html = re.sub(
             r'\s*<a\s+href="/stroke/care-plan">\s*Results\s*</a>\s*',
             "\n",
@@ -727,7 +948,6 @@ async def proxy(prefix: str, path: str, request: Request):
             flags=re.IGNORECASE,
         )
 
-        # Force clients to fetch the latest EMC stylesheet after UI updates.
         emc_html = emc_html.replace(
             'href="/emc/static/styles.css"',
             'href="/emc/static/styles.css?v=vh-emc-ui-20260811"',

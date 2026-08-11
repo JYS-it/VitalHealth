@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=6">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
   <script defer src="demo_character_seeds.js"></script>
   <script defer src="app.js?v=3"></script>
@@ -18,11 +18,16 @@
   <header class="header">
     <div class="header__wrap">
       <div class="header__top">
-        <div class="brand-group">
+       <div class="brand-group">
   <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
     <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
   </a>
   <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+</div>
+
+<div class="auth-status">
+  <span class="auth-status__user" x-text="`Signed in as ${welcomeName()}`">Signed in</span>
+  <a class="auth-status__logout" href="/logout">Log out</a>
 </div>
       </div>
 
@@ -45,7 +50,7 @@
     <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard home">
       <article class="home-hero card">
         <p class="hero-kicker">VitalHealth portal</p>
-        <h1>Welcome, guest!</h1>
+        <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome, guest!</h1>
         <h2>Choose a healthcare workflow to begin.</h2>
         <p>
           VitalHealth brings clinical triage, stroke assessment, and medical certificate workflows into
@@ -75,14 +80,6 @@
           <span class="bubble-cta">Start EMC Workflow</span>
         </a>
       </div>
-
-      <article class="dashboard-activity card" aria-label="Recent activity and saved workflows">
-        <div>
-          <h3>Recent Activity / Saved Workflows</h3>
-          <p>Sign in to view saved assessments, care plans, and workflow outputs.</p>
-        </div>
-        <button class="btn-outline" type="button">Sign in to view activity</button>
-      </article>
     </section>
 
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
