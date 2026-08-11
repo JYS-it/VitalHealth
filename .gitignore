@@ -16,6 +16,7 @@ venv/
 
 # Editor / IDE
 .vs/
+.idea/
 
 # Demo data build artifacts — regenerate with demo_data/compute_*.py
 demo_data/output/

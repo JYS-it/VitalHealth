@@ -246,9 +246,18 @@ button.primary:hover {
 	background: #1557b0;
 }
 
-button.danger {
-	color: var(--red);
-	border-color: #d9a3a3;
+button.danger,
+button.btn-danger {
+	background: var(--red);
+	color: #fff;
+	border-color: var(--red);
+}
+
+button.danger:hover,
+button.btn-danger:hover {
+	background: #b91c1c;
+	border-color: #b91c1c;
+	color: #fff;
 }
 
 button:disabled {
