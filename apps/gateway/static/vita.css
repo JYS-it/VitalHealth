@@ -134,8 +134,8 @@
 }
 
 .vita-chip {
-  border: 1px solid #ecd4ab;
-  background: #fff8eb;
+  border: 1px solid #efcd86;
+  background: #fff4df;
   color: var(--vh-text);
   border-radius: 999px;
   padding: 6px 10px;
@@ -172,9 +172,9 @@
 }
 
 .vita-msg--bot p {
-  background: linear-gradient(135deg, #f3f7fc 0%, #fff8ec 100%);
+  background: linear-gradient(135deg, #eaf2ff 0%, #fff4df 100%);
   color: var(--vh-text);
-  border: 1px solid #dbe3ee;
+  border: 1px solid #d8e1ec;
 }
 
 .vita-msg--user p {
@@ -201,7 +201,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--vh-primary);
+  background: var(--vh-accent);
   animation: vita-bob 1s infinite ease-in-out;
 }
 

@@ -8,8 +8,20 @@
   --vh-text-muted: #5f6f82;
   --vh-border: #d8e1ec;
   --vh-primary: #1f6feb;
-  --vh-primary-hover: #2a7af0;
+  --vh-primary-hover: #1557b0;
   --vh-primary-soft: #eaf2ff;
+  --vh-success: #1f6feb;
+  --vh-success-hover: #1557b0;
+  --vh-success-soft: #eaf2ff;
+  --vh-warning: #d97706;
+  --vh-warning-hover: #d97706;
+  --vh-warning-soft: #fff4df;
+  --vh-danger: #dc2626;
+  --vh-danger-hover: #b91c1c;
+  --vh-danger-soft: #fdecec;
+  --vh-secondary: #d8e1ec;
+  --vh-secondary-hover: #bac8da;
+  --vh-secondary-soft: #f1f5f9;
   --vh-accent: #f59e0b;
   --vh-accent-hover: #d97706;
   --vh-accent-soft: #fff4df;
@@ -90,7 +102,32 @@ a {
 .brand {
   font-size: 1.35rem;
 }
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: none;
+}
 
+.brand-logo img {
+  display: block;
+  width: auto;
+  height: 42px;
+  max-width: min(280px, 70vw);
+  object-fit: contain;
+}
+
+.brand-logo:hover {
+  opacity: 0.92;
+}
+
+@media (max-width: 700px) {
+  .brand-logo img {
+    height: 34px;
+    max-width: min(220px, 80vw);
+  }
+}
 .scope-badge {
   display: inline-flex;
   align-items: center;
@@ -217,6 +254,7 @@ button {
 .btn-primary,
 .btn-secondary,
 .btn-generate,
+.btn-submit,
 .primary,
 button.primary,
 button {
@@ -230,13 +268,13 @@ button {
 
 .btn:hover,
 .btn-primary:hover,
-.btn-secondary:hover,
 .btn-generate:hover,
+.btn-submit:hover,
 .primary:hover,
 button.primary:hover,
 button:hover {
-  background: var(--vh-primary-hover);
-  border-color: var(--vh-primary-hover);
+  background: var(--vh-warning);
+  border-color: var(--vh-warning);
 }
 
 .btn-ghost {
@@ -251,6 +289,128 @@ button:hover {
   border-color: var(--vh-accent);
   color: #8a5500;
   background: var(--vh-accent-soft);
+}
+
+.btn-primary {
+  border-color: var(--vh-primary);
+  background: var(--vh-primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  border-color: var(--vh-warning);
+  background: var(--vh-warning);
+}
+
+.btn-success {
+  border-color: var(--vh-primary);
+  background: var(--vh-primary);
+  color: #fff;
+}
+
+.btn-success:hover {
+  border-color: var(--vh-warning);
+  background: var(--vh-warning);
+}
+
+.btn-submit {
+  border-color: var(--vh-primary);
+  background: var(--vh-primary);
+  color: #fff;
+}
+
+.btn-submit:hover {
+  border-color: var(--vh-warning);
+  background: var(--vh-warning);
+}
+
+body[data-vitalhealth-section="emc"] .header-wrap {
+  padding: 12px 0;
+}
+
+body[data-vitalhealth-section="emc"] .nav-wrap {
+  width: min(1240px, 94%);
+  margin: 0 auto;
+  padding: 0 0 12px;
+}
+
+body[data-vitalhealth-section="emc"] .nav-wrap .navbar,
+body[data-vitalhealth-section="emc"] .nav-wrap .global-nav {
+  gap: 10px;
+}
+
+body[data-vitalhealth-section="emc"] .btn:hover,
+body[data-vitalhealth-section="emc"] .btn-primary:hover,
+body[data-vitalhealth-section="emc"] .btn-success:hover,
+body[data-vitalhealth-section="emc"] .btn-submit:hover,
+body[data-vitalhealth-section="emc"] .primary:hover,
+body[data-vitalhealth-section="emc"] button.primary:hover {
+  box-shadow: 0 10px 24px rgba(217, 119, 6, 0.28);
+}
+
+.btn-warning {
+  border-color: var(--vh-warning);
+  background: var(--vh-warning);
+  color: #fff;
+}
+
+.btn-warning:hover {
+  border-color: var(--vh-warning-hover);
+  background: var(--vh-warning-hover);
+}
+
+.btn-loading,
+.is-generating {
+  border-color: var(--vh-warning);
+  background: var(--vh-warning);
+  color: #fff;
+}
+
+.btn-loading:hover,
+.is-generating:hover {
+  border-color: var(--vh-warning-hover);
+  background: var(--vh-warning-hover);
+}
+
+.skeleton,
+.buffer {
+  background: linear-gradient(90deg, #fff4df 25%, #f7d99f 50%, #fff4df 75%);
+  background-size: 200% 100%;
+}
+
+.btn-danger {
+  border-color: var(--vh-danger);
+  background: var(--vh-danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  border-color: var(--vh-danger-hover);
+  background: var(--vh-danger-hover);
+}
+
+.btn-secondary {
+  border-color: var(--vh-border);
+  background: #fff;
+  color: var(--vh-text);
+}
+
+.btn-secondary:hover {
+  border-color: var(--vh-secondary-hover);
+  background: var(--vh-secondary-soft);
+  color: var(--vh-text);
+}
+
+.btn-outline {
+  border: 1px solid var(--vh-border);
+  background: var(--vh-surface);
+  color: var(--vh-text);
+}
+
+.btn-outline:hover {
+  border-color: var(--vh-secondary-hover);
+  color: var(--vh-text);
+  background: var(--vh-secondary-soft);
 }
 
 .site-footer,
@@ -285,6 +445,11 @@ button:hover {
   .nav-chip,
   .navbar a {
     flex: 1 1 180px;
+  }
+
+  body[data-vitalhealth-section="emc"] .nav-wrap {
+    width: min(1240px, 94%);
+    padding-bottom: 10px;
   }
 }
 

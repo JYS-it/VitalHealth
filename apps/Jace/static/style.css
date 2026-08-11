@@ -240,8 +240,8 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   justify-content: center;
   min-height: 40px;
   border-radius: 999px;
-  border: 1px solid #d97706;
-  background: #f59e0b;
+  border: 1px solid #1f6feb;
+  background: #1f6feb;
   color: #ffffff;
   font-weight: 600;
   font-size: 0.88rem;
@@ -253,7 +253,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   border-color: #d97706;
 }
 
-.results-quick {
+.dashboard-activity {
   border-radius: 18px;
   border: 1px dashed #bfd0e6;
   background: linear-gradient(135deg, #fbfdff 0%, #f4f8ff 56%, #fff8eb 100%);
@@ -263,31 +263,31 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
   gap: 14px;
 }
 
-.results-quick h3 {
+.dashboard-activity h3 {
   margin: 0;
   color: #14213d;
   font-size: 1rem;
 }
 
-.results-quick p {
+.dashboard-activity p {
   margin: 6px 0 0;
   color: #5f6f82;
   font-size: 0.88rem;
 }
 
-.results-quick .btn-ghost {
+.dashboard-activity .btn-outline {
   border-radius: 999px;
-  border-color: #1f6feb;
-  color: #1f6feb;
+  border-color: #64748b;
+  color: #475569;
   background: #ffffff;
   min-height: 38px;
   padding: 0 14px;
 }
 
-.results-quick .btn-ghost:hover {
-  background: #eaf2ff;
-  color: #1557b0;
-  border-color: #1557b0;
+.dashboard-activity .btn-outline:hover {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #334155;
 }
 
 .feature-card--status {

@@ -4,7 +4,7 @@
     'How do I use Stroke Assessment?',
     'How do I use Clinical Triage?',
     'How do I use the EMC Workflow?',
-    'Where do I view results?',
+    'Where will saved workflows appear?',
     'Is this a diagnosis?',
   ];
 

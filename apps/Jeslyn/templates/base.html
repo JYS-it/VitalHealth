@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ page_title }} | VitalHealth</title>
+    <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png" />
     <link rel="stylesheet" href="{{ purl('static', filename='style.css') }}" />
     <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css" />
     <script defer src="/vh-assets/vita.js"></script>
@@ -14,7 +15,9 @@
         <div class="container header-wrap">
             <div class="brand-block">
                 <div class="brand-row">
-                    <a class="brand" href="../triage/">VitalHealth</a>
+                   <a class="brand brand-logo" href="../triage/" aria-label="VitalHealth Home">
+    <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+</a>
                     <span class="scope-badge">Integrated educational clinical workflow support platform</span>
                 </div>
             </div>
@@ -26,7 +29,6 @@
                 <a href="../triage/">Clinical Triage</a>
                 <a class="active" href="{{ purl('prediction') }}">Stroke Assessment</a>
                 <a href="../emc/">EMC Workflow</a>
-                <a href="{{ purl('care_plan') }}">Results</a>
             </nav>
         </div>
     </header>

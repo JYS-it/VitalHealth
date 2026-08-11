@@ -79,6 +79,52 @@ def _vita_section_guidance(active_section: str) -> str:
     return "Focus on guiding overall dashboard navigation and module selection."
 
 
+def _vita_local_reply(message: str, active_section: str) -> str:
+    """Return a deterministic local Vita reply when no model provider is available."""
+    text = (message or "").strip().lower()
+    section = (active_section or "dashboard").strip().lower()
+
+    if any(k in text for k in ["where", "open", "start", "go to", "navigate"]):
+        if "stroke" in text or "stroke" in section:
+            return (
+                "Open Stroke Assessment from the top navigation, then complete the patient intake form and submit to view risk output. "
+                "You can continue to Care Plan from the result area. "
+                "This is educational decision-support, not a diagnosis."
+            )
+        if "emc" in text or "certificate" in text or "leave" in text or "emc" in section:
+            return (
+                "Open EMC Workflow from the top navigation, complete the intake fields, and submit to generate a clinician review draft. "
+                "Use Approve or Reject actions after reviewing safety and policy checks. "
+                "This is educational decision-support, not a diagnosis."
+            )
+        if "triage" in text or "intake" in text or "dashboard" in section:
+            return (
+                "From Home, choose Clinical Triage to begin intake or browse existing patient entries. "
+                "Use the workspace controls to switch between browser, intake, and results views. "
+                "This is educational decision-support, not a diagnosis."
+            )
+
+    if any(k in text for k in ["result", "risk", "score", "output"]):
+        return (
+            "Results indicate model-supported estimates and workflow status, and should be interpreted by a clinician in context. "
+            "If you want, I can guide you to the exact page section for each module's result output. "
+            "This is educational decision-support, not a diagnosis."
+        )
+
+    if any(k in text for k in ["diagnose", "diagnosis", "treat", "treatment", "medicine", "prescribe"]):
+        return (
+            "I can help with workflow navigation and output interpretation, but I cannot provide diagnosis or treatment instructions. "
+            "Please consult a licensed clinician for medical decisions. "
+            "This is educational decision-support, not a diagnosis."
+        )
+
+    return (
+        "I can help you navigate Home, Clinical Triage, Stroke Assessment, or EMC Workflow and explain where each output appears. "
+        "Tell me what step you are on and I will give concise next actions. "
+        "This is educational decision-support, not a diagnosis."
+    )
+
+
 async def _vita_live_reply(message: str, active_section: str) -> Optional[str]:
     system_prompt = (
         "You are Vita, a concise assistant for the VitalHealth educational platform. "
@@ -303,6 +349,18 @@ async def vita_chat(payload: VitaChatRequest):
             "error": None,
         }
 
+    local_reply = _vita_local_reply(
+        message=message,
+        active_section=active_section,
+    )
+
+    if local_reply:
+        return {
+            "success": True,
+            "data": {"reply": local_reply},
+            "error": None,
+        }
+
     return {
         "success": True,
         "data": {"reply": VITA_FALLBACK},
@@ -370,6 +428,66 @@ async def proxy(prefix: str, path: str, request: Request):
             r'\1="/stroke/',
             html,
         )
+
+        content = html.encode("utf-8")
+
+    if prefix == "emc" and "text/html" in content_type:
+        html = content.decode("utf-8", errors="replace")
+
+        # Normalize old EMC headers to use the same brand logo element as the
+        # other pages when plain text markup is still returned.
+        if "brand-logo" not in html:
+            html = re.sub(
+                r'<a\s+class="brand"\s+href="/triage/">\s*VitalHealth\s*</a>',
+                '<a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">'
+                '<img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">'
+                '</a>',
+                html,
+                flags=re.IGNORECASE,
+            )
+
+        # Remove stale top-level Results nav item if an older EMC template is served.
+        html = re.sub(
+            r'\s*<a\s+href="/stroke/care-plan">\s*Results\s*</a>\s*',
+            "\n",
+            html,
+            flags=re.IGNORECASE,
+        )
+
+        # Force clients to fetch the latest EMC stylesheet after UI updates.
+        html = html.replace(
+            'href="/emc/static/styles.css"',
+            'href="/emc/static/styles.css?v=vh-emc-ui-20260811"',
+        )
+
+        # Ensure old EMC templates still show explicit generating/loading feedback.
+        loading_patch = """
+<script id="vh-emc-loading-patch">
+(() => {
+    const forms = document.querySelectorAll('.workflow-form');
+    if (!forms.length) return;
+    forms.forEach((form) => {
+        form.addEventListener('submit', () => {
+            if (!form.checkValidity()) return;
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) overlay.hidden = false;
+            const button = form.querySelector('button[type="submit"]');
+            if (!button) return;
+            const original = button.dataset.loadingText || button.textContent.trim();
+            const loadingText = /reject/i.test(original) ? 'Processing rejection...' : 'Generating...';
+            button.dataset.loadingText = original;
+            button.textContent = loadingText;
+            button.classList.add('btn-loading', 'is-generating');
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+        }, { once: true });
+    });
+})();
+</script>
+"""
+
+        if "vh-emc-loading-patch" not in html and "</body>" in html:
+            html = html.replace("</body>", f"{loading_patch}\n</body>")
 
         content = html.encode("utf-8")
 

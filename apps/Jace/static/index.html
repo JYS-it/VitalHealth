@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
-  <link rel="stylesheet" href="style.css?v=3">
-  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css">
+  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
   <script defer src="app.js?v=3"></script>
   <script defer src="/vh-assets/vita.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
 </head>
 <body x-data="ctrseApp()" x-init="init()" data-vitalhealth-section="dashboard">
 
@@ -17,9 +18,11 @@
     <div class="header__wrap">
       <div class="header__top">
         <div class="brand-group">
-          <span class="brand">VitalHealth</span>
-          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
-        </div>
+  <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+    <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+  </a>
+  <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+</div>
       </div>
 
       <nav class="global-nav" aria-label="VitalHealth navigation">
@@ -33,10 +36,6 @@
                 @click="openTriage()">Clinical Triage</button>
         <a class="nav-chip" href="/stroke/">Stroke Assessment</a>
         <a class="nav-chip" href="/emc/">EMC Workflow</a>
-        <button type="button" class="nav-chip"
-                :class="{ 'nav-chip--active': activeNav==='results' }"
-                :aria-pressed="activeNav==='results'"
-                @click="openResults()">Results</button>
       </nav>
     </div>
   </header>
@@ -45,7 +44,7 @@
     <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard home">
       <article class="home-hero card">
         <p class="hero-kicker">VitalHealth portal</p>
-        <h1>Welcome, <span x-text="welcomeName()"></span>!</h1>
+        <h1>Welcome, guest!</h1>
         <h2>Choose a healthcare workflow to begin.</h2>
         <p>
           VitalHealth brings clinical triage, stroke assessment, and medical certificate workflows into
@@ -76,12 +75,12 @@
         </a>
       </div>
 
-      <article class="results-quick card" aria-label="Results quick access">
+      <article class="dashboard-activity card" aria-label="Recent activity and saved workflows">
         <div>
-          <h3>Assessment Results</h3>
-          <p>View previous assessments and workflow outputs.</p>
+          <h3>Recent Activity / Saved Workflows</h3>
+          <p>Sign in to view saved assessments, care plans, and workflow outputs.</p>
         </div>
-        <button class="btn-ghost" type="button" @click="openResults()">Open Results</button>
+        <button class="btn-outline" type="button">Sign in to view activity</button>
       </article>
     </section>
 
