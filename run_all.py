@@ -200,14 +200,13 @@ def ensure_requirements_current(app: dict, py: Path):
 
 
 def ensure_shared_storage(app: dict, py: Path):
-    """Upgrade pre-existing backend environments after shared code is added.
+    """Upgrade pre-existing environments after shared code is added.
 
-    The gateway has no clinical-record dependency. The three backend
-    requirements files install this package on a fresh setup; this small check
-    also repairs virtual environments created before the package was added.
+    Each app's requirements.txt installs this package on a fresh setup
+    (the gateway needs it for the `users` table backing login; the three
+    backends need it for clinical records); this small check also repairs
+    virtual environments created before the package was added to that app.
     """
-    if app["name"] == "gateway":
-        return
     probe = subprocess.run(
         [str(py), "-c", "import vitalhealth_storage"],
         stdout=subprocess.DEVNULL,

@@ -78,6 +78,11 @@ document.addEventListener('alpine:init', () => {
       { label: 'contradiction', note: '68yo woman with chest pain — actually the patient is 45 years old' },
       { label: 'red flag', note: 'found unresponsive at home, brought in by ambulance' },
     ],
+    // Demo mock-patient notes (demo_data/characters.py, synced via
+    // demo_data/sync_jace_seeds.py) — kept separate from `seeds` above so
+    // the built-in edge-case seeds and their pinned-extraction coverage
+    // are unaffected. Unpinned: extraction runs live for these.
+    characterSeeds: window.DEMO_CHARACTER_SEEDS || [],
 
     // ---- compare / columns ----
     compareMode: false,
@@ -474,6 +479,23 @@ document.addEventListener('alpine:init', () => {
     seed(i) {
       this.intake.note = this.seeds[i].note;
       this.intake.extractError = '';
+    },
+
+    seedCharacter(i) {
+      const s = this.characterSeeds[i];
+      this.intake.note = s.note;
+      this.intake.extractError = '';
+      // Vitals are typed, never extracted from the note (see the eyebrow
+      // label above the vitals grid) -- fill them directly from the demo
+      // character's own data instead, so one click prepares the whole form.
+      if (s.vitals) {
+        this.intake.noVitals = false;
+        Object.assign(this.intake.vitals, {
+          hr: s.vitals.hr, sbp: s.vitals.sbp, dbp: s.vitals.dbp,
+          rr: s.vitals.rr, o2: s.vitals.o2,
+          temp: s.vitals.temp, temp_unit: s.vitals.temp_unit,
+        });
+      }
     },
 
     // Stage 1 -> 2. Sends ONLY the note — typed vitals never touch the LLM (§5).

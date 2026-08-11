@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
   <link rel="stylesheet" href="style.css?v=4">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
+  <script defer src="demo_character_seeds.js"></script>
   <script defer src="app.js?v=3"></script>
   <script defer src="/vh-assets/vita.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
-  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
 </head>
 <body x-data="ctrseApp()" x-init="init()" data-vitalhealth-section="dashboard">
 
@@ -163,6 +164,12 @@
                   <button class="arche-btn" type="button" x-text="s.label" @click="seed(i)"></button>
                 </template>
               </div>
+              <div class="seed-row">
+                <span class="eyebrow">Demo characters</span>
+                <template x-for="(s, i) in characterSeeds" :key="s.label">
+                  <button class="arche-btn" type="button" x-text="s.label" @click="seedCharacter(i)"></button>
+                </template>
+              </div>
             </div>
 
             <!-- VITALS zone — typed directly; never sent to the language model (§5) -->
@@ -239,9 +246,9 @@
               </ul>
               <label class="ack ack--gate"><input type="checkbox" x-model="intake.flagsAck"> I have reviewed these notices</label>
 
-              <!-- §14 beat 3: make the code-level backstop visible. Live, the LLM usually
-                   obeys rule 10 and never emits the injected token — so this runs the REAL
-                   guardrail on a planted extraction where it DID. -->
+              <!-- §14 beat 3: make the code-level backstop visible. Live, the LLM usually*
+          obeys rule 10 and never emits the injected token — so this runs the REAL*
+          guardrail on a planted extraction where it DID. -->
               <div class="toolbar backstop-bar"
                    x-show="(intake.extraction?.guardrail_flags || []).some(f => f.startsWith('injection'))" x-cloak>
                 <button class="btn-ghost" type="button" @click="runExtractBackstop()">Show guardrail backstop</button>
