@@ -215,6 +215,14 @@ database-enforced append-only audit-event trigger. For a production deployment,
 use a managed PostgreSQL service, encrypted connections, backups, and a proper
 migration review before changing the schema.
 
+## Demo data
+
+`demo_data/` has an 8-character mock-patient roster for demonstrating all
+three apps — a copy-paste cheat sheet (`demo_data/CHEAT_SHEET.md`) for
+live-form demos, plus a script that seeds the same characters into the
+shared database with real (not hand-guessed) model output. See
+[demo_data/README.md](demo_data/README.md) for the run order.
+
 ## Environment variables
 
 Each app reads its own secrets from the environment (or a local `.env`). No

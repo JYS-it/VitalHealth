@@ -76,6 +76,11 @@ document.addEventListener('alpine:init', () => {
       { label: 'contradiction', note: '68yo woman with chest pain — actually the patient is 45 years old' },
       { label: 'red flag', note: 'found unresponsive at home, brought in by ambulance' },
     ],
+    // Demo mock-patient notes (demo_data/characters.py, synced via
+    // demo_data/sync_jace_seeds.py) — kept separate from `seeds` above so
+    // the built-in edge-case seeds and their pinned-extraction coverage
+    // are unaffected. Unpinned: extraction runs live for these.
+    characterSeeds: window.DEMO_CHARACTER_SEEDS || [],
 
     // ---- compare / columns ----
     compareMode: false,
@@ -435,6 +440,11 @@ document.addEventListener('alpine:init', () => {
 
     seed(i) {
       this.intake.note = this.seeds[i].note;
+      this.intake.extractError = '';
+    },
+
+    seedCharacter(i) {
+      this.intake.note = this.characterSeeds[i].note;
       this.intake.extractError = '';
     },
 

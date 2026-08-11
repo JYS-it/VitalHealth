@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=2">
+  <script defer src="demo_character_seeds.js"></script>
   <script defer src="app.js?v=2"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
@@ -104,6 +105,12 @@
                 <span class="eyebrow">Demo seeds</span>
                 <template x-for="(s, i) in seeds" :key="s.label">
                   <button class="arche-btn" type="button" x-text="s.label" @click="seed(i)"></button>
+                </template>
+              </div>
+              <div class="seed-row">
+                <span class="eyebrow">Demo characters</span>
+                <template x-for="(s, i) in characterSeeds" :key="s.label">
+                  <button class="arche-btn" type="button" x-text="s.label" @click="seedCharacter(i)"></button>
                 </template>
               </div>
             </div>
