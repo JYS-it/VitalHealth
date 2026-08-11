@@ -16,6 +16,7 @@ venv/
 
 # Editor / IDE
 .vs/
+.idea/
 
 # Note: each app may add its own .gitignore for app-specific artefacts
 # (e.g. apps/Jace ignores *.npy build arrays and logs/).

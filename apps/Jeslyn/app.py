@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import os
 import re
+from threading import Lock
 
 from flask import Flask, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from pypdf import PdfReader
 from vitalhealth_storage import get_store
 
 try:
-    import google.generativeai as genai
+    from google import genai
 except Exception:
     genai = None
 
@@ -175,8 +176,19 @@ def load_rag_documents() -> list:
     return rag_documents
 
 
-# Cache RAG docs at app startup for simplicity and speed.
-rag_documents = load_rag_documents()
+# PDF text extraction is expensive enough to delay server startup, especially
+# from a synced directory. Load it on the first care-plan request instead.
+_rag_documents = None
+_rag_documents_lock = Lock()
+
+
+def get_rag_documents() -> list:
+    global _rag_documents
+    if _rag_documents is None:
+        with _rag_documents_lock:
+            if _rag_documents is None:
+                _rag_documents = load_rag_documents()
+    return _rag_documents
 
 
 def retrieve_relevant_pdf_guidance(patient_data: dict) -> list:
@@ -205,7 +217,7 @@ def retrieve_relevant_pdf_guidance(patient_data: dict) -> list:
 
     retrieved_guidance = []
 
-    for document in rag_documents:
+    for document in get_rag_documents():
         if document["source_key"] in selected_source_keys:
             retrieved_guidance.append(
                 {
@@ -356,9 +368,11 @@ def generate_care_plan_with_gemini(prompt: str) -> str:
         )
 
     try:
-        genai.configure(api_key=api_key)
-        genai_model = genai.GenerativeModel("models/gemini-2.5-flash")
-        response = genai_model.generate_content(prompt)
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
         return clean_generated_care_plan(response.text)
 
     except Exception as exc:
@@ -566,4 +580,5 @@ def care_plan():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug_mode = os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes"}
+    app.run(debug=debug_mode, use_reloader=debug_mode)
