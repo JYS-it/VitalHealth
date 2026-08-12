@@ -238,6 +238,19 @@ def start_app(app: dict) -> subprocess.Popen:
 
     env = os.environ.copy()
     env.update(load_env_file(app["dir"] / ".env"))
+
+    if app["name"] == "gateway":
+        # The gateway owns login (shared DATABASE_URL) and Vita (Gemini), but
+        # each clinical app keeps its provider credentials in its own .env.
+        # Reuse Jace's local settings only when the gateway does not define an
+        # explicit value itself. This keeps one-command local startup working
+        # after the login/Vita UI was added without duplicating secrets.
+        jace_env = load_env_file(ROOT / "apps" / "Jace" / ".env")
+        if not env.get("DATABASE_URL", "").strip():
+            env["DATABASE_URL"] = jace_env.get("DATABASE_URL", "")
+        if not env.get("GEMINI_API_KEY", "").strip():
+            env["GEMINI_API_KEY"] = jace_env.get("GEMINI_API_KEY", "")
+
     env.update(app["extra_env"])
 
     popen_kwargs = dict(

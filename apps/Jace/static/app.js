@@ -260,21 +260,31 @@ document.addEventListener('alpine:init', () => {
           return res.json();
         };
 
-        if (col.id) {
-          const [j, h] = await Promise.all([
-            fetchJson(`api/generate/${encodeURIComponent(col.id)}`, { register: 'justify' }),
-            fetchJson(`api/generate/${encodeURIComponent(col.id)}`, { register: 'handover' }),
-          ]);
-          col.gen.justify = j;
-          col.gen.handover = h;
-        } else {
-          const [j, h] = await Promise.all([
-            fetchJson('api/generate-from-payload', { register: 'justify', payload: col.payload }),
-            fetchJson('api/generate-from-payload', { register: 'handover', payload: col.payload }),
-          ]);
-          col.gen.justify = j;
-          col.gen.handover = h;
-        }
+        const explainRequest = (useCase) => ({
+          use_case: useCase,
+          prefer_live: true,
+          ...(col.id ? { patient_id: col.id } : { payload: col.payload }),
+        });
+        const [justifyResult, handoverResult] = await Promise.all([
+          fetchJson('api/explain', explainRequest('justify')),
+          fetchJson('api/explain', explainRequest('handover')),
+        ]);
+        // api.py owns the canonical GenAI contract. Adapt its two registers to
+        // this UI's presentation fields instead of maintaining duplicate API
+        // endpoints with a second clinical-generation path.
+        col.gen.justify = {
+          source: justifyResult.source,
+          text: justifyResult.text,
+          guardrail: justifyResult.guardrails,
+          disclaimer: justifyResult.disclaimer,
+        };
+        col.gen.handover = {
+          source: handoverResult.source,
+          assessment: handoverResult.synthesis,
+          recommendation: handoverResult.caveat,
+          guardrail: handoverResult.guardrails,
+          disclaimer: handoverResult.disclaimer,
+        };
 
         col.genTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       } catch (e) {
@@ -293,7 +303,7 @@ document.addEventListener('alpine:init', () => {
         const res = await fetch('api/guardrail-test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ register }),
+          body: JSON.stringify({ use_case: register }),
         });
         col.guardTest = await res.json();
       } catch (e) {
@@ -426,7 +436,12 @@ document.addEventListener('alpine:init', () => {
     combinedGuard(col) {
       const vals = [col.gen.justify?.guardrail, col.gen.handover?.guardrail]
         .filter(Boolean)
-        .map((x) => String(x).toLowerCase());
+        .map((x) => {
+          if (typeof x === 'object') {
+            return x.passed === true ? 'pass' : `flag ${(x.flags || []).join(' ')}`.toLowerCase();
+          }
+          return String(x).toLowerCase();
+        });
       if (vals.some((x) => x.includes('fail') || x.includes('flag'))) {
         return { label: 'Guardrail: review', cls: 'guard--flag' };
       }
@@ -600,9 +615,13 @@ document.addEventListener('alpine:init', () => {
 
     _confirmedRequest() {
       const f = this.intake.fields;
+      const oxygenDeviceCode = { RA: 0, O2: 1 }[this.intake.vitals.device] ?? null;
       const complaints = (f.complaints || [])
-        .map((c) => c.token)
-        .filter(Boolean)
+        .map((c) => ({
+          token: String(c.token || '').trim(),
+          evidence: c.evidence || null,
+        }))
+        .filter((c) => c.token)
         .slice(0, 2);
 
       return {
@@ -617,7 +636,7 @@ document.addEventListener('alpine:init', () => {
           dbp: this._num(this.intake.vitals.dbp),
           rr: this._num(this.intake.vitals.rr),
           o2: this._num(this.intake.vitals.o2),
-          device: this.intake.vitals.device || null,
+          o2_device: oxygenDeviceCode,
           temp: this._num(this.intake.vitals.temp),
           temp_unit: this.intake.vitals.temp_unit || 'C',
         },
@@ -637,10 +656,25 @@ document.addEventListener('alpine:init', () => {
       this.intake.predictError = '';
 
       try {
-        const res = await fetch('api/predict-from-note', {
+        const confirmed = this._confirmedRequest();
+        const res = await fetch('api/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this._confirmedRequest()),
+          body: JSON.stringify({
+            age: confirmed.age,
+            sex: confirmed.sex,
+            arrival_mode: confirmed.arrival_mode,
+            complaints: confirmed.complaints,
+            vitals: confirmed.vitals ? {
+              hr: confirmed.vitals.hr,
+              sbp: confirmed.vitals.sbp,
+              dbp: confirmed.vitals.dbp,
+              rr: confirmed.vitals.rr,
+              o2: confirmed.vitals.o2,
+              temp: confirmed.vitals.temp,
+              temp_unit: confirmed.vitals.temp_unit,
+            } : null,
+          }),
         });
 
         const data = await res.json();
