@@ -538,18 +538,26 @@ def _forbidden_for_role(request: Request, message: str) -> Response:
     return JSONResponse({"detail": message}, status_code=403)
 
 
-def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
-    """Patient accounts currently have only the portal dashboard surface.
+_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted"}
 
-    Triage decision support, stroke assessment, and EMC drafting/approval stay
-    clinician-only until dedicated patient submission routes are introduced.
-    Jace's static assets are allowed so the portal can load, while only its
+
+def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
+    """What a patient account may reach through the proxy.
+
+    Triage stays clinician-only and instant — out of scope for the review
+    workflow. Stroke and EMC now allow exactly two patient-facing routes each
+    (self-submission and its confirmation page); everything else there,
+    including the review/edit/approve pages, stays clinician-only. Jace's
+    static assets are allowed so the portal can load, while only its
     explicit patient-safe dashboard API can be called.
     """
     normalized = path.strip("/")
-    if prefix != "triage":
-        return False
-    return not normalized.startswith("api/") or normalized.startswith("api/dashboard/")
+    if prefix == "triage":
+        return not normalized.startswith("api/") or normalized.startswith("api/dashboard/")
+    if prefix in ("stroke", "emc"):
+        first_segment = normalized.split("/", 1)[0] if normalized else ""
+        return first_segment in _PATIENT_SUBMIT_FIRST_SEGMENTS
+    return False
 
 
 def _name_from_email(email: str) -> str:
@@ -1071,9 +1079,14 @@ async def set_clinician_context(payload: ClinicianContextRequest, request: Reque
 
 
 @app.api_route("/{prefix}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def redirect_bare_prefix(prefix: str):
+async def redirect_bare_prefix(prefix: str, request: Request):
     if prefix == "stroke":
-        return RedirectResponse(url="/stroke/prediction", status_code=307)
+        # Bare /stroke used to always mean "the clinician-instant form," but
+        # that route is clinician-only now — a patient landing here needs the
+        # submission form instead, or they'd just bounce off a 403.
+        actor = _current_actor(request)
+        target = "/stroke/submit" if actor and actor.is_patient else "/stroke/prediction"
+        return RedirectResponse(url=target, status_code=307)
 
     if prefix in BACKENDS:
         return RedirectResponse(url=f"/{prefix}/", status_code=307)
@@ -1088,10 +1101,21 @@ async def proxy(prefix: str, path: str, request: Request):
     if upstream is None:
         return Response(status_code=404)
 
-    if prefix == "stroke" and path.strip("/") == "":
-        return RedirectResponse(url="/stroke/prediction", status_code=307)
-
     actor = _current_actor(request)
+
+    # The nav links to /stroke/ and /emc/ (trailing slash — a distinct route
+    # from bare /stroke and /emc, which redirect_bare_prefix() handles) always
+    # meant "the clinician-instant entry point" until patient submission
+    # existed. For a patient that now clinician-only landing 403s and bounces
+    # them back to the dashboard with no explanation — send them to the
+    # submission form instead, same as redirect_bare_prefix() already does
+    # for the bare form.
+    if prefix == "stroke" and path.strip("/") == "":
+        target = "/stroke/submit" if actor and actor.is_patient else "/stroke/prediction"
+        return RedirectResponse(url=target, status_code=307)
+
+    if prefix == "emc" and path.strip("/") == "" and actor and actor.is_patient:
+        return RedirectResponse(url="/emc/submit", status_code=307)
 
     if actor is None:
         if "text/html" in request.headers.get("accept", ""):
@@ -1131,8 +1155,10 @@ async def proxy(prefix: str, path: str, request: Request):
     body = await request.body()
 
     request_timeout = None
-    if prefix == "stroke" and path.strip("/").startswith("care-plan"):
-        # Care-plan generation may take longer because the stroke app calls an LLM.
+    if prefix == "stroke" and path.strip("/").startswith(("care-plan", "submit")):
+        # Care-plan generation, and now patient self-submission (which
+        # generates the care plan eagerly too), both call an LLM and can take
+        # longer than the default timeout.
         request_timeout = httpx.Timeout(180.0, connect=10.0, read=180.0)
 
     try:

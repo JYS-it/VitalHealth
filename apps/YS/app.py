@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import joblib
 import numpy as np
 import pandas as pd
-from flask import Flask, abort, render_template, request
+from flask import Flask, abort, redirect, render_template, request
 from markupsafe import Markup, escape
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -47,9 +47,14 @@ WORKFLOWS = {}
 def require_clinician_role():
     """Reject patient sessions from EMC review, approval, and issuance.
 
+    Exception: submit_form/submit/submitted are the patient-facing
+    self-submission routes — a patient may reach exactly these, nothing else.
+
     The gateway always requires authentication. Keeping direct launches
     usable without a cookie preserves the documented local development path.
     """
+    if request.endpoint in {"submit_form", "submit", "submitted"}:
+        return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
         if actor is None:
@@ -479,10 +484,26 @@ def make_audit(workflow):
 
 
 def store(workflow):
-    workflow_id = uuid.uuid4().hex
-    WORKFLOWS[workflow_id] = workflow
-    persist_workflow(workflow_id, workflow, "emc_draft_created")
-    return workflow_id
+    """Persist first, then use the DB row's own id as the in-process key.
+
+    Previously this minted an independent uuid4().hex as workflow_id and the
+    DB row got a *different* id from persist_workflow() — two unrelated
+    identifiers for the same workflow, and the only reason a review was ever
+    reachable was by the exact URL a clinician had just been shown. Making the
+    DB id authoritative is what lets a queue query (list_pending_review) hand
+    back an id that /revise, /approve, /reject, and the new /review route can
+    all load directly, including from a different process after a restart
+    (see load_workflow()).
+    """
+    persist_workflow(workflow, "emc_draft_created")
+    # safe_create_record swallows write failures rather than raising (DB down,
+    # a constraint violation) — persistence must not turn an otherwise valid
+    # workflow into a 500. Fall back to an in-memory-only id in that case,
+    # same as this function did before database ids were made authoritative;
+    # it just won't be queue-discoverable or reviewable from another process.
+    record_id = workflow.get("database_record_id") or uuid.uuid4().hex
+    WORKFLOWS[record_id] = workflow
+    return record_id
 
 
 def workflow_snapshot(workflow):
@@ -499,10 +520,16 @@ def workflow_snapshot(workflow):
         "revision_history": workflow["revision_history"],
         "final": workflow["final"],
         "issue_status": workflow["issue_status"],
+        # Who originally submitted this — kept separate from "who is acting
+        # right now" (persist_workflow's actor_reference) so a later reviewer
+        # approving/rejecting doesn't overwrite the original submitter's
+        # attribution, and so it survives being reconstructed from the DB by
+        # load_workflow() after a restart.
+        "submitted_by_email": workflow.get("submitted_by_email"),
     }
 
 
-def persist_workflow(workflow_id, workflow, event_type):
+def persist_workflow(workflow, event_type):
     """Mirror an EMC workflow to PostgreSQL when DATABASE_URL is configured."""
     snapshot = workflow_snapshot(workflow)
     owner_user_id = workflow.get("owner_user_id")
@@ -532,12 +559,89 @@ def persist_workflow(workflow_id, workflow, event_type):
         source_app="emc",
         event_type=event_type,
         record_id=record_id,
-        # The authenticated account, not the typed clinician name — free-text a
-        # user supplies is not an audit actor.
-        actor_reference=workflow.get("actor_email") or workflow["metadata"].get("attending_clinician_name"),
-        payload={"workflow_id": workflow_id, "status": workflow["issue_status"]},
+        # Whoever is acting on this specific call (set by /review's POST
+        # handler when a different clinician reviews someone else's
+        # submission) takes precedence; otherwise fall back to who submitted
+        # it, then the older actor_email/typed-name fallbacks for workflows
+        # created before this distinction existed.
+        actor_reference=(
+            workflow.get("acting_actor_email")
+            or workflow.get("submitted_by_email")
+            or workflow.get("actor_email")
+            or workflow["metadata"].get("attending_clinician_name")
+        ),
+        payload={"record_id": record_id, "status": workflow["issue_status"]},
     )
     return record_id
+
+
+def workflow_from_record(record):
+    """Rebuild an in-process workflow dict from a persisted DB row.
+
+    The inverse of workflow_snapshot(). Lets a workflow started in one
+    process (or by a patient's /submit) be reviewed from any other process —
+    a fresh clinician session, or the same one after a restart — since
+    WORKFLOWS is otherwise empty there. api_key is re-derived rather than
+    read from the snapshot: it is deliberately never persisted (see
+    workflow_snapshot's docstring) because it's a single shared env var, not
+    per-workflow secret state.
+    """
+    snapshot = record.get("output_payload") or {}
+    input_payload = record.get("input_payload") or {}
+    # Demo/seed rows (demo_data/seed_db.py) only ever ran the raw ML step —
+    # their output_payload is just {"prediction": {...}}, with no draft,
+    # evidence, or review_gate at all, and their metadata/features live in
+    # input_payload instead of the output snapshot. A record submitted
+    # through /submit or /start always has the full shape; this is only for
+    # records this workflow never produced.
+    has_full_snapshot = "draft" in snapshot
+    payload = snapshot.get("prediction") or {}
+    evidence = snapshot.get("evidence") or {}
+    gate = snapshot.get("review_gate") or {
+        "local": {"mode": "DETERMINISTIC", "verdict": "REVIEW_REQUIRED", "issues": []},
+        "critic": {
+            "mode": "NOT_RUN", "verdict": "NOT_RUN",
+            "summary": "No certificate draft has been generated for this record.",
+            "issues": [],
+        },
+        "approval_allowed": False,
+        "critical_critic_issues": [],
+    }
+    return {
+        "api_key": get_api_key(),
+        "style": snapshot.get("style", "standard"),
+        "metadata": snapshot.get("metadata") or input_payload.get("metadata") or {},
+        "features": snapshot.get("features") or input_payload.get("features") or {},
+        "payload": payload,
+        "evidence": evidence,
+        "draft": snapshot.get("draft") or {"mode": "NO_DRAFT", "text": "", "error": None},
+        "gate": gate,
+        "note_extraction": snapshot.get("note_extraction", {}),
+        "revision_history": snapshot.get("revision_history", []),
+        "final": snapshot.get("final"),
+        "issue_status": record.get("status"),
+        "database_record_id": record["id"],
+        "owner_user_id": record.get("owner_user_id"),
+        "submitted_by_email": snapshot.get("submitted_by_email"),
+        "has_reviewable_draft": has_full_snapshot,
+        "internal": internal_summary(payload, evidence, gate) if payload else None,
+    }
+
+
+def load_workflow(record_id):
+    """WORKFLOWS first (same-process fast path), else reconstruct from the
+    DB. 404s on an unknown or non-EMC id instead of the raw dict-index
+    KeyError->500 this replaces at every /revise, /approve, /reject call site.
+    """
+    workflow = WORKFLOWS.get(record_id)
+    if workflow is not None:
+        return workflow
+    record = SHARED_STORE.get_record(record_id)
+    if record is None or record.get("source_app") != "emc":
+        abort(404)
+    workflow = workflow_from_record(record)
+    WORKFLOWS[record_id] = workflow
+    return workflow
 
 
 def status_class(value):
@@ -594,15 +698,176 @@ def start():
     # attributes to the account that started it, not to whoever is posting now.
     workflow["owner_user_id"] = actor.user_id if actor else None
     workflow["actor_email"] = actor.email if actor else None
+    workflow["submitted_by_email"] = actor.email if actor else None
+    workflow["has_reviewable_draft"] = True
     workflow["internal"] = internal_summary(payload, evidence, gate)
     workflow_id = store(workflow)
-    persist_workflow(workflow_id, workflow, "emc_draft_created")
     return render_state(workflow_id, "Draft ready for clinician review.")
+
+
+# Clinic/clinician identity is administrative information a patient
+# self-submitting a request has no reason to know in advance (their reviewing
+# clinician's registration number, specifically). collect_metadata still
+# requires these fields non-empty, so the patient form supplies placeholders
+# and the reviewing clinician fills in the real values on /review before
+# approving — see review_form/review_submit below.
+_PENDING_CLINIC_METADATA = {
+    "clinic_name": "Pending clinician review",
+    "clinic_address": "Pending clinician review",
+    "attending_clinician_name": "Pending clinician review",
+    "clinician_registration_no": "PENDING",
+}
+
+
+@app.get("/submit")
+def submit_form():
+    actor = current_actor()
+    if actor is None or not actor.is_patient:
+        abort(403)
+    return render_template(
+        "submit.html", title=APP_TITLE, today=date.today().isoformat(),
+        symptom_fields=symptom_fields(), patient_identity=patient_identity(), message=None,
+    )
+
+
+@app.post("/submit")
+def submit():
+    """Patient self-submission. Reuses the exact same pipeline /start does —
+    collect_metadata's dormant actor.is_patient branch (this module, above)
+    locks patient_id/patient_name to the signed-in patient here — but never
+    renders the workflow state back to the caller. Nothing model-derived is
+    shown; the response is only a generic "submitted" confirmation."""
+    actor = current_actor()
+    if actor is None or not actor.is_patient:
+        abort(403)
+    form = request.form.copy()
+    for field, placeholder in _PENDING_CLINIC_METADATA.items():
+        form.setdefault(field, placeholder)
+    try:
+        metadata = collect_metadata(form, actor)
+        features = collect_features(form, metadata)
+    except ValueError as exc:
+        return render_template(
+            "submit.html", title=APP_TITLE, today=date.today().isoformat(),
+            symptom_fields=symptom_fields(), patient_identity=patient_identity(),
+            message=f"Input validation: {exc}",
+        )
+    payload = run_prediction(features)
+    payload["patient_admin_metadata"] = metadata
+    api_key, style = get_api_key(), "standard"
+    evidence = evidence_for(payload, metadata)
+    draft = generate_draft(evidence, style, api_key)
+    gate = review_gate(deterministic_review(draft["text"], evidence, payload), critic_review(draft["text"], evidence, api_key))
+    workflow = {
+        "api_key": api_key, "style": style, "metadata": metadata, "features": features,
+        "payload": payload, "evidence": evidence, "draft": draft, "gate": gate,
+        "note_extraction": {"status": "NOT_REQUESTED", "proposals": None},
+        "revision_history": [], "final": None, "issue_status": "PENDING_REVIEW",
+        "owner_user_id": actor.user_id, "actor_email": actor.email, "submitted_by_email": actor.email,
+        "has_reviewable_draft": True,
+    }
+    workflow["internal"] = internal_summary(payload, evidence, gate)
+    record_id = store(workflow)
+    return redirect(_prefixed_url_for("submitted", record_id=record_id))
+
+
+@app.get("/submitted/<record_id>")
+def submitted(record_id):
+    """Generic confirmation only. No draft data — risk score, diagnosis,
+    certificate text, or anything model-derived — is ever rendered here."""
+    return render_template("submitted.html", title=APP_TITLE)
+
+
+@app.get("/review/<record_id>")
+def review_form(record_id):
+    workflow = load_workflow(record_id)
+    return render_template(
+        "review.html", title=APP_TITLE, workflow=workflow, record_id=record_id,
+        render_certificate=render_certificate, message=None,
+    )
+
+
+@app.post("/review/<record_id>")
+def review_submit(record_id):
+    workflow = load_workflow(record_id)
+    actor = current_actor()
+    action = request.form.get("action")
+
+    # Defence in depth: the UI hides the edit form for a record with no real
+    # draft (a demo/seed row that only ever ran the ML step), but a direct
+    # POST could still reach here. has_reviewable_draft is absent (not False)
+    # on every workflow this app actually creates itself, so this only ever
+    # trips for the DB-reconstruction fallback's synthetic placeholder.
+    if action in ("save", "approve") and not workflow.get("has_reviewable_draft", True):
+        return render_template(
+            "review.html", title=APP_TITLE, workflow=workflow, record_id=record_id,
+            render_certificate=render_certificate,
+            message="This record has no certificate draft to save or approve.",
+        )
+
+    if action in ("save", "approve"):
+        edited_text = request.form.get("draft_text", "").strip()
+        if edited_text:
+            workflow["draft"] = {**workflow["draft"], "text": edited_text, "mode": "CLINICIAN_EDITED"}
+
+        metadata = workflow["metadata"]
+        for field in ("clinic_name", "clinic_address", "attending_clinician_name", "clinician_registration_no"):
+            value = request.form.get(field, "").strip()
+            if value:
+                metadata[field] = value
+        leave_days = request.form.get("authorized_medical_leave_days")
+        if leave_days:
+            try:
+                metadata["authorized_medical_leave_days"] = as_int(leave_days, metadata["authorized_medical_leave_days"])
+            except (TypeError, ValueError):
+                pass
+        leave_start = request.form.get("medical_leave_start_date")
+        if leave_start:
+            try:
+                metadata["medical_leave_start_date"] = parse_iso_date(leave_start, "Leave start date")
+            except ValueError:
+                pass
+
+        workflow["evidence"] = evidence_for(workflow["payload"], metadata)
+        workflow["gate"] = review_gate(
+            deterministic_review(workflow["draft"]["text"], workflow["evidence"], workflow["payload"]),
+            critic_review(workflow["draft"]["text"], workflow["evidence"], workflow["api_key"]),
+        )
+        workflow["internal"] = internal_summary(workflow["payload"], workflow["evidence"], workflow["gate"])
+        workflow["acting_actor_email"] = actor.email if actor else None
+
+    if action == "save":
+        persist_workflow(workflow, "emc_reviewer_edited")
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    if action == "approve":
+        metadata = workflow["metadata"]
+        metadata["approving_clinician_name"] = (actor.display_name or actor.email) if actor else metadata.get("attending_clinician_name")
+        metadata["approval_date"] = date.today().isoformat()
+        metadata["certificate_id"] = f"EMC-{date.today().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        metadata["clinician_review_status"] = "APPROVED"
+        # The clinician's reviewed/edited draft text IS the final text — no
+        # separate LLM call to regenerate it. Once real hand-editing exists,
+        # a fresh regeneration has no memory of what the clinician just
+        # deliberately edited or removed, so it could silently reintroduce it.
+        workflow["final"] = workflow["draft"]["text"]
+        workflow["issue_status"] = "APPROVED_FOR_ISSUE"
+        persist_workflow(workflow, "emc_approved")
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    if action == "reject":
+        workflow["metadata"]["clinician_review_status"] = "REJECTED"
+        workflow["issue_status"] = "REJECTED"
+        workflow["acting_actor_email"] = actor.email if actor else None
+        persist_workflow(workflow, "emc_rejected")
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    abort(400)
 
 
 @app.post("/revise/<workflow_id>")
 def revise(workflow_id):
-    workflow = WORKFLOWS[workflow_id]
+    workflow = load_workflow(workflow_id)
     instructions = request.form.get("revision_instructions", "").strip()
     if not instructions:
         return render_state(workflow_id, "Enter revision instructions before regenerating.")
@@ -610,13 +875,13 @@ def revise(workflow_id):
     workflow["draft"] = generate_draft(workflow["evidence"], workflow["style"], workflow["api_key"], instructions, workflow["draft"]["text"])
     workflow["gate"] = review_gate(deterministic_review(workflow["draft"]["text"], workflow["evidence"], workflow["payload"]), critic_review(workflow["draft"]["text"], workflow["evidence"], workflow["api_key"]))
     workflow["internal"] = internal_summary(workflow["payload"], workflow["evidence"], workflow["gate"])
-    persist_workflow(workflow_id, workflow, "emc_draft_revised")
+    persist_workflow(workflow, "emc_draft_revised")
     return render_state(workflow_id, "Draft regenerated from clinician instructions.")
 
 
 @app.post("/approve/<workflow_id>")
 def approve(workflow_id):
-    workflow = WORKFLOWS[workflow_id]
+    workflow = load_workflow(workflow_id)
     if workflow["draft"]["mode"] != "LIVE_GENAI":
         return render_state(workflow_id, "Final issue is blocked: the current draft is an offline template, not live GenAI output.")
     if not workflow["gate"]["approval_allowed"]:
@@ -639,7 +904,7 @@ def approve(workflow_id):
         return render_state(workflow_id, "Final issue is blocked by the final safety review.")
     workflow["final"], workflow["final_gate"], workflow["issue_status"] = result["text"], final_gate, "APPROVED_FOR_ISSUE"
     audit = make_audit(workflow)
-    record_id = persist_workflow(workflow_id, workflow, "emc_approved")
+    record_id = persist_workflow(workflow, "emc_approved")
     SHARED_STORE.safe_append_audit_event(
         source_app="emc", event_type="emc_audit_snapshot", record_id=record_id, payload=audit
     )
@@ -653,10 +918,10 @@ def approve(workflow_id):
 
 @app.post("/reject/<workflow_id>")
 def reject(workflow_id):
-    workflow = WORKFLOWS[workflow_id]
+    workflow = load_workflow(workflow_id)
     workflow["metadata"]["clinician_review_status"] = "REJECTED"
     workflow["issue_status"] = "REJECTED"
-    persist_workflow(workflow_id, workflow, "emc_rejected")
+    persist_workflow(workflow, "emc_rejected")
     return render_state(workflow_id, "Draft rejected. Add clinician revision instructions to prepare a new draft.")
 
 

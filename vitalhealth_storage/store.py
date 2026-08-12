@@ -475,6 +475,7 @@ class ClinicalStore:
         patient_id: str | None = None,
         owner_user_id: str | None = None,
         source_app: str | None = None,
+        status: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """Newest first.
@@ -494,6 +495,8 @@ class ClinicalStore:
             statement = statement.where(or_(*subject_filters))
         if source_app:
             statement = statement.where(records.c.source_app == source_app)
+        if status:
+            statement = statement.where(records.c.status == status)
         statement = statement.order_by(records.c.created_at.desc()).limit(limit)
 
         with self._require_engine().begin() as connection:
@@ -601,6 +604,51 @@ class ClinicalStore:
         )
         with self._require_engine().begin() as connection:
             return [dict(row) for row in connection.execute(statement).mappings()]
+
+    def list_pending_review(
+        self,
+        *,
+        source_apps: tuple[str, ...] = ("stroke", "emc"),
+        status: str = "PENDING_REVIEW",
+        limit: int = 100,
+    ) -> list[dict]:
+        """The open, shared clinician review queue: every patient-submitted
+        item awaiting action, across modules, newest first.
+
+        Triage is excluded by the default source_apps — it stays instant and
+        clinician-only, out of scope for this queue. No per-item claiming: any
+        clinician sees the same list, and a row simply drops off once its
+        status moves past PENDING_REVIEW.
+        """
+        statement = (
+            records.select()
+            .where(records.c.source_app.in_(source_apps))
+            .where(records.c.status == status)
+            .order_by(records.c.created_at.desc())
+            .limit(limit)
+        )
+        with self._require_engine().begin() as connection:
+            rows = [dict(row) for row in connection.execute(statement).mappings()]
+
+        patient_ids = {row["patient_id"] for row in rows if row.get("patient_id")}
+        if patient_ids:
+            with self._require_engine().begin() as connection:
+                patient_rows = {
+                    p["id"]: p
+                    for p in connection.execute(
+                        patients.select().where(patients.c.id.in_(patient_ids))
+                    ).mappings()
+                }
+            for row in rows:
+                patient = patient_rows.get(row.get("patient_id"))
+                row["patient_display_name"] = (patient or {}).get("display_name")
+                row["patient_external_id"] = (patient or {}).get("external_id")
+        else:
+            for row in rows:
+                row["patient_display_name"] = None
+                row["patient_external_id"] = None
+
+        return rows
 
     def list_audit_events(self, record_id: str, *, limit: int = 50) -> list[dict]:
         statement = (

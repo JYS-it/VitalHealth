@@ -31,9 +31,14 @@ app.secret_key = os.getenv("SECRET_KEY", "change-this-in-production")
 def require_clinician_role():
     """Reject patient sessions from clinician-only stroke workflows.
 
+    Exception: submit_form/submit/submitted are the patient-facing
+    self-submission routes — a patient may reach exactly these, nothing else.
+
     The gateway always requires authentication. Keeping direct launches
     usable without a cookie preserves the documented local development path.
     """
+    if request.endpoint in {"submit_form", "submit", "submitted"}:
+        return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
         if actor is None:
@@ -480,6 +485,37 @@ def parse_patient_form(form_data) -> dict:
     }
 
 
+def predict_stroke_risk(patient_data: dict) -> dict:
+    """The model call only — sub-millisecond, no network. Shared by the
+    clinician-instant /prediction route and the patient /submit route."""
+    model_input_df = pd.DataFrame([patient_data])[feature_cols].copy()
+    model_input_df["Gender"] = model_input_df["Gender"].map({"Male": 1, "Female": 0})
+    model_input_df[num_cols] = scaler.transform(model_input_df[num_cols])
+    model_input_df = model_input_df.apply(pd.to_numeric, errors="coerce")
+
+    risk_probability = float(model.predict_proba(model_input_df)[:, 1][0])
+    risk_category = "High risk" if risk_probability >= risk_threshold else "Low risk"
+
+    return {
+        "risk_category": risk_category,
+        "risk_probability_percent": round(risk_probability * 100, 2),
+        "threshold_used": float(risk_threshold),
+    }
+
+
+def generate_stroke_care_plan(patient_data: dict, prediction_result: dict) -> tuple[str, list, list]:
+    """RAG retrieval + the one real LLM call + the 7-day calendar. Shared by
+    the clinician-instant /care-plan route and the patient /submit route,
+    which generates this eagerly so a reviewing clinician has a complete
+    draft rather than an extra "generate now" step."""
+    retrieved_guidance = retrieve_relevant_pdf_guidance(patient_data)
+    retrieved_source_titles = [item["source_title"] for item in retrieved_guidance]
+    rag_prompt = build_rag_prompt(patient_data, prediction_result, retrieved_guidance)
+    generated_care_plan = generate_care_plan_with_gemini(rag_prompt)
+    care_calendar = build_7_day_care_calendar(patient_data)
+    return generated_care_plan, retrieved_source_titles, care_calendar
+
+
 def patient_data_fingerprint(patient_data) -> str:
     """Identifies one particular set of answers, so a second assessment in the
     same browser session is recognised as new rather than as an edit."""
@@ -542,6 +578,134 @@ def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_
     return record_id
 
 
+def persist_stroke_record_for_review(patient_data, prediction_result, care_plan, care_calendar):
+    """Patient self-submission, always a new record. Deliberately does not
+    touch Flask session at all (unlike persist_stroke_record) — that
+    mechanism links /prediction to /care-plan within one browser session,
+    which doesn't apply here: this route computes both eagerly in one
+    request, and review happens in a completely different browser/session
+    later."""
+    output = {"prediction": prediction_result, "care_plan": care_plan, "care_calendar": care_calendar}
+    actor = identity.actor_from_cookies(request.cookies)
+    subject_ref, subject_name = identity.resolve_subject(request.cookies, actor)
+    record_id = SHARED_STORE.safe_create_record(
+        source_app="stroke", record_type="stroke_risk_assessment", status="PENDING_REVIEW",
+        input_payload=patient_data, output_payload=output, model_version="stroke_logistic_model",
+        patient_external_id=subject_ref, patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
+    )
+    SHARED_STORE.safe_append_audit_event(
+        source_app="stroke", event_type="stroke_submitted_for_review", record_id=record_id,
+        actor_reference=actor.email if actor else None,
+        payload={"risk_category": prediction_result["risk_category"]},
+    )
+    return record_id
+
+
+@app.get("/submit")
+def submit_form():
+    actor = identity.actor_from_cookies(request.cookies)
+    if actor is None or not actor.is_patient:
+        abort(403)
+    return render_template("submit.html", page_title="Request Stroke Risk Assessment", error_message=None)
+
+
+@app.post("/submit")
+def submit():
+    """Patient self-submission. Never renders a result back to the caller —
+    the response is only a generic "submitted" confirmation (see
+    /submitted/<record_id>)."""
+    actor = identity.actor_from_cookies(request.cookies)
+    if actor is None or not actor.is_patient:
+        abort(403)
+    try:
+        patient_data = parse_patient_form(request.form)
+        prediction_result = predict_stroke_risk(patient_data)
+    except Exception as exc:
+        return render_template(
+            "submit.html", page_title="Request Stroke Risk Assessment",
+            error_message=f"Could not process submission: {exc}",
+        )
+    generated_care_plan, _source_titles, care_calendar = generate_stroke_care_plan(patient_data, prediction_result)
+    record_id = persist_stroke_record_for_review(patient_data, prediction_result, generated_care_plan, care_calendar)
+    return redirect(_prefixed_url_for("submitted", record_id=record_id))
+
+
+@app.get("/submitted/<record_id>")
+def submitted(record_id):
+    """Generic confirmation only. No risk category, percentage, or care-plan
+    text is ever rendered here."""
+    return render_template("submitted.html", page_title="Submitted")
+
+
+@app.get("/review/<record_id>")
+def review_form(record_id):
+    record = SHARED_STORE.get_record(record_id)
+    if record is None or record.get("source_app") != "stroke":
+        abort(404)
+    output = record.get("output_payload") or {}
+    return render_template(
+        "review.html", page_title="Review stroke assessment", record=record,
+        patient_data=record.get("input_payload") or {},
+        prediction=output.get("prediction") or {},
+        care_plan_text=output.get("care_plan", ""),
+        care_calendar=output.get("care_calendar") or [],
+        message=None,
+    )
+
+
+@app.post("/review/<record_id>")
+def review_submit(record_id):
+    record = SHARED_STORE.get_record(record_id)
+    if record is None or record.get("source_app") != "stroke":
+        abort(404)
+    actor = identity.actor_from_cookies(request.cookies)
+    action = request.form.get("action")
+
+    output = dict(record.get("output_payload") or {})
+    prediction = dict(output.get("prediction") or {})
+
+    if action in ("save", "approve"):
+        risk_category = request.form.get("risk_category", "").strip()
+        if risk_category:
+            prediction["risk_category"] = risk_category
+        try:
+            prediction["risk_probability_percent"] = float(request.form.get("risk_probability_percent"))
+        except (TypeError, ValueError):
+            pass
+        output["prediction"] = prediction
+
+        edited_plan = request.form.get("care_plan_text", "").strip()
+        if edited_plan:
+            output["care_plan"] = edited_plan
+
+    if action == "save":
+        SHARED_STORE.safe_update_record(record_id, status="PENDING_REVIEW", output_payload=output)
+        SHARED_STORE.safe_append_audit_event(
+            source_app="stroke", event_type="stroke_reviewer_edited", record_id=record_id,
+            actor_reference=actor.email if actor else None,
+        )
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    if action == "approve":
+        SHARED_STORE.safe_update_record(record_id, status="APPROVED", output_payload=output)
+        SHARED_STORE.safe_append_audit_event(
+            source_app="stroke", event_type="stroke_approved", record_id=record_id,
+            actor_reference=actor.email if actor else None,
+        )
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    if action == "reject":
+        SHARED_STORE.safe_update_record(record_id, status="REJECTED", output_payload=output)
+        SHARED_STORE.safe_append_audit_event(
+            source_app="stroke", event_type="stroke_rejected", record_id=record_id,
+            actor_reference=actor.email if actor else None,
+        )
+        return redirect(_prefixed_url_for("review_form", record_id=record_id))
+
+    abort(400)
+
+
 @app.route("/")
 def home():
     return redirect(url_for("prediction"))
@@ -556,28 +720,7 @@ def prediction():
     if request.method == "POST":
         try:
             patient_data = parse_patient_form(request.form)
-
-            # Keep model input in the exact trained feature order.
-            model_input_df = pd.DataFrame([patient_data])[feature_cols].copy()
-
-            # Encode Gender for model prediction.
-            model_input_df["Gender"] = model_input_df["Gender"].map(
-                {"Male": 1, "Female": 0}
-            )
-
-            # Scale only numeric columns.
-            model_input_df[num_cols] = scaler.transform(model_input_df[num_cols])
-            model_input_df = model_input_df.apply(pd.to_numeric, errors="coerce")
-
-            # Predict stroke probability using Logistic Regression.
-            risk_probability = float(model.predict_proba(model_input_df)[:, 1][0])
-            risk_category = "High risk" if risk_probability >= risk_threshold else "Low risk"
-
-            prediction_result = {
-                "risk_category": risk_category,
-                "risk_probability_percent": round(risk_probability * 100, 2),
-                "threshold_used": float(risk_threshold),
-            }
+            prediction_result = predict_stroke_risk(patient_data)
 
             # Store in session for care-plan route.
             session["patient_data"] = patient_data
@@ -608,13 +751,7 @@ def care_plan():
     if not patient_data or not prediction_result:
         return redirect(url_for("prediction"))
 
-    retrieved_guidance = retrieve_relevant_pdf_guidance(patient_data)
-    retrieved_source_titles = [item["source_title"] for item in retrieved_guidance]
-
-    rag_prompt = build_rag_prompt(patient_data, prediction_result, retrieved_guidance)
-    generated_care_plan = generate_care_plan_with_gemini(rag_prompt)
-
-    care_calendar = build_7_day_care_calendar(patient_data)
+    generated_care_plan, retrieved_source_titles, care_calendar = generate_stroke_care_plan(patient_data, prediction_result)
     persist_stroke_record(patient_data, prediction_result, generated_care_plan, care_calendar)
 
     return render_template(

@@ -851,6 +851,9 @@ select.finput{font-family:var(--font-mono);}
   padding:var(--s2) 0; border-bottom:1px solid var(--border); font-size:var(--fs-sm);
 }
 .vh-history__item:last-child{ border-bottom:0; }
+.vh-history__item--actionable{
+  grid-template-columns:auto 10rem 1fr auto auto;
+}
 .vh-history__module{ color:var(--text-muted); }
 .vh-history__headline{ font-weight:500; }
 .vh-history__time{ color:var(--text-faint); font-size:var(--fs-xs); white-space:nowrap; }
@@ -911,4 +914,5 @@ select.finput{font-family:var(--font-mono);}
 @media (max-width:760px){
   .vh-history__item{ grid-template-columns:auto 1fr; row-gap:var(--s1); }
   .vh-history__time{ grid-column:2; }
+  .vh-history__item--actionable .filter-btn{ grid-column:2; justify-self:start; }
 }

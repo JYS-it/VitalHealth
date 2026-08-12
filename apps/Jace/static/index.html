@@ -163,6 +163,26 @@
             </form>
           </article>
 
+          <section class="card vh-history" x-show="pending.length" x-cloak>
+            <div class="eyebrow mb2">Pending reviews</div>
+            <p class="vh-note">
+              Patient-submitted stroke and certificate drafts awaiting your review. Open to any clinician —
+              first to act wins.
+            </p>
+            <ul class="vh-history__list">
+              <template x-for="item in pending" :key="item.record_id">
+                <li class="vh-history__item vh-history__item--actionable">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline"
+                        x-text="`${item.patient_display_name || 'Unknown patient'} — ${item.headline}`"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                  <a class="filter-btn" :href="item.href">Review</a>
+                </li>
+              </template>
+            </ul>
+          </section>
+
           <section class="card">
             <div class="eyebrow mb2">All patients</div>
             <div class="vh-table-wrap">

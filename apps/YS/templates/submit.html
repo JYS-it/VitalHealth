@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css">
+
+  <script defer src="/vh-assets/vita.js"></script>
+</head>
+
+<body data-vitalhealth-section="emc">
+  <header class="site-header clinical-header">
+    <div class="container header-wrap">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+            <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+          </a>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="container nav-wrap">
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a href="/triage/">Clinical Triage</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a class="active" href="/emc/submit">EMC Workflow</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section class="workflow-shell workflow-shell--emc">
+      <article class="card panel-card workflow-card intake-card">
+        <form method="post" action="{{ url_for('submit') }}" class="form-grid workflow-form">
+          <div class="section-heading">
+            <h2>Request a medical certificate</h2>
+            <span>Required fields</span>
+          </div>
+
+          {% if message %}
+          <p class="notice">{{ message }}</p>
+          {% endif %}
+
+          <p class="hint wide">
+            A clinician will review your request before anything is issued. You'll see the outcome on your
+            dashboard once it's been reviewed — this form does not show a diagnosis or certificate preview.
+          </p>
+
+          <label>
+            Patient full name
+            <input name="patient_name" value="{{ patient_identity.name if patient_identity else '' }}" readonly required>
+          </label>
+
+          <label>
+            Patient ID
+            <input name="patient_id" value="{{ patient_identity.external_id if patient_identity else '' }}" readonly required>
+          </label>
+
+          <label>
+            Age
+            <input name="patient_age" type="number" min="0" max="130" value="33" required>
+          </label>
+
+          <label>
+            Gender code
+            <select name="gender">
+              <option value="0">0</option>
+              <option value="1">1</option>
+            </select>
+          </label>
+
+          <label>
+            Symptom duration in days
+            <input name="duration" type="number" min="1" max="60" value="4">
+          </label>
+
+          <label>
+            Consultation date
+            <input name="consultation_date" type="date" value="{{ today }}" required>
+          </label>
+
+          <label>
+            Leave start date
+            <input name="medical_leave_start_date" type="date" value="{{ today }}" required>
+          </label>
+
+          <label>
+            Requested leave days
+            <input name="authorized_medical_leave_days" type="number" min="1" max="60" value="3" required>
+          </label>
+
+          <label class="check wide">
+            <input type="checkbox" name="diagnosis_disclosure_consent">
+            I consent to my diagnosis being included on the certificate, if applicable
+          </label>
+
+          <details class="symptoms wide" open>
+            <summary>Symptoms <span id="symptom-count">0 selected</span></summary>
+
+            <input class="search" id="symptom-search" type="search" placeholder="Filter symptoms" aria-label="Filter symptoms">
+
+            <div class="symptom-actions" aria-label="Symptom selection controls">
+              <button type="button" id="select-all-symptoms" class="btn-outline">Select all</button>
+              <button type="button" id="clear-all-symptoms" class="btn-secondary">Clear all</button>
+            </div>
+
+            <div class="check-grid" id="symptom-grid">
+              {% for field, label in symptom_fields %}
+              <label class="check symptom">
+                <input type="checkbox" name="{{ field }}">
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </details>
+
+          <button class="primary btn-submit wide" type="submit">Submit for clinician review</button>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
+    </div>
+  </footer>
+
+  <div class="loading-overlay" id="loading-overlay" hidden aria-live="polite" aria-busy="true">
+    <div class="loading-dialog">
+      <span class="loading-label">Submitting your request</span>
+      <div class="skeleton title"></div>
+      <div class="skeleton line"></div>
+      <div class="skeleton line short"></div>
+    </div>
+  </div>
+
+  <script>
+    const search = document.getElementById('symptom-search');
+    if (search) {
+      search.addEventListener('input', () => {
+        document.querySelectorAll('.symptom').forEach((item) => {
+          item.hidden = !item.textContent.toLowerCase().includes(search.value.toLowerCase());
+        });
+      });
+    }
+
+    const symptomInputs = Array.from(document.querySelectorAll('#symptom-grid input[type="checkbox"]'));
+    const countLabel = document.getElementById('symptom-count');
+
+    function updateCount() {
+      if (countLabel) countLabel.textContent = `${symptomInputs.filter((i) => i.checked).length} selected`;
+    }
+    symptomInputs.forEach((input) => input.addEventListener('change', updateCount));
+
+    const selectAll = document.getElementById('select-all-symptoms');
+    const clearAll = document.getElementById('clear-all-symptoms');
+    if (selectAll) selectAll.addEventListener('click', () => { symptomInputs.forEach((i) => { if (!i.closest('.symptom').hidden) i.checked = true; }); updateCount(); });
+    if (clearAll) clearAll.addEventListener('click', () => { symptomInputs.forEach((i) => { i.checked = false; }); updateCount(); });
+
+    const form = document.querySelector('.workflow-form');
+    if (form) {
+      form.addEventListener('submit', () => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.hidden = false;
+      });
+    }
+  </script>
+</body>
+</html>

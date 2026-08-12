@@ -59,7 +59,7 @@ def _patient_row_view(row: dict, *, audience: str) -> dict:
         "modules": {
             app: summaries.summarize(row["modules"].get(app), audience=audience)
             if row["modules"].get(app)
-            else summaries.blank_tile(app)
+            else summaries.blank_tile(app, audience=audience)
             for app in SOURCE_APPS
         },
     }
@@ -124,7 +124,7 @@ def patient_summary(request: Request):
     modules = {
         app: summaries.summarize(latest.get(app), audience=audience)
         if latest.get(app)
-        else summaries.blank_tile(app)
+        else summaries.blank_tile(app, audience=audience)
         for app in SOURCE_APPS
     }
 
@@ -176,6 +176,46 @@ def clinician_patients(request: Request, q: str | None = None):
     }
 
 
+@router.get("/pending")
+def clinician_pending(request: Request):
+    """Every stroke/EMC item awaiting clinician review, across all patients.
+
+    Open shared queue: no per-item claiming, any clinician sees the same
+    list, and a row simply drops off once its status moves past
+    PENDING_REVIEW. Triage is excluded — it stays instant and clinician-only,
+    out of scope for this queue.
+    """
+    actor = _actor(request)
+
+    if actor is None:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    if not actor.is_clinician:
+        return JSONResponse({"detail": "Clinician access required"}, status_code=403)
+
+    if not STORE.enabled:
+        return JSONResponse(_UNAVAILABLE, status_code=503)
+
+    try:
+        pending = STORE.list_pending_review()
+    except SQLAlchemyError:
+        LOGGER.warning("Pending review queue read failed", exc_info=True)
+        return JSONResponse(_UNAVAILABLE, status_code=503)
+
+    review_paths = {"stroke": "/stroke/review", "emc": "/emc/review"}
+    items = []
+    for record in pending:
+        tile = summaries.summarize(record, audience=summaries.AUDIENCE_CLINICIAN)
+        tile["patient_id"] = record.get("patient_id")
+        tile["patient_display_name"] = record.get("patient_display_name") or record.get("patient_external_id")
+        review_path = review_paths.get(record.get("source_app"))
+        if review_path:
+            tile["href"] = f"{review_path}/{record['id']}"
+        items.append(tile)
+
+    return {"pending": items, "count": len(items)}
+
+
 @router.get("/patients/{patient_id}")
 def clinician_patient_detail(patient_id: str, request: Request):
     actor = _actor(request)
@@ -211,7 +251,7 @@ def clinician_patient_detail(patient_id: str, request: Request):
         "modules": [
             summaries.summarize(latest.get(app), audience=audience)
             if latest.get(app)
-            else summaries.blank_tile(app)
+            else summaries.blank_tile(app, audience=audience)
             for app in SOURCE_APPS
         ],
         "history": [_record_view(record, audience=audience) for record in records],

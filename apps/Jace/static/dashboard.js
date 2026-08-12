@@ -24,10 +24,17 @@ document.addEventListener('alpine:init', () => {
     // clinician view
     patients: [],
     unassigned: [],
+    pending: [],            // stroke/EMC items awaiting review, any module
     search: '',
     selected: null,        // loaded patient detail
     loadingDetail: false,
     activeSubject: null,   // patient the next assessment will be filed under
+
+    // polling — patient tiles and the clinician queue both update without a
+    // manual reload. No WebSocket/SSE: a plain interval is enough here and
+    // needs no new infrastructure across the gateway + two Flask apps.
+    pollHandle: null,
+    POLL_INTERVAL_MS: 15000,
 
     get isClinician() {
       return this.role === 'clinician';
@@ -45,10 +52,49 @@ document.addEventListener('alpine:init', () => {
         this.role = me.role;
         this.displayName = me.display_name || '';
         await (this.isClinician ? this.loadPatients() : this.loadSummary());
+        if (this.isClinician) await this.loadPending();
       } catch (e) {
         this.error = 'Could not load your dashboard. Please refresh the page.';
       } finally {
         this.loading = false;
+      }
+      this.startPolling();
+    },
+
+    startPolling() {
+      this.stopPolling();
+      this.pollHandle = setInterval(() => {
+        if (document.hidden) return;
+        this.refresh();
+      }, this.POLL_INTERVAL_MS);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) this.refresh();
+      });
+    },
+
+    stopPolling() {
+      if (this.pollHandle) clearInterval(this.pollHandle);
+      this.pollHandle = null;
+    },
+
+    async refresh() {
+      // Silent: no spinner, no error-banner flicker on one bad tick — those
+      // are reserved for the very first load(). A failed refresh just tries
+      // again on the next tick.
+      try {
+        if (this.isClinician) {
+          await Promise.all([this.loadPatients(), this.loadPending()]);
+        } else {
+          await this.loadSummary();
+        }
+      } catch (e) { /* next tick retries */ }
+    },
+
+    async loadPending() {
+      const res = await fetch('api/dashboard/pending');
+      if (res.ok) {
+        const data = await res.json();
+        this.pending = data.pending || [];
       }
     },
 

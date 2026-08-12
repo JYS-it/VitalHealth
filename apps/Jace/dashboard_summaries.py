@@ -33,6 +33,14 @@ MODULE_HREFS = {
     "emc": "/emc/",
 }
 
+# A patient's "Start"/"Run again" link must point at the patient-facing
+# submission route, not the clinician-instant one — the latter now 403s them.
+PATIENT_MODULE_HREFS = {
+    "triage": "/triage/",
+    "stroke": "/stroke/submit",
+    "emc": "/emc/submit",
+}
+
 MODULE_BLURBS = {
     "triage": "Assess triage priority from intake details and clinician notes.",
     "stroke": "Estimate stroke risk and generate educational care planning guidance.",
@@ -62,6 +70,18 @@ _EMC_STATUS_TONES = {
     "APPROVED_FOR_ISSUE": TONE_OK,
     "REJECTED": TONE_WARNING,
     "BLOCKED_FINAL_SAFETY_REVIEW": TONE_CRITICAL,
+}
+
+_STROKE_STATUS_LABELS = {
+    "PENDING_REVIEW": "Awaiting clinician review",
+    "APPROVED": "Reviewed by clinician",
+    "REJECTED": "Rejected by clinician",
+}
+
+_STROKE_STATUS_TONES = {
+    "PENDING_REVIEW": TONE_NEUTRAL,
+    "APPROVED": TONE_OK,
+    "REJECTED": TONE_WARNING,
 }
 
 # Stroke and triage inputs are flat dicts of raw feature names. These are the
@@ -125,9 +145,10 @@ def _iso(value: Any) -> str | None:
     return isoformat() if callable(isoformat) else str(value)
 
 
-def _blank_tile(source_app: str) -> dict:
+def _blank_tile(source_app: str, audience: str = AUDIENCE_CLINICIAN) -> dict:
     """The 'you haven't run this yet' state — still a full tile so the frontend
     renders one shape either way."""
+    hrefs = PATIENT_MODULE_HREFS if audience == AUDIENCE_PATIENT else MODULE_HREFS
     return {
         "record_id": None,
         "module": source_app,
@@ -140,7 +161,7 @@ def _blank_tile(source_app: str) -> dict:
         "inputs": [],
         "status": None,
         "created_at": None,
-        "href": MODULE_HREFS.get(source_app, "/"),
+        "href": hrefs.get(source_app, "/"),
     }
 
 
@@ -183,20 +204,36 @@ def _summarize_triage(output: Mapping, status: str, audience: str) -> tuple[str,
     return headline, _TRIAGE_TONES.get(level, TONE_NEUTRAL), facts
 
 
-def _summarize_stroke(output: Mapping, audience: str) -> tuple[str, str, list]:
+def _summarize_stroke(output: Mapping, status: str, audience: str) -> tuple[str, str, list]:
     prediction = output.get("prediction")
     if not isinstance(prediction, Mapping):
         return "Details unavailable", TONE_NEUTRAL, []
 
-    # Risk category and probability remain clinician-facing until a dedicated
-    # clinician-approved patient result workflow exists.
+    status_upper = status.upper()
+
+    # Risk category and probability are withheld from the patient until a
+    # clinician has approved the (possibly edited) result — this is the
+    # human-in-the-loop review workflow, not a blanket withhold. ASSESSED and
+    # CARE_PLAN_READY are the pre-review-workflow statuses a clinician-run
+    # assessment still gets (apps/Jeslyn/app.py's persist_stroke_record) —
+    # those were already produced directly by a clinician, so there is no
+    # pending action left to complete; treat them as already reviewed.
     if audience == AUDIENCE_PATIENT:
-        facts: list[tuple[str, str]] = []
-        if output.get("care_plan"):
-            facts.append(("Care plan", "Available"))
-        if output.get("care_calendar"):
-            facts.append(("7-day calendar", "Available"))
-        return "Assessment received", TONE_NEUTRAL, facts
+        if status_upper in ("APPROVED", "ASSESSED", "CARE_PLAN_READY"):
+            category = _text(prediction.get("risk_category")) or "Assessed"
+            percent = prediction.get("risk_probability_percent")
+            headline = f"{category} ({percent}%)" if percent is not None else category
+            tone = TONE_WARNING if "high" in category.lower() else TONE_OK
+            facts: list[tuple[str, str]] = []
+            if output.get("care_plan"):
+                facts.append(("Care plan", "Available"))
+            if output.get("care_calendar"):
+                facts.append(("7-day calendar", "Available"))
+            return headline, tone, facts
+
+        headline = _STROKE_STATUS_LABELS.get(status_upper, "Submitted")
+        tone = _STROKE_STATUS_TONES.get(status_upper, TONE_NEUTRAL)
+        return headline, tone, []
 
     category = _text(prediction.get("risk_category")) or "Assessed"
     percent = prediction.get("risk_probability_percent")
@@ -204,11 +241,13 @@ def _summarize_stroke(output: Mapping, audience: str) -> tuple[str, str, list]:
     tone = TONE_WARNING if "high" in category.lower() else TONE_OK
 
     facts: list[tuple[str, str]] = []
+    if status_upper in _STROKE_STATUS_LABELS:
+        facts.append(("Review status", _STROKE_STATUS_LABELS[status_upper]))
     if output.get("care_plan"):
         facts.append(("Care plan", "Generated"))
     if output.get("care_calendar"):
         facts.append(("7-day calendar", "Available"))
-    if audience == AUDIENCE_CLINICIAN and prediction.get("threshold_used") is not None:
+    if prediction.get("threshold_used") is not None:
         facts.append(("Decision threshold", _text(prediction["threshold_used"])))
 
     return headline, tone, facts
@@ -344,7 +383,7 @@ def summarize(record: Mapping | None, *, audience: str = AUDIENCE_CLINICIAN) -> 
         return _blank_tile("")
 
     source_app = str(record.get("source_app") or "")
-    tile = _blank_tile(source_app)
+    tile = _blank_tile(source_app, audience=audience)
     tile.update({
         "record_id": record.get("id"),
         "completed": True,
@@ -359,7 +398,7 @@ def summarize(record: Mapping | None, *, audience: str = AUDIENCE_CLINICIAN) -> 
         if source_app == "triage":
             headline, tone, facts = _summarize_triage(output, status, audience)
         elif source_app == "stroke":
-            headline, tone, facts = _summarize_stroke(output, audience)
+            headline, tone, facts = _summarize_stroke(output, status, audience)
         elif source_app == "emc":
             headline, tone, facts = _summarize_emc(output, status, audience)
         else:
@@ -379,8 +418,8 @@ def summarize(record: Mapping | None, *, audience: str = AUDIENCE_CLINICIAN) -> 
     return tile
 
 
-def blank_tile(source_app: str) -> dict:
-    return _blank_tile(source_app)
+def blank_tile(source_app: str, *, audience: str = AUDIENCE_CLINICIAN) -> dict:
+    return _blank_tile(source_app, audience=audience)
 
 
 def iso_timestamp(value: Any) -> str | None:

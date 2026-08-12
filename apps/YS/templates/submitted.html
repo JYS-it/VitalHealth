@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css">
+
+  <script defer src="/vh-assets/vita.js"></script>
+</head>
+
+<body data-vitalhealth-section="emc">
+  <header class="site-header clinical-header">
+    <div class="container header-wrap">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+            <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+          </a>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="container nav-wrap">
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a href="/triage/">Clinical Triage</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a class="active" href="/emc/submit">EMC Workflow</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section class="workflow-shell workflow-shell--emc">
+      <article class="card panel-card workflow-card">
+        <div class="output-header">
+          <h2>Submitted</h2>
+        </div>
+        <div class="box">
+          <p>
+            Your request has been submitted and is awaiting clinician review. You'll see the outcome on your
+            dashboard once a clinician has reviewed it — no diagnosis, score, or draft text is shown until then.
+          </p>
+          <p><a class="btn-outline" href="/triage/">Back to your dashboard</a></p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
+    </div>
+  </footer>
+</body>
+</html>

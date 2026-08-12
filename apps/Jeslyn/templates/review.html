@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="workflow-shell">
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h1>Review stroke risk assessment</h1>
+            <p>Status: <span class="status-chip">{{ record.status }}</span></p>
+        </div>
+
+        {% if message %}
+        <div class="alert alert-error">{{ message }}</div>
+        {% endif %}
+
+        <dl class="profile-grid review-grid">
+            <div><dt>Age</dt><dd>{{ patient_data.Age }}</dd></div>
+            <div><dt>Gender</dt><dd>{{ patient_data.Gender }}</dd></div>
+            <div><dt>BMI</dt><dd>{{ patient_data.BMI }}</dd></div>
+            <div><dt>Systolic blood pressure</dt><dd>{{ patient_data.Blood_Pressure_Systolic }}</dd></div>
+            <div><dt>Diastolic blood pressure</dt><dd>{{ patient_data.Blood_Pressure_Diastolic }}</dd></div>
+            <div><dt>Cholesterol</dt><dd>{{ patient_data.Cholesterol }}</dd></div>
+            <div><dt>Glucose level</dt><dd>{{ patient_data.Glucose_Level }}</dd></div>
+            <div><dt>Smoking</dt><dd>{{ "Yes" if patient_data.Smoking == 1 else "No" }}</dd></div>
+            <div><dt>Alcohol intake</dt><dd>{{ "Yes" if patient_data.Alcohol_Intake == 1 else "No" }}</dd></div>
+            <div><dt>Physical activity</dt><dd>{{ "Yes" if patient_data.Physical_Activity == 1 else "No" }}</dd></div>
+            <div><dt>Family history</dt><dd>{{ "Yes" if patient_data.Family_History == 1 else "No" }}</dd></div>
+            <div><dt>Heart disease</dt><dd>{{ "Yes" if patient_data.Heart_Disease == 1 else "No" }}</dd></div>
+            <div><dt>Diabetes</dt><dd>{{ "Yes" if patient_data.Diabetes == 1 else "No" }}</dd></div>
+        </dl>
+    </article>
+
+    {% if record.status in ('APPROVED', 'REJECTED') %}
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>{{ 'Approved result' if record.status == 'APPROVED' else 'Rejected' }}</h2>
+        </div>
+        {% if record.status == 'APPROVED' %}
+        <div class="metric-list">
+            <p><span class="metric-label">Risk category</span><span class="metric-value">{{ prediction.risk_category }}</span></p>
+            <p><span class="metric-label">Risk probability</span><span class="metric-value">{{ prediction.risk_probability_percent }}%</span></p>
+        </div>
+        <div class="care-plan-text">{{ care_plan_text }}</div>
+        {% else %}
+        <p class="review-note">This submission was rejected and will not be shown to the patient as a result.</p>
+        {% endif %}
+    </article>
+    {% else %}
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h2>Model draft — editable</h2>
+            <p>Review and adjust before releasing this to the patient.</p>
+        </div>
+
+        <form method="post" action="{{ purl('review_submit', record_id=record.id) }}" class="form-grid">
+            <label>Risk category
+                <select name="risk_category">
+                    <option value="Low risk" {% if prediction.risk_category == 'Low risk' %}selected{% endif %}>Low risk</option>
+                    <option value="High risk" {% if prediction.risk_category == 'High risk' %}selected{% endif %}>High risk</option>
+                </select>
+            </label>
+
+            <label>Risk probability (%)
+                <input type="number" name="risk_probability_percent" min="0" max="100" step="0.01" value="{{ prediction.risk_probability_percent }}">
+            </label>
+
+            <label class="wide-field">Care plan text
+                <textarea name="care_plan_text" rows="10">{{ care_plan_text }}</textarea>
+            </label>
+
+            <p class="review-note">7-day calendar (read-only; not editable here)</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th><th>Day</th><th>Main Focus</th>
+                            <th>Morning Action</th><th>Afternoon Action</th><th>Evening Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in care_calendar %}
+                        <tr>
+                            <td>{{ row['Date'] }}</td>
+                            <td>{{ row['Day'] }}</td>
+                            <td>{{ row['Main Focus'] }}</td>
+                            <td>{{ row['Morning Action'] }}</td>
+                            <td>{{ row['Afternoon Action'] }}</td>
+                            <td>{{ row['Evening Action'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" name="action" value="save" class="btn">Save changes</button>
+                <button type="submit" name="action" value="approve" class="btn btn-primary">Approve</button>
+                <button type="submit" name="action" value="reject" class="btn btn-danger">Reject</button>
+            </div>
+        </form>
+    </article>
+    {% endif %}
+</section>
+{% endblock %}
