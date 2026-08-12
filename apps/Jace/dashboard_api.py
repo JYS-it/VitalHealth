@@ -245,16 +245,28 @@ def record_detail(record_id: str, request: Request):
 
     audience = summaries.AUDIENCE_CLINICIAN if actor.is_clinician else summaries.AUDIENCE_PATIENT
 
-    return {
-        "record": _record_view(record, audience=audience),
-        "audit": [
+    audit_view = [
+        {
+            "event_type": event["event_type"],
+            "actor_reference": event["actor_reference"],
+            "occurred_at": summaries.iso_timestamp(event["occurred_at"]),
+        }
+        for event in audit
+    ]
+    if not actor.is_clinician:
+        # A patient's history may show that a record changed, but never the
+        # clinician's email or other staff identity metadata.
+        audit_view = [
             {
                 "event_type": event["event_type"],
-                "actor_reference": event["actor_reference"],
-                "occurred_at": summaries.iso_timestamp(event["occurred_at"]),
+                "occurred_at": event["occurred_at"],
             }
-            for event in audit
-        ],
+            for event in audit_view
+        ]
+
+    return {
+        "record": _record_view(record, audience=audience),
+        "audit": audit_view,
     }
 
 

@@ -23,6 +23,12 @@ and opens **http://127.0.0.1:8080/** in your browser automatically. First run
 takes a few minutes (installing dependencies); later runs start in seconds
 since the venvs already exist.
 
+When `DATABASE_URL` is configured, the launcher also creates the mock-patient
+roster and Dr Alex Lee demo clinician in the shared database before starting
+the web services. Missing demo model snapshots are generated on that first
+run only; later launches synchronise the same records without duplicating
+unchanged audit data.
+
 Want the AI-drafted-text features (care plans, EMC drafts, note extraction),
 not just the ML predictions? Add API keys before running — see
 [Environment variables](#environment-variables) below; the predictions work
@@ -124,9 +130,10 @@ renders a different dashboard for each (see
 [Dashboards](#dashboards)).
 
 - A **patient** account is linked to a row in `patients`, created at
-  registration. Everything they run is filed under that identity — the EMC
-  form's patient fields are overridden server-side from the session, so a
-  patient cannot attach a record to anyone else.
+  registration. The current patient surface is their read-only portal
+  dashboard. Clinical triage, stroke assessment, EMC drafting, review, and
+  issuance are rejected server-side until dedicated patient submission routes
+  are introduced.
 - A **clinician** account can read every patient's records. Registration
   therefore requires `CLINICIAN_ACCESS_CODE`, and **fails closed**: if that
   variable is unset, the Clinician option is rejected outright.
@@ -150,18 +157,19 @@ That is also why all four processes must share one `SESSION_SECRET`;
 `apps/Jace/dashboard_api.py`. Authorisation is enforced there, server-side;
 the SPA's role branch only picks a layout.
 
-- **Patient** — one tile per module showing progress (*n* of 3), and once a
-  module has been run, the model's headline result plus the fields that were
-  entered, with a chronological activity list underneath.
+- **Patient** — one tile per module showing progress (*n* of 3), safe workflow
+  status, their submitted fields, and a chronological activity list. Triage
+  priority, stroke probabilities, model drivers, and clinician identities are
+  never returned to this view.
 - **Clinician** — every patient in one table with each module's latest result
   and last activity, a search box, a drill-down into one patient's full
   history, and an "Unassigned records" bucket for assessments run with no
   patient selected.
 
 Tiles are formatted server-side in `apps/Jace/dashboard_summaries.py`, which
-also enforces one redaction rule: a patient-facing EMC tile never carries
-model scores, differential diagnoses, or review internals, per policy
-`EMC-005` in `apps/YS/app.py`.
+enforces patient redaction for all three modules. The gateway is the public
+role boundary; each clinical backend also rejects requests that carry a
+patient session cookie.
 
 ## Manual / advanced (run one app at a time)
 

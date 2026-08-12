@@ -6,7 +6,7 @@ import os
 import re
 from threading import Lock
 
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, abort, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 import joblib
 import pandas as pd
@@ -25,6 +25,21 @@ SHARED_STORE = get_store()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-this-in-production")
+
+
+@app.before_request
+def require_clinician_role():
+    """Reject patient sessions from clinician-only stroke workflows.
+
+    The gateway always requires authentication. Keeping direct launches
+    usable without a cookie preserves the documented local development path.
+    """
+    if request.cookies.get(identity.COOKIE_NAME):
+        actor = identity.actor_from_cookies(request.cookies)
+        if actor is None:
+            abort(401)
+        if not actor.is_clinician:
+            abort(403)
 
 
 def _prefixed_url_for(endpoint: str, **values) -> str:

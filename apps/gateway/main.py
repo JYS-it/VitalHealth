@@ -531,6 +531,27 @@ def _current_actor(request: Request) -> identity.Actor | None:
     return identity.actor_from_cookies(request.cookies)
 
 
+def _forbidden_for_role(request: Request, message: str) -> Response:
+    """Deny a role before the request reaches an upstream clinical app."""
+    if "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url="/triage/", status_code=303)
+    return JSONResponse({"detail": message}, status_code=403)
+
+
+def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
+    """Patient accounts currently have only the portal dashboard surface.
+
+    Triage decision support, stroke assessment, and EMC drafting/approval stay
+    clinician-only until dedicated patient submission routes are introduced.
+    Jace's static assets are allowed so the portal can load, while only its
+    explicit patient-safe dashboard API can be called.
+    """
+    normalized = path.strip("/")
+    if prefix != "triage":
+        return False
+    return not normalized.startswith("api/") or normalized.startswith("api/dashboard/")
+
+
 def _name_from_email(email: str) -> str:
     """Fallback display name for accounts registered before names were asked for."""
     local_part = str(email or "").split("@", 1)[0]
@@ -1070,9 +1091,9 @@ async def proxy(prefix: str, path: str, request: Request):
     if prefix == "stroke" and path.strip("/") == "":
         return RedirectResponse(url="/stroke/prediction", status_code=307)
 
-    user = _authenticated_user(request)
+    actor = _current_actor(request)
 
-    if user is None:
+    if actor is None:
         if "text/html" in request.headers.get("accept", ""):
             next_path_value = f"/{prefix}/{path}"
             if request.query_params:
@@ -1082,6 +1103,12 @@ async def proxy(prefix: str, path: str, request: Request):
             return RedirectResponse(url=f"/login?next={next_path}", status_code=303)
 
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    if actor.is_patient and not _patient_may_use_proxy_path(prefix, path):
+        return _forbidden_for_role(
+            request,
+            "This workflow is available to clinician accounts only.",
+        )
 
     url = f"{upstream}/{path}"
 
@@ -1097,9 +1124,9 @@ async def proxy(prefix: str, path: str, request: Request):
     # The backends bind 127.0.0.1, so anything running locally can forge these;
     # they authenticate off the signed vh_session cookie (forwarded above with
     # the rest of the headers) instead.
-    forward_headers["X-Vitalhealth-User"] = user["uid"]
-    forward_headers["X-Vitalhealth-User-Email"] = user["email"]
-    forward_headers["X-Vitalhealth-Role"] = str(user.get("role") or "")
+    forward_headers["X-Vitalhealth-User"] = actor.user_id
+    forward_headers["X-Vitalhealth-User-Email"] = actor.email
+    forward_headers["X-Vitalhealth-Role"] = actor.role
 
     body = await request.body()
 

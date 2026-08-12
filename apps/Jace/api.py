@@ -65,6 +65,27 @@ _BY_ID = {p["id"]: p for p in _PATIENTS}
 app = FastAPI(title="CTRSE — triage acuity")
 
 
+@app.middleware("http")
+async def require_clinician_for_clinical_api(request: Request, call_next):
+    """Reject patient sessions from clinical APIs as defence in depth.
+
+    The gateway is the public authentication boundary.  An unauthenticated
+    direct launch remains available for the documented standalone development
+    workflow, but a request that carries a VitalHealth session must be a valid
+    clinician session before it can use a clinical API.
+    """
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/dashboard/"):
+        token = request.cookies.get(identity.COOKIE_NAME)
+        if token:
+            actor = identity.actor_from_cookies(request.cookies)
+            if actor is None:
+                return JSONResponse({"detail": "Authentication required"}, status_code=401)
+            if not actor.is_clinician:
+                return JSONResponse({"detail": "Clinician access required"}, status_code=403)
+    return await call_next(request)
+
+
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
