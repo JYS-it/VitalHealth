@@ -67,6 +67,12 @@ APPS = [
 ]
 
 GATEWAY_URL = "http://127.0.0.1:8080/"
+DEMO_OUTPUT_DIR = ROOT / "demo_data" / "output"
+DEMO_COMPUTE_JOBS = [
+    ("triage", ROOT / "apps" / "Jace", ROOT / "demo_data" / "compute_triage.py"),
+    ("stroke", ROOT / "apps" / "Jeslyn", ROOT / "demo_data" / "compute_stroke.py"),
+    ("emc", ROOT / "apps" / "YS", ROOT / "demo_data" / "compute_emc.py"),
+]
 
 
 def venv_python(app_dir: Path) -> Path:
@@ -221,6 +227,46 @@ def ensure_shared_storage(app: dict, py: Path):
     )
 
 
+def seed_demo_database():
+    """Populate the shared database with the mock patients and demo clinician.
+
+    The output snapshots are generated only when absent, so normal launches do
+    not repeatedly load models. ``seed_db.py`` is idempotent for unchanged
+    records, preventing duplicate demo audit entries on every startup.
+    """
+    jace_env = load_env_file(ROOT / "apps" / "Jace" / ".env")
+    gateway_env = load_env_file(ROOT / "apps" / "gateway" / ".env")
+    env = os.environ.copy()
+    env.update(jace_env)
+    # A gateway .env often exists solely for optional settings. Do not let an
+    # empty placeholder there erase Jace's shared DATABASE_URL.
+    env.update({key: value for key, value in gateway_env.items() if value.strip()})
+
+    if not env.get("DATABASE_URL", "").strip():
+        print("[demo] DATABASE_URL is not configured; skipping mock patient seeding.")
+        return
+
+    for name, app_dir, script in DEMO_COMPUTE_JOBS:
+        output = DEMO_OUTPUT_DIR / f"{name}.json"
+        if output.exists():
+            continue
+        print(f"[demo] generating {name} model results (first run only)...")
+        subprocess.run(
+            [str(venv_python(app_dir)), str(script)],
+            cwd=ROOT,
+            env=env,
+            check=True,
+        )
+
+    print("[demo] synchronising mock patients and clinician to PostgreSQL...")
+    subprocess.run(
+        [str(venv_python(ROOT / "apps" / "gateway")), str(ROOT / "demo_data" / "seed_db.py")],
+        cwd=ROOT,
+        env=env,
+        check=True,
+    )
+
+
 def stream_output(name: str, proc: subprocess.Popen):
     for line in iter(proc.stdout.readline, ""):
         if not line:
@@ -319,6 +365,7 @@ def main():
     try:
         for app in APPS:
             ensure_app_ready(app)
+        seed_demo_database()
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Setup failed: {exc}", file=sys.stderr)
         return 1

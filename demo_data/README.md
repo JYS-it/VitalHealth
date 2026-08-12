@@ -24,6 +24,13 @@ the database with any venv that has `vitalhealth_storage` installed.
 
 ## Run order
 
+For normal local development, simply run `py -3.12 run_all.py` from the
+repository root. Once the four environments are ready, the launcher creates
+missing output snapshots and runs `seed_db.py` automatically whenever
+`DATABASE_URL` is configured. The commands below remain useful when you want
+to regenerate model snapshots deliberately after changing the demo roster or
+a model.
+
 From the repo root, in order:
 
 ```powershell

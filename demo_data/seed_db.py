@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 
 from characters import CHARACTERS, DEMO_CLINICIAN, DEMO_PASSWORD, demo_email  # noqa: E402
 from vitalhealth_storage import get_store  # noqa: E402
-from vitalhealth_storage.store import records as records_table  # noqa: E402
+from vitalhealth_storage.store import records as records_table, users as users_table  # noqa: E402
 
 
 def hash_password(password: str) -> str:
@@ -50,12 +50,26 @@ def hash_password(password: str) -> str:
 
 
 def ensure_account(store, *, email, display_name, role, patient_id=None) -> str:
-    """Create the login if absent, otherwise reuse it and make sure it still
-    points at the right patient. Re-running the seed must not duplicate users."""
+    """Create or reconcile one documented demo login.
+
+    Demo credentials are published in CHEAT_SHEET.md, so an account left over
+    from an earlier schema/password/role must be repaired on re-seed instead
+    of silently making the documented login unusable. This function is used
+    only for the fixed demo roster, never for real user accounts.
+    """
     existing = store.get_user_by_email(email)
     if existing:
-        if patient_id and existing["patient_id"] != patient_id:
-            store.link_user_patient(existing["id"], patient_id)
+        with store.engine.begin() as connection:
+            connection.execute(
+                users_table.update()
+                .where(users_table.c.id == existing["id"])
+                .values(
+                    password_hash=hash_password(DEMO_PASSWORD),
+                    role=role,
+                    display_name=display_name,
+                    patient_id=patient_id,
+                )
+            )
         return existing["id"]
 
     return store.create_user(
@@ -123,6 +137,10 @@ def main():
     store = get_store()
     if not store.enabled:
         raise SystemExit("DATABASE_URL is not configured -- set it before seeding.")
+    # run_all.py seeds before the gateway process starts. Initialise here so a
+    # brand-new PostgreSQL database has its tables and safeguards before the
+    # first demo user or record is queried.
+    store.initialize()
 
     results_by_app = {app: load_results(app) for app in APP_CONFIG}
 
@@ -159,6 +177,16 @@ def main():
             status = config["status"](row["output_payload"])
             existing_id = find_existing_record(store, patient_id, source_app, config["record_type"])
             if existing_id:
+                existing_record = store.get_record(existing_id) or {}
+                unchanged = (
+                    existing_record.get("status") == status
+                    and existing_record.get("input_payload") == row["input_payload"]
+                    and existing_record.get("output_payload") == row["output_payload"]
+                    and existing_record.get("owner_user_id") == owner_user_id
+                )
+                if unchanged:
+                    print(f"  [{source_app}] already seeded record {existing_id}")
+                    continue
                 store.update_record(
                     existing_id,
                     status=status,

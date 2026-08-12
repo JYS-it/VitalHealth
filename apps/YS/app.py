@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import joblib
 import numpy as np
 import pandas as pd
-from flask import Flask, render_template, request
+from flask import Flask, abort, render_template, request
 from markupsafe import Markup, escape
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -41,6 +41,21 @@ DERIVED_FEATURES = {"Age", "Gender", "Duration", "Medical_History"}
 
 app = Flask(__name__)
 WORKFLOWS = {}
+
+
+@app.before_request
+def require_clinician_role():
+    """Reject patient sessions from EMC review, approval, and issuance.
+
+    The gateway always requires authentication. Keeping direct launches
+    usable without a cookie preserves the documented local development path.
+    """
+    if request.cookies.get(identity.COOKIE_NAME):
+        actor = identity.actor_from_cookies(request.cookies)
+        if actor is None:
+            abort(401)
+        if not actor.is_clinician:
+            abort(403)
 
 
 def _prefixed_url_for(endpoint: str, **values) -> str:

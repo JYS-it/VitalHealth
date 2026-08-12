@@ -145,6 +145,12 @@ def _blank_tile(source_app: str) -> dict:
 
 
 def _summarize_triage(output: Mapping, status: str, audience: str) -> tuple[str, str, list]:
+    # Triage priority, confidence, and red-flag state are clinician decision
+    # support. A patient needs a clear workflow state, not an inferred acuity
+    # label that could be misread as medical advice.
+    if audience == AUDIENCE_PATIENT:
+        return "Submitted for clinician review", TONE_NEUTRAL, []
+
     # A refused prediction is checked two ways on purpose: records written
     # before the status bug in api.py was fixed carry status="ASSESSED" even
     # though the model declined to run.
@@ -181,6 +187,16 @@ def _summarize_stroke(output: Mapping, audience: str) -> tuple[str, str, list]:
     prediction = output.get("prediction")
     if not isinstance(prediction, Mapping):
         return "Details unavailable", TONE_NEUTRAL, []
+
+    # Risk category and probability remain clinician-facing until a dedicated
+    # clinician-approved patient result workflow exists.
+    if audience == AUDIENCE_PATIENT:
+        facts: list[tuple[str, str]] = []
+        if output.get("care_plan"):
+            facts.append(("Care plan", "Available"))
+        if output.get("care_calendar"):
+            facts.append(("7-day calendar", "Available"))
+        return "Assessment received", TONE_NEUTRAL, facts
 
     category = _text(prediction.get("risk_category")) or "Assessed"
     percent = prediction.get("risk_probability_percent")
