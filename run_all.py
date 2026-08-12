@@ -234,10 +234,12 @@ def seed_demo_database():
     not repeatedly load models. ``seed_db.py`` is idempotent for unchanged
     records, preventing duplicate demo audit entries on every startup.
     """
+    root_env = load_env_file(ROOT / ".env")
     jace_env = load_env_file(ROOT / "apps" / "Jace" / ".env")
     gateway_env = load_env_file(ROOT / "apps" / "gateway" / ".env")
     env = os.environ.copy()
-    env.update(jace_env)
+    env.update({key: value for key, value in root_env.items() if value.strip()})
+    env.update({key: value for key, value in jace_env.items() if value.strip()})
     # A gateway .env often exists solely for optional settings. Do not let an
     # empty placeholder there erase Jace's shared DATABASE_URL.
     env.update({key: value for key, value in gateway_env.items() if value.strip()})
@@ -283,7 +285,19 @@ def start_app(app: dict) -> subprocess.Popen:
         cmd = [str(py), *args]
 
     env = os.environ.copy()
-    env.update(load_env_file(app["dir"] / ".env"))
+    # Repository-root .env contains shared platform configuration (notably
+    # DATABASE_URL). App-local files override that baseline for settings that
+    # genuinely belong to one service, such as provider API keys.
+    env.update({
+        key: value
+        for key, value in load_env_file(ROOT / ".env").items()
+        if value.strip()
+    })
+    env.update({
+        key: value
+        for key, value in load_env_file(app["dir"] / ".env").items()
+        if value.strip()
+    })
 
     if app["name"] == "gateway":
         # The gateway owns login (shared DATABASE_URL) and Vita (Gemini), but
