@@ -769,3 +769,146 @@ select.finput{font-family:var(--font-mono);}
   border-bottom-color: #dc2626;
   background: transparent;
 }
+/* ============================================================================
+   PORTAL DASHBOARD (dashboard.js)
+   Patient progress tiles and the clinician patient table. Tone classes
+   (--critical/--warning/--ok/--neutral) are chosen server-side in
+   dashboard_summaries.py; nothing here decides what a result means.
+   ========================================================================= */
+
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+.vh-banner{
+  padding:var(--s3) var(--s4); border-radius:var(--r);
+  font-size:var(--fs-sm); margin-bottom:var(--s4);
+}
+.vh-banner--error{
+  background:var(--p1-tint); border:1px solid var(--p1); color:#7f1d1d;
+}
+.vh-loading{ color:var(--text-muted); font-size:var(--fs-sm); }
+
+/* ---- progress ---- */
+.vh-progress{ margin-top:var(--s4); }
+.vh-progress__track{
+  height:8px; border-radius:var(--r-pill); background:var(--surface-2); overflow:hidden;
+}
+.vh-progress__fill{
+  height:100%; background:var(--accent); border-radius:var(--r-pill);
+  transition:width .3s ease;
+}
+.vh-progress__label{
+  display:block; margin-top:var(--s2);
+  font-size:var(--fs-sm); color:var(--text-muted);
+}
+
+/* ---- module tile ---- */
+.vh-tile{
+  display:flex; flex-direction:column; gap:var(--s3);
+  border-top:3px solid var(--border-strong);
+}
+.vh-tile--critical{ border-top-color:var(--p1); }
+.vh-tile--warning { border-top-color:var(--p2); }
+.vh-tile--ok      { border-top-color:var(--p3); }
+.vh-tile--neutral { border-top-color:var(--border-strong); }
+
+.vh-tile__head{ display:flex; justify-content:space-between; align-items:baseline; gap:var(--s2); }
+.vh-tile__head h3{ margin:0; font-size:var(--fs-lg); line-height:var(--lh-tight); }
+.vh-tile__state{
+  font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.05em;
+  padding:2px var(--s2); border-radius:var(--r-pill); white-space:nowrap;
+}
+.vh-tile__state.is-done{ background:var(--pass-tint); color:var(--pass); }
+.vh-tile__state.is-todo{ background:var(--surface-2); color:var(--text-faint); }
+
+.vh-tile__headline{ margin:0; font-size:var(--fs-xl); line-height:var(--lh-tight); font-weight:600; }
+.vh-tile__blurb{ margin:0; color:var(--text-muted); font-size:var(--fs-sm); }
+.vh-tile__foot{
+  margin-top:auto; padding-top:var(--s3); border-top:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center; gap:var(--s2);
+}
+.vh-tile__time{ font-size:var(--fs-xs); color:var(--text-faint); }
+.vh-tile__foot .bubble-cta{ border:0; cursor:pointer; font:inherit; }
+
+/* ---- fact lists ---- */
+.vh-facts{ margin:0; display:grid; gap:var(--s1); }
+.vh-fact{ display:flex; justify-content:space-between; gap:var(--s3); font-size:var(--fs-sm); }
+.vh-fact dt{ color:var(--text-muted); }
+.vh-fact dd{ margin:0; text-align:right; font-weight:500; }
+.vh-inputs summary{
+  cursor:pointer; font-size:var(--fs-sm); color:var(--accent); padding:var(--s1) 0;
+}
+.vh-inputs[open] summary{ margin-bottom:var(--s2); }
+
+/* ---- activity list ---- */
+.vh-history{ margin-top:var(--s5); }
+.vh-history__list{ list-style:none; margin:0; padding:0; }
+.vh-history__item{
+  display:grid; grid-template-columns:auto 10rem 1fr auto;
+  align-items:center; gap:var(--s3);
+  padding:var(--s2) 0; border-bottom:1px solid var(--border); font-size:var(--fs-sm);
+}
+.vh-history__item:last-child{ border-bottom:0; }
+.vh-history__module{ color:var(--text-muted); }
+.vh-history__headline{ font-weight:500; }
+.vh-history__time{ color:var(--text-faint); font-size:var(--fs-xs); white-space:nowrap; }
+.vh-note{ margin:0 0 var(--s3); color:var(--text-muted); font-size:var(--fs-sm); }
+
+.vh-dot{ width:9px; height:9px; border-radius:50%; background:var(--border-strong); }
+.vh-dot--critical{ background:var(--p1); }
+.vh-dot--warning { background:var(--p2); }
+.vh-dot--ok      { background:var(--p3); }
+
+/* ---- clinician table ---- */
+.vh-context{
+  display:flex; justify-content:space-between; align-items:center; gap:var(--s3);
+  flex-wrap:wrap; margin-top:var(--s4);
+  padding:var(--s3) var(--s4); border-radius:var(--r);
+  background:var(--accent-soft); font-size:var(--fs-sm);
+}
+.vh-search{ display:flex; gap:var(--s2); margin-top:var(--s4); }
+.vh-search input{
+  flex:1; padding:var(--s2) var(--s3);
+  border:1px solid var(--border-strong); border-radius:var(--r-sm);
+  font:inherit; font-size:var(--fs-sm);
+}
+
+.vh-table-wrap{ overflow-x:auto; }
+.vh-table{ width:100%; border-collapse:collapse; font-size:var(--fs-sm); }
+.vh-table th, .vh-table td{
+  text-align:left; padding:var(--s3) var(--s2);
+  border-bottom:1px solid var(--border); vertical-align:middle;
+}
+.vh-table thead th{
+  font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.05em;
+  color:var(--text-muted); font-weight:600;
+}
+.vh-table tbody tr.is-active{ background:var(--accent-soft); }
+.vh-nowrap{ white-space:nowrap; color:var(--text-muted); }
+.vh-empty{ color:var(--text-faint); text-align:center; padding:var(--s5) 0; }
+
+.vh-linkish{
+  background:none; border:0; padding:0; font:inherit; text-align:left;
+  color:var(--accent); cursor:pointer; display:flex; flex-direction:column;
+}
+.vh-linkish:hover{ text-decoration:underline; }
+.vh-linkish small{ color:var(--text-faint); font-size:var(--fs-xs); font-weight:400; }
+
+.vh-pill{
+  display:inline-block; padding:2px var(--s2); border-radius:var(--r-pill);
+  font-size:var(--fs-xs); background:var(--surface-2); color:var(--text);
+}
+.vh-pill--critical{ background:var(--p1-tint); color:#7f1d1d; }
+.vh-pill--warning { background:var(--p2-tint); color:#7c4a03; }
+.vh-pill--ok      { background:var(--p3-tint); color:#1a5b28; }
+.vh-pill--neutral { background:var(--surface-2); color:var(--text-muted); }
+.vh-pill--empty   { background:transparent; color:var(--text-faint); }
+
+.vh-detail{ margin-top:var(--s5); }
+
+@media (max-width:760px){
+  .vh-history__item{ grid-template-columns:auto 1fr; row-gap:var(--s1); }
+  .vh-history__time{ grid-column:2; }
+}

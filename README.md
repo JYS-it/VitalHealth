@@ -103,7 +103,7 @@ session works for `/triage/`, `/stroke/`, and `/emc/` alike, since they're
 all only reachable through the gateway's one origin
 (`http://127.0.0.1:8080/`).
 
-- `/register` — self-service signup (email + password, no admin approval).
+- `/register` — self-service signup (name, email, password, and a role).
 - `/login` / `/logout` — session start/end.
 - Sessions are a signed, expiring cookie (`itsdangerous`, 12-hour default),
   verified statelessly on every proxied request — the database is only
@@ -111,16 +111,57 @@ all only reachable through the gateway's one origin
 - Passwords are hashed with `bcrypt`.
 - Unauthenticated browser requests to a proxied route redirect to `/login`;
   unauthenticated API-style requests get a `401` instead.
-- The gateway forwards the logged-in user's identity to backends via
-  `X-Vitalhealth-User` / `X-Vitalhealth-User-Email` headers. This is
-  optional for the backends to read — none of them currently require it.
-- There's a single role: authentication is "logged in or not," with no
-  per-user permissions.
 - **Caveat:** this only protects requests that go through the gateway.
   Running a backend standalone (see
   [Manual / advanced](#manual--advanced-run-one-app-at-a-time) below) is not
   authenticated — the same class of limitation as `X-Forwarded-Prefix`
   already being a no-op when a backend is run outside the gateway.
+
+### Roles
+
+There are two: **patient** and **clinician**. Both land on `/triage/`, which
+renders a different dashboard for each (see
+[Dashboards](#dashboards)).
+
+- A **patient** account is linked to a row in `patients`, created at
+  registration. Everything they run is filed under that identity — the EMC
+  form's patient fields are overridden server-side from the session, so a
+  patient cannot attach a record to anyone else.
+- A **clinician** account can read every patient's records. Registration
+  therefore requires `CLINICIAN_ACCESS_CODE`, and **fails closed**: if that
+  variable is unset, the Clinician option is rejected outright.
+- Triage and stroke have no patient field on their forms, so a clinician
+  picks a patient with **Work on** in the dashboard. That choice is a second
+  signed cookie (`vh_subject`) which all three backends read, and it is
+  cleared on logout.
+
+Backends authenticate off the **signed session cookie**, which the proxy
+forwards along with every other header. The `X-Vitalhealth-User` /
+`-User-Email` / `-Role` headers are still sent, but only for logging — the
+backends bind `127.0.0.1`, so anything running locally could forge a header,
+whereas the cookie's signature cannot be forged without `SESSION_SECRET`.
+That is also why all four processes must share one `SESSION_SECRET`;
+`run_all.py` copies the gateway's value into the three backends for you.
+
+### Dashboards
+
+`/triage/` is the portal home for both roles, served by the Jace SPA
+(`apps/Jace/static/dashboard.js`) and backed by read-only endpoints in
+`apps/Jace/dashboard_api.py`. Authorisation is enforced there, server-side;
+the SPA's role branch only picks a layout.
+
+- **Patient** — one tile per module showing progress (*n* of 3), and once a
+  module has been run, the model's headline result plus the fields that were
+  entered, with a chronological activity list underneath.
+- **Clinician** — every patient in one table with each module's latest result
+  and last activity, a search box, a drill-down into one patient's full
+  history, and an "Unassigned records" bucket for assessments run with no
+  patient selected.
+
+Tiles are formatted server-side in `apps/Jace/dashboard_summaries.py`, which
+also enforces one redaction rule: a patient-facing EMC tile never carries
+model scores, differential diagnoses, or review internals, per policy
+`EMC-005` in `apps/YS/app.py`.
 
 ## Manual / advanced (run one app at a time)
 
@@ -182,25 +223,37 @@ proxied route 404s while the landing page at `/` still works.
 
 VitalHealth can write durable, cross-module records to one PostgreSQL database
 without coupling the apps' model code. The shared schema contains `patients`,
-`clinical_records`, and append-only `audit_events` tables. It stores:
+`clinical_records`, `users`, and append-only `audit_events` tables. It stores:
 
 - EMC workflow snapshots, approval/rejection events, and redacted audit data;
 - stroke risk assessments and generated care plans; and
 - triage assessments and clinician extraction corrections.
 
+Every record carries two separate identities, because they answer different
+questions and often point at different people:
+
+- `patient_id` — who the record is **about** (the subject);
+- `owner_user_id` — which account **produced** it (the actor).
+
+For a patient running their own assessment these coincide. For a clinician
+assessing someone else they do not, and the dashboards depend on the
+distinction.
+
 The three clinical apps remain usable without a database: `DATABASE_URL` is
 optional for `apps/Jace/.env`, `apps/Jeslyn/.env`, and `apps/YS/.env`, and
 predictions still work without it (persistence writes just no-op). Use the
-same URL in all three files.
+same URL in all three files. Note that Jace additionally needs it to serve
+the dashboards; `run_all.py` copies the gateway's value into any backend
+that does not set its own.
 
 The gateway is different: `DATABASE_URL` is a **hard requirement** for it
 (`apps/gateway/.env`), because it uses the shared database for exactly one
 thing — the `users` table backing login (see
 [Authentication](#authentication) below). It still has no clinical-record
-business logic and never touches `patients`, `clinical_records`, or
-`audit_events`. Without `DATABASE_URL` set, nobody can log in and every
-proxied route (`/triage/*`, `/stroke/*`, `/emc/*`) becomes permanently
-inaccessible, even though the landing page at `/` still renders.
+business logic and never touches `clinical_records` or `audit_events`.
+Without `DATABASE_URL` set, nobody can log in and every proxied route
+(`/triage/*`, `/stroke/*`, `/emc/*`) becomes permanently inaccessible, even
+though the landing page at `/` still renders.
 
 For a local PostgreSQL installation, add the same URL to the three existing
 app `.env` files. Once `run_all.py` has built the app environments, initialise
@@ -238,6 +291,7 @@ for the one exception: Jace's own code doesn't load `.env` itself).
 | `OPENROUTER_MODEL` | YS | Optional; defaults to `openai/gpt-4o-mini` |
 | `SECRET_KEY` | Jeslyn | Flask session secret; defaults to a placeholder in development |
 | `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL. Optional for the three clinical apps (durable clinical records/audit events); required for the gateway (the `users` table backing login) |
-| `SESSION_SECRET` | gateway | Signs the login session cookie; defaults to a placeholder in development — set a long random value in production |
+| `SESSION_SECRET` | gateway, Jace, Jeslyn, YS | Signs the login session cookie. **All four must share one value** — the gateway signs, the backends verify to decide whose record a result is. `run_all.py` copies the gateway's value into the backends; set it yourself if you start them by hand. Defaults to a placeholder in development — set a long random value in production |
+| `CLINICIAN_ACCESS_CODE` | gateway | Required to register a clinician account. Unset means clinician registration is refused outright (clinicians can read every patient's records) |
 | `SESSION_COOKIE_SECURE` | gateway | Optional; set to `true` once the gateway is served over HTTPS |
 | `TRIAGE_UPSTREAM` / `STROKE_UPSTREAM` / `EMC_UPSTREAM` | gateway | Optional; override where each prefix proxies to (default `127.0.0.1:8000` / `:5000` / `:5001`) |

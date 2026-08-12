@@ -23,8 +23,9 @@ import html
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +50,7 @@ except Exception:
         pass
 
 import auth
+from vitalhealth_storage import identity
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -469,6 +471,45 @@ button:hover {
     border-top: 1px solid var(--vh-border);
     padding-top: 1rem;
 }
+.role-choice {
+    border: 1px solid var(--vh-border);
+    border-radius: 14px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 1.1rem 0 0.4rem;
+}
+.role-choice legend {
+    padding: 0 0.4rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--vh-muted);
+}
+.role-option {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    margin: 0.55rem 0 0;
+    font-weight: 400;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.role-option input {
+    width: auto;
+    margin: 0.25rem 0 0;
+    flex: none;
+}
+.role-option span {
+    font-size: 0.9rem;
+    color: var(--vh-muted);
+}
+.role-option strong {
+    color: inherit;
+    font-size: 0.95rem;
+}
+.hint--inline {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+}
 @media (max-width: 760px) {
     .workflow-links {
         grid-template-columns: 1fr;
@@ -484,6 +525,16 @@ button:hover {
 
 def _authenticated_user(request: Request) -> dict | None:
     return auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+
+
+def _current_actor(request: Request) -> identity.Actor | None:
+    return identity.actor_from_cookies(request.cookies)
+
+
+def _name_from_email(email: str) -> str:
+    """Fallback display name for accounts registered before names were asked for."""
+    local_part = str(email or "").split("@", 1)[0]
+    return local_part.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
 
 
 def _safe_next_path(next_path: str) -> str:
@@ -578,7 +629,7 @@ def _render_login(error: str | None, next_path: str, email: str) -> str:
   <main class="auth-card">
     <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-    <span class="auth-kicker">Secure staff access</span>
+    <span class="auth-kicker">Secure sign in</span>
     <h1>Welcome back</h1>
     <p class="sub">Sign in to continue to VitalHealth workflows.</p>
 
@@ -603,9 +654,17 @@ def _render_login(error: str | None, next_path: str, email: str) -> str:
 """
 
 
-def _render_register(error: str | None, email: str) -> str:
+def _render_register(
+    error: str | None,
+    email: str,
+    display_name: str = "",
+    role: str = identity.ROLE_PATIENT,
+) -> str:
     error_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
     email_value = html.escape(email)
+    name_value = html.escape(display_name)
+    clinician_selected = " checked" if role == identity.ROLE_CLINICIAN else ""
+    patient_selected = "" if role == identity.ROLE_CLINICIAN else " checked"
 
     return f"""<!doctype html>
 <html lang="en">
@@ -621,21 +680,42 @@ def _render_register(error: str | None, email: str) -> str:
   <main class="auth-card">
     <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-    <span class="auth-kicker">Create staff access</span>
+    <span class="auth-kicker">Patient and clinician access</span>
     <h1>Create account</h1>
-    <p class="sub">Register to access VitalHealth clinical workflow tools.</p>
+    <p class="sub">Register to access VitalHealth workflows.</p>
 
     {error_html}
 
     <form method="post" action="/register">
+      <label for="display_name">Full name</label>
+      <input type="text" id="display_name" name="display_name" value="{name_value}" required maxlength="120" autofocus>
+
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" value="{email_value}" required autofocus>
+      <input type="email" id="email" name="email" value="{email_value}" required>
 
       <label for="password">Password</label>
       <input type="password" id="password" name="password" required minlength="8">
 
       <label for="confirm">Confirm password</label>
       <input type="password" id="confirm" name="confirm" required minlength="8">
+
+      <fieldset class="role-choice">
+        <legend>This account is for</legend>
+
+        <label class="role-option">
+          <input type="radio" name="role" value="patient"{patient_selected}>
+          <span><strong>Patient</strong><br>See your own assessments and care guidance.</span>
+        </label>
+
+        <label class="role-option">
+          <input type="radio" name="role" value="clinician"{clinician_selected}>
+          <span><strong>Clinician</strong><br>Review every patient's records. Requires an access code.</span>
+        </label>
+      </fieldset>
+
+      <label for="clinician_code">Clinician access code</label>
+      <input type="password" id="clinician_code" name="clinician_code" autocomplete="off">
+      <p class="hint hint--inline">Leave blank when registering as a patient.</p>
 
       <button type="submit">Register</button>
     </form>
@@ -647,18 +727,48 @@ def _render_register(error: str | None, email: str) -> str:
 """
 
 
-def _set_session_cookie(response: Response, user_id: str, email: str) -> None:
-    token = auth.create_session_token(user_id, email)
+def _cookie_is_secure() -> bool:
+    return os.environ.get("SESSION_COOKIE_SECURE", "").lower() == "true"
+
+
+def _set_session_cookie(
+    response: Response,
+    *,
+    user_id: str,
+    email: str,
+    role: str,
+    patient_external_id: str | None = None,
+    display_name: str | None = None,
+) -> None:
+    token = auth.create_session_token(
+        user_id=user_id,
+        email=email,
+        role=role,
+        patient_external_id=patient_external_id,
+        display_name=display_name,
+    )
 
     response.set_cookie(
         auth.COOKIE_NAME,
         token,
         httponly=True,
         samesite="lax",
-        secure=os.environ.get("SESSION_COOKIE_SECURE", "").lower() == "true",
+        secure=_cookie_is_secure(),
         max_age=auth.SESSION_MAX_AGE_SECONDS,
         path="/",
     )
+
+
+def _patient_external_id_for(user: Any) -> str | None:
+    """The patients row a login speaks for, or None for clinicians."""
+    patient_id = user.get("patient_id") if hasattr(user, "get") else None
+    if not patient_id:
+        return None
+    try:
+        patient = SHARED_STORE.get_patient(patient_id)
+    except Exception:
+        return None
+    return patient["external_id"] if patient else None
 
 
 @app.get("/")
@@ -705,7 +815,14 @@ async def login_submit(request: Request):
         return RedirectResponse(url=f"/login?{query}", status_code=303)
 
     response = RedirectResponse(url=next_path, status_code=303)
-    _set_session_cookie(response, user["id"], user["email"])
+    _set_session_cookie(
+        response,
+        user_id=user["id"],
+        email=user["email"],
+        role=identity.normalise_role(user["role"]),
+        patient_external_id=_patient_external_id_for(user),
+        display_name=user["display_name"],
+    )
 
     return response
 
@@ -714,8 +831,10 @@ async def login_submit(request: Request):
 async def register_form(request: Request) -> HTMLResponse:
     error = request.query_params.get("error", "")
     email = request.query_params.get("email", "")
+    display_name = request.query_params.get("display_name", "")
+    role = identity.normalise_role(request.query_params.get("role", ""))
 
-    return HTMLResponse(_render_register(error or None, email))
+    return HTMLResponse(_render_register(error or None, email, display_name, role))
 
 
 @app.post("/register")
@@ -725,15 +844,27 @@ async def register_submit(request: Request):
     email = str(form.get("email", "")).strip()
     password = str(form.get("password", ""))
     confirm = str(form.get("confirm", ""))
+    display_name = str(form.get("display_name", "")).strip()
+    role = identity.normalise_role(form.get("role", ""))
+    clinician_code = str(form.get("clinician_code", "")).strip()
 
     def fail(message: str):
-        query = f"error={quote(message)}&email={quote(email)}"
+        query = (
+            f"error={quote(message)}&email={quote(email)}"
+            f"&display_name={quote(display_name)}&role={quote(role)}"
+        )
         return RedirectResponse(url=f"/register?{query}", status_code=303)
 
     db_error = _database_error_message()
 
     if db_error:
         return fail(db_error)
+
+    if not display_name:
+        return fail("Enter your full name.")
+
+    if len(display_name) > 120:
+        return fail("Name must be 120 characters or fewer.")
 
     if not email or "@" not in email:
         return fail("Enter a valid email address.")
@@ -744,10 +875,34 @@ async def register_submit(request: Request):
     if password != confirm:
         return fail("Passwords do not match.")
 
+    # A clinician account can read every patient's records, so this gate fails
+    # closed: with no CLINICIAN_ACCESS_CODE configured, the role is simply not
+    # available for self-service registration.
+    if role == identity.ROLE_CLINICIAN:
+        expected_code = os.environ.get("CLINICIAN_ACCESS_CODE", "").strip()
+
+        if not expected_code:
+            return fail("Clinician registration is not enabled on this deployment.")
+
+        if clinician_code != expected_code:
+            return fail("That clinician access code is not valid.")
+
+    patient_external_id = None
+    patient_id = None
+
     try:
+        if role == identity.ROLE_PATIENT:
+            # Doubles as YS's patient_id, which only accepts [A-Za-z0-9-]{3,32}
+            # (apps/YS/app.py), so this must not be derived from the email.
+            patient_external_id = f"u-{uuid.uuid4().hex[:16]}"
+            patient_id = SHARED_STORE.upsert_patient(patient_external_id, display_name)
+
         user_id = SHARED_STORE.create_user(
             email=email,
             password_hash=auth.hash_password(password),
+            role=role,
+            display_name=display_name,
+            patient_id=patient_id,
         )
     except IntegrityError:
         return fail("Email already registered.")
@@ -755,7 +910,14 @@ async def register_submit(request: Request):
         return fail("Could not create the account. Please check the shared database setup.")
 
     response = RedirectResponse(url="/triage/", status_code=303)
-    _set_session_cookie(response, user_id, email.strip().lower())
+    _set_session_cookie(
+        response,
+        user_id=user_id,
+        email=email.strip().lower(),
+        role=role,
+        patient_external_id=patient_external_id,
+        display_name=display_name,
+    )
 
     return response
 
@@ -764,28 +926,33 @@ async def register_submit(request: Request):
 async def logout():
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie(auth.COOKIE_NAME, path="/")
+    # Otherwise the next clinician to sign in on this browser inherits whichever
+    # patient the previous one had selected.
+    response.delete_cookie(auth.SUBJECT_COOKIE_NAME, path="/")
 
     return response
 
 @app.get("/api/me")
 async def current_user(request: Request):
-    user = _authenticated_user(request)
+    actor = _current_actor(request)
 
-    if not user:
+    if not actor:
         return {
             "authenticated": False,
             "email": None,
             "display_name": "guest",
+            "role": None,
+            "patient_external_id": None,
         }
-
-    email = str(user.get("email", "")).strip()
-    name_part = email.split("@", 1)[0] if email else "user"
-    display_name = name_part.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
 
     return {
         "authenticated": True,
-        "email": email,
-        "display_name": display_name or email or "user",
+        "email": actor.email,
+        # Registered names beat the email-prefix guess, which is only a
+        # fallback for accounts created before names were collected.
+        "display_name": actor.display_name or _name_from_email(actor.email) or "user",
+        "role": actor.role,
+        "patient_external_id": actor.patient_external_id,
     }
 
 
@@ -832,6 +999,56 @@ async def vita_chat(payload: VitaChatRequest):
     }
 
 
+class ClinicianContextRequest(BaseModel):
+    patient_external_id: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+# Declared above the /{prefix} catch-alls below: Starlette matches routes in
+# registration order, so anything added after them is swallowed by the proxy.
+@app.post("/api/clinician/context")
+async def set_clinician_context(payload: ClinicianContextRequest, request: Request):
+    """Choose which patient a clinician's next assessment is about.
+
+    Neither the triage nor the stroke form has a patient field, so without a
+    selected subject a clinician's assessments could never be filed against
+    anyone. The choice lives in a signed cookie rather than a form field so all
+    three backends read it the same way and none of them can be lied to.
+    """
+    actor = _current_actor(request)
+
+    if actor is None:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    if not actor.is_clinician:
+        return JSONResponse({"detail": "Clinician access required"}, status_code=403)
+
+    external_id = (payload.patient_external_id or "").strip()
+    response = JSONResponse({
+        "patient_external_id": external_id or None,
+        "display_name": payload.display_name if external_id else None,
+    })
+
+    if not external_id:
+        response.delete_cookie(auth.SUBJECT_COOKIE_NAME, path="/")
+        return response
+
+    response.set_cookie(
+        auth.SUBJECT_COOKIE_NAME,
+        auth.create_subject_token(
+            external_id=external_id,
+            display_name=payload.display_name,
+        ),
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_is_secure(),
+        max_age=auth.SESSION_MAX_AGE_SECONDS,
+        path="/",
+    )
+
+    return response
+
+
 @app.api_route("/{prefix}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def redirect_bare_prefix(prefix: str):
     if prefix == "stroke":
@@ -876,8 +1093,13 @@ async def proxy(prefix: str, path: str, request: Request):
     forward_headers["X-Forwarded-Prefix"] = f"/{prefix}"
     forward_headers["X-Forwarded-Host"] = request.headers.get("host", "")
     forward_headers["X-Forwarded-Proto"] = request.url.scheme
+    # Useful in backend logs, but NOT the basis for any authorisation decision.
+    # The backends bind 127.0.0.1, so anything running locally can forge these;
+    # they authenticate off the signed vh_session cookie (forwarded above with
+    # the rest of the headers) instead.
     forward_headers["X-Vitalhealth-User"] = user["uid"]
     forward_headers["X-Vitalhealth-User-Email"] = user["email"]
+    forward_headers["X-Vitalhealth-Role"] = str(user.get("role") or "")
 
     body = await request.body()
 

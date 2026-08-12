@@ -10,6 +10,10 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
     "SQLAlchemy==2.0.36",
     "psycopg[binary]==3.2.3",
+    # Session-cookie signing. Declared here rather than per app so all four
+    # processes verify sessions with the same implementation — Flask supplies
+    # this transitively to Jeslyn and YS, but Jace has no other source for it.
+    "itsdangerous==2.2.0",
 ]
 
 [tool.setuptools.packages.find]

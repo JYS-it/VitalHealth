@@ -12,7 +12,7 @@ from flask import Flask, render_template, request
 from markupsafe import Markup, escape
 from openai import OpenAI
 from dotenv import load_dotenv
-from vitalhealth_storage import get_store
+from vitalhealth_storage import get_store, identity
 
 
 load_dotenv()
@@ -185,9 +185,23 @@ def parse_iso_date(value, field_name):
         raise ValueError(f"{field_name} must use YYYY-MM-DD.") from exc
 
 
-def collect_metadata(form):
+def current_actor():
+    """The signed-in user, from the session cookie the gateway forwards."""
+    return identity.actor_from_cookies(request.cookies)
+
+
+def collect_metadata(form, actor=None):
     today = date.today().isoformat()
     patient_id = normalize_text(form.get("patient_id"), "Patient ID", 32)
+    patient_name = normalize_text(form.get("patient_name"), "Patient full name", 120)
+
+    # A signed-in patient can only ever file a certificate against themselves.
+    # The form field is advisory; the session is authoritative. Without this a
+    # patient could type someone else's ID and attach an EMC to their chart.
+    if actor is not None and actor.is_patient and actor.patient_external_id:
+        patient_id = actor.patient_external_id
+        patient_name = actor.display_name or patient_name
+
     if not re.fullmatch(r"[A-Za-z0-9-]{3,32}", patient_id):
         raise ValueError("Patient ID may contain only letters, numbers, and hyphens.")
     patient_age = as_int(form.get("patient_age"), -1)
@@ -197,7 +211,7 @@ def collect_metadata(form):
     if not 1 <= leave_days <= 60:
         raise ValueError("Authorised leave days must be between 1 and 60.")
     return {
-        "patient_name": normalize_text(form.get("patient_name"), "Patient full name", 120),
+        "patient_name": patient_name,
         "patient_id": patient_id,
         "patient_age": patient_age,
         "clinic_name": normalize_text(form.get("clinic_name"), "Clinic name", 120),
@@ -476,9 +490,15 @@ def workflow_snapshot(workflow):
 def persist_workflow(workflow_id, workflow, event_type):
     """Mirror an EMC workflow to PostgreSQL when DATABASE_URL is configured."""
     snapshot = workflow_snapshot(workflow)
+    owner_user_id = workflow.get("owner_user_id")
     record_id = workflow.get("database_record_id")
     if record_id:
-        SHARED_STORE.safe_update_record(record_id, status=workflow["issue_status"], output_payload=snapshot)
+        SHARED_STORE.safe_update_record(
+            record_id,
+            status=workflow["issue_status"],
+            output_payload=snapshot,
+            owner_user_id=owner_user_id,
+        )
     else:
         record_id = SHARED_STORE.safe_create_record(
             source_app="emc",
@@ -489,6 +509,7 @@ def persist_workflow(workflow_id, workflow, event_type):
             model_version=PROMPT_VERSION,
             patient_external_id=workflow["metadata"]["patient_id"],
             patient_name=workflow["metadata"]["patient_name"],
+            owner_user_id=owner_user_id,
         )
         if record_id:
             workflow["database_record_id"] = record_id
@@ -496,7 +517,9 @@ def persist_workflow(workflow_id, workflow, event_type):
         source_app="emc",
         event_type=event_type,
         record_id=record_id,
-        actor_reference=workflow["metadata"].get("attending_clinician_name"),
+        # The authenticated account, not the typed clinician name — free-text a
+        # user supplies is not an audit actor.
+        actor_reference=workflow.get("actor_email") or workflow["metadata"].get("attending_clinician_name"),
         payload={"workflow_id": workflow_id, "status": workflow["issue_status"]},
     )
     return record_id
@@ -516,9 +539,17 @@ def status_class(value):
 app.jinja_env.globals.update(status_class=status_class)
 
 
+def patient_identity():
+    """Locked patient details for a signed-in patient, or None for clinicians."""
+    actor = current_actor()
+    if actor is None or not actor.is_patient or not actor.patient_external_id:
+        return None
+    return {"external_id": actor.patient_external_id, "name": actor.display_name or ""}
+
+
 def render_state(workflow_id=None, message=None):
     workflow = WORKFLOWS.get(workflow_id)
-    return render_template("index.html", title=APP_TITLE, today=date.today().isoformat(), symptom_fields=symptom_fields(), style_options=STYLE_OPTIONS, workflow=workflow, workflow_id=workflow_id, message=message, model_metadata=MODEL_METADATA, feature_count=len(FEATURE_LAYOUT), render_certificate=render_certificate, legacy_schema=any(feature in FEATURE_LAYOUT for feature in ("Gender", "Duration", "Medical_History")), genai_configured=bool(get_api_key()))
+    return render_template("index.html", title=APP_TITLE, today=date.today().isoformat(), symptom_fields=symptom_fields(), style_options=STYLE_OPTIONS, workflow=workflow, workflow_id=workflow_id, message=message, model_metadata=MODEL_METADATA, feature_count=len(FEATURE_LAYOUT), render_certificate=render_certificate, legacy_schema=any(feature in FEATURE_LAYOUT for feature in ("Gender", "Duration", "Medical_History")), genai_configured=bool(get_api_key()), patient_identity=patient_identity())
 
 
 @app.get("/")
@@ -528,8 +559,9 @@ def index():
 
 @app.post("/start")
 def start():
+    actor = current_actor()
     try:
-        metadata = collect_metadata(request.form)
+        metadata = collect_metadata(request.form, actor)
         features = collect_features(request.form, metadata)
     except ValueError as exc:
         return render_state(message=f"Input validation: {exc}")
@@ -543,8 +575,14 @@ def start():
     gate = review_gate(deterministic_review(draft["text"], evidence, payload), critic_review(draft["text"], evidence, api_key))
     clinician_note = normalize_text(request.form.get("clinician_note"), "Clinician note", 2000, required=False)
     workflow = {"api_key": api_key, "style": style, "metadata": metadata, "features": features, "payload": payload, "evidence": evidence, "draft": draft, "gate": gate, "note_extraction": extract_note(clinician_note, api_key), "revision_history": [], "final": None, "issue_status": "PENDING_REVIEW"}
+    # Carried on the workflow so every later persist (revise/approve/reject)
+    # attributes to the account that started it, not to whoever is posting now.
+    workflow["owner_user_id"] = actor.user_id if actor else None
+    workflow["actor_email"] = actor.email if actor else None
     workflow["internal"] = internal_summary(payload, evidence, gate)
-    return render_state(store(workflow), "Draft ready for clinician review.")
+    workflow_id = store(workflow)
+    persist_workflow(workflow_id, workflow, "emc_draft_created")
+    return render_state(workflow_id, "Draft ready for clinician review.")
 
 
 @app.post("/revise/<workflow_id>")

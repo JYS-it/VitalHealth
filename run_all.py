@@ -250,6 +250,30 @@ def start_app(app: dict) -> subprocess.Popen:
             env["DATABASE_URL"] = jace_env.get("DATABASE_URL", "")
         if not env.get("GEMINI_API_KEY", "").strip():
             env["GEMINI_API_KEY"] = jace_env.get("GEMINI_API_KEY", "")
+    else:
+        # Two settings are shared platform state rather than per-app config, so
+        # a backend that doesn't define them inherits the gateway's:
+        #
+        #   SESSION_SECRET  the gateway signs the session cookie and the three
+        #                   backends verify it to decide whose record this is.
+        #                   Disagree on the secret and every signature check
+        #                   fails silently — no error, just records attributed
+        #                   to nobody.
+        #   DATABASE_URL    all four write to the same shared database.
+        #
+        # Provider API keys stay deliberately per-app and are never copied.
+        gateway_env = load_env_file(ROOT / "apps" / "gateway" / ".env")
+        for key in ("SESSION_SECRET", "DATABASE_URL"):
+            if env.get(key, "").strip():
+                continue
+            inherited = gateway_env.get(key, "").strip()
+            if inherited:
+                env[key] = inherited
+            else:
+                print(
+                    f"[{app['name']}] {key} is not set here or in apps/gateway/.env - "
+                    "records from this app will not appear on any dashboard."
+                )
 
     env.update(app["extra_env"])
 

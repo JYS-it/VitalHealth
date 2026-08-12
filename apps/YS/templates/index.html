@@ -45,15 +45,27 @@
             <span>Required fields</span>
           </div>
 
+          {# A signed-in patient certifies only themselves, so these two are
+             fixed to their account. The server enforces this regardless of
+             what is submitted (collect_metadata); readonly just makes the
+             rule visible rather than surprising. #}
           <label>
             Patient full name
-            <input name="patient_name" value="Jenny Lee" required>
+            <input name="patient_name"
+                   value="{{ patient_identity.name if patient_identity else 'Jenny Lee' }}"
+                   {% if patient_identity %}readonly{% endif %} required>
           </label>
 
           <label>
             Patient ID / Passport
-            <input name="patient_id" value="T0987654I" required>
+            <input name="patient_id"
+                   value="{{ patient_identity.external_id if patient_identity else 'T0987654I' }}"
+                   {% if patient_identity %}readonly{% endif %} required>
           </label>
+
+          {% if patient_identity %}
+          <p class="hint">Certificates you request are filed under your own account.</p>
+          {% endif %}
 
           <label>
             Age

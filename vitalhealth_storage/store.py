@@ -18,13 +18,28 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, MetaData, String, Table, create_engine, text
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    or_,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
 
 
 metadata = MetaData()
 LOGGER = logging.getLogger(__name__)
+
+# The three clinical modules, in the order a dashboard should present them.
+# `source_app` on every record is one of these.
+SOURCE_APPS = ("triage", "stroke", "emc")
 
 patients = Table(
     "patients",
@@ -45,6 +60,10 @@ records = Table(
     metadata,
     Column("id", String(36), primary_key=True),
     Column("patient_id", String(36), ForeignKey("patients.id"), nullable=True, index=True),
+    # Who the record is *about* (patient_id) and who *produced* it
+    # (owner_user_id) are different questions. A clinician's assessment of
+    # someone else has both, and they point at different people.
+    Column("owner_user_id", String(36), ForeignKey("users.id"), nullable=True, index=True),
     Column("source_app", String(32), nullable=False, index=True),
     Column("record_type", String(64), nullable=False),
     Column("status", String(64), nullable=False, index=True),
@@ -80,6 +99,13 @@ users = Table(
     Column("id", String(36), primary_key=True),
     Column("email", String(255), unique=True, nullable=False, index=True),
     Column("password_hash", String(255), nullable=False),
+    # "patient" or "clinician". The default is the least-privileged role on
+    # purpose: a forgotten role= on an insert must never mint an account that
+    # can read every patient's records.
+    Column("role", String(16), nullable=False, server_default="patient"),
+    Column("display_name", String(120), nullable=True),
+    # Set for patient accounts only — the patients row this login speaks for.
+    Column("patient_id", String(36), ForeignKey("patients.id"), nullable=True, index=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -182,6 +208,65 @@ class ClinicalStore:
                 VALUES ('2026_08_10_initial_hardening', CURRENT_TIMESTAMP)
                 ON CONFLICT (version) DO NOTHING
             """))
+            self._migrate_roles_and_ownership(connection)
+
+    def _migrate_roles_and_ownership(self, connection: Any) -> None:
+        """Add the role/ownership columns to a database created before them.
+
+        create_all() only ever creates missing *tables*, so a database that
+        already has `users` will never gain the new columns from the table
+        definitions alone. These statements are the actual migration; on a
+        fresh database they are all no-ops.
+        """
+        for statement in (
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'patient'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(120)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS patient_id VARCHAR(36)",
+            "ALTER TABLE clinical_records ADD COLUMN IF NOT EXISTS owner_user_id VARCHAR(36)",
+            "CREATE INDEX IF NOT EXISTS ix_users_patient ON users (patient_id)",
+            "CREATE INDEX IF NOT EXISTS ix_clinical_records_owner "
+            "ON clinical_records (owner_user_id, created_at DESC)",
+        ):
+            connection.execute(text(statement))
+
+        # Foreign keys have no ADD CONSTRAINT IF NOT EXISTS, so they get the
+        # same pg_catalog guard the audit trigger above uses.
+        connection.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_patient') THEN
+                    ALTER TABLE users ADD CONSTRAINT fk_users_patient
+                    FOREIGN KEY (patient_id) REFERENCES patients (id);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_records_owner_user') THEN
+                    ALTER TABLE clinical_records ADD CONSTRAINT fk_records_owner_user
+                    FOREIGN KEY (owner_user_id) REFERENCES users (id);
+                END IF;
+            END;
+            $$;
+        """))
+
+        # Accounts that predate roles are the team's own staff logins, so they
+        # become clinicians. Guarded by the migration row so it runs exactly
+        # once and can never come back later to promote a patient who signed
+        # up afterwards. Must precede the INSERT that records the version.
+        connection.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM schema_migrations
+                    WHERE version = '2026_08_12_roles_and_ownership'
+                ) THEN
+                    UPDATE users SET role = 'clinician' WHERE role = 'patient';
+                END IF;
+            END;
+            $$;
+        """))
+        connection.execute(text("""
+            INSERT INTO schema_migrations (version, applied_at)
+            VALUES ('2026_08_12_roles_and_ownership', CURRENT_TIMESTAMP)
+            ON CONFLICT (version) DO NOTHING
+        """))
 
     def upsert_patient(self, external_id: str, display_name: str | None = None) -> str:
         if not self.engine:
@@ -210,7 +295,15 @@ class ClinicalStore:
             )
             return patient_id
 
-    def create_user(self, *, email: str, password_hash: str) -> str:
+    def create_user(
+        self,
+        *,
+        email: str,
+        password_hash: str,
+        role: str = "patient",
+        display_name: str | None = None,
+        patient_id: str | None = None,
+    ) -> str:
         """Insert a new user. Raises on a duplicate email rather than
         swallowing the error — unlike the safe_* wrappers below, auth has
         no valid fallback when persistence fails."""
@@ -223,6 +316,9 @@ class ClinicalStore:
                     id=user_id,
                     email=email.strip().lower(),
                     password_hash=password_hash,
+                    role=role,
+                    display_name=display_name,
+                    patient_id=patient_id,
                     created_at=_utcnow(),
                 )
             )
@@ -236,6 +332,24 @@ class ClinicalStore:
                 users.select().where(users.c.email == email.strip().lower())
             ).mappings().first()
 
+    def get_user_by_id(self, user_id: str) -> dict | None:
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                users.select().where(users.c.id == user_id)
+            ).mappings().first()
+        return dict(row) if row else None
+
+    def link_user_patient(self, user_id: str, patient_id: str) -> None:
+        """Point a login at the patients row it speaks for."""
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        with self.engine.begin() as connection:
+            connection.execute(
+                users.update().where(users.c.id == user_id).values(patient_id=patient_id)
+            )
+
     def create_record(
         self,
         *,
@@ -247,6 +361,7 @@ class ClinicalStore:
         model_version: str | None = None,
         patient_external_id: str | None = None,
         patient_name: str | None = None,
+        owner_user_id: str | None = None,
     ) -> str:
         if not self.engine:
             raise RuntimeError("Shared database is not configured.")
@@ -259,6 +374,7 @@ class ClinicalStore:
                 records.insert().values(
                     id=record_id,
                     patient_id=patient_id,
+                    owner_user_id=owner_user_id,
                     source_app=source_app,
                     record_type=record_type,
                     status=status,
@@ -278,6 +394,7 @@ class ClinicalStore:
         status: str,
         input_payload: dict | None = None,
         output_payload: dict | None = None,
+        owner_user_id: str | None = None,
     ) -> None:
         if not self.engine:
             raise RuntimeError("Shared database is not configured.")
@@ -286,6 +403,8 @@ class ClinicalStore:
             values["input_payload"] = _json_value(input_payload)
         if output_payload is not None:
             values["output_payload"] = _json_value(output_payload)
+        if owner_user_id is not None:
+            values["owner_user_id"] = owner_user_id
         with self.engine.begin() as connection:
             result = connection.execute(records.update().where(records.c.id == record_id).values(**values))
             if result.rowcount != 1:
@@ -316,6 +435,182 @@ class ClinicalStore:
                 )
             )
         return event_id
+
+    # ---- read paths (dashboards) -------------------------------------------
+    #
+    # These deliberately have no safe_* twin. A swallowed *write* costs one
+    # record; a swallowed *read* shows a clinician an empty chart and lets them
+    # conclude the patient has no history. Let SQLAlchemyError propagate and
+    # have the API turn it into a visible "records unavailable" response.
+
+    def _require_engine(self) -> Any:
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        return self.engine
+
+    def get_patient(self, patient_id: str) -> dict | None:
+        with self._require_engine().begin() as connection:
+            row = connection.execute(
+                patients.select().where(patients.c.id == patient_id)
+            ).mappings().first()
+        return dict(row) if row else None
+
+    def get_patient_by_external_id(self, external_id: str) -> dict | None:
+        with self._require_engine().begin() as connection:
+            row = connection.execute(
+                patients.select().where(patients.c.external_id == external_id)
+            ).mappings().first()
+        return dict(row) if row else None
+
+    def get_record(self, record_id: str) -> dict | None:
+        with self._require_engine().begin() as connection:
+            row = connection.execute(
+                records.select().where(records.c.id == record_id)
+            ).mappings().first()
+        return dict(row) if row else None
+
+    def list_records(
+        self,
+        *,
+        patient_id: str | None = None,
+        owner_user_id: str | None = None,
+        source_app: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Newest first.
+
+        patient_id and owner_user_id are OR-ed, not AND-ed: "records about me"
+        and "records I created" diverge for seeded data, for rows written
+        before ownership existed, and any time subject resolution fails. A
+        patient should see both.
+        """
+        statement = records.select()
+        subject_filters = []
+        if patient_id:
+            subject_filters.append(records.c.patient_id == patient_id)
+        if owner_user_id:
+            subject_filters.append(records.c.owner_user_id == owner_user_id)
+        if subject_filters:
+            statement = statement.where(or_(*subject_filters))
+        if source_app:
+            statement = statement.where(records.c.source_app == source_app)
+        statement = statement.order_by(records.c.created_at.desc()).limit(limit)
+
+        with self._require_engine().begin() as connection:
+            return [dict(row) for row in connection.execute(statement).mappings()]
+
+    def latest_record_per_app(
+        self,
+        *,
+        patient_id: str | None = None,
+        owner_user_id: str | None = None,
+    ) -> dict[str, dict | None]:
+        """The most recent record from each module — one dashboard tile each."""
+        latest: dict[str, dict | None] = {app: None for app in SOURCE_APPS}
+        if not patient_id and not owner_user_id:
+            return latest
+        # The roster is small enough that one ordered pass beats a window
+        # function here, and it keeps the SQL readable.
+        for row in self.list_records(
+            patient_id=patient_id, owner_user_id=owner_user_id, limit=500
+        ):
+            app = row.get("source_app")
+            if app in latest and latest[app] is None:
+                latest[app] = row
+        return latest
+
+    def list_patient_summaries(
+        self,
+        *,
+        search: str | None = None,
+        limit: int = 200,
+    ) -> list[dict]:
+        """One row per patient for the clinician dashboard.
+
+        Driven from `patients` rather than from records so a patient who has
+        registered but not yet run anything still appears — an empty chart is
+        a legitimate state, not an absent one.
+        """
+        engine = self._require_engine()
+
+        patient_query = patients.select()
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            patient_query = patient_query.where(
+                or_(
+                    patients.c.display_name.ilike(pattern),
+                    patients.c.external_id.ilike(pattern),
+                )
+            )
+        patient_query = patient_query.order_by(patients.c.display_name).limit(limit)
+
+        with engine.begin() as connection:
+            patient_rows = [dict(row) for row in connection.execute(patient_query).mappings()]
+            if not patient_rows:
+                return []
+
+            ids = [row["id"] for row in patient_rows]
+            record_rows = [
+                dict(row)
+                for row in connection.execute(
+                    records.select()
+                    .where(records.c.patient_id.in_(ids))
+                    .order_by(records.c.created_at.desc())
+                ).mappings()
+            ]
+
+        summaries = {
+            row["id"]: {
+                "patient_id": row["id"],
+                "external_id": row["external_id"],
+                "display_name": row["display_name"],
+                "modules": {app: None for app in SOURCE_APPS},
+                "completed_modules": 0,
+                "record_count": 0,
+                "last_activity": None,
+            }
+            for row in patient_rows
+        }
+
+        for record in record_rows:
+            summary = summaries.get(record["patient_id"])
+            if summary is None:
+                continue
+            summary["record_count"] += 1
+            app = record.get("source_app")
+            if app in summary["modules"] and summary["modules"][app] is None:
+                summary["modules"][app] = record
+                summary["completed_modules"] += 1
+            created = record.get("created_at")
+            if created and (summary["last_activity"] is None or created > summary["last_activity"]):
+                summary["last_activity"] = created
+
+        return [summaries[row["id"]] for row in patient_rows]
+
+    def list_unassigned_records(self, *, limit: int = 100) -> list[dict]:
+        """Records with no patient attached.
+
+        Triage and stroke have no patient field on their forms, so anything
+        run without a resolved subject lands here rather than vanishing.
+        """
+        statement = (
+            records.select()
+            .where(records.c.patient_id.is_(None))
+            .order_by(records.c.created_at.desc())
+            .limit(limit)
+        )
+        with self._require_engine().begin() as connection:
+            return [dict(row) for row in connection.execute(statement).mappings()]
+
+    def list_audit_events(self, record_id: str, *, limit: int = 50) -> list[dict]:
+        statement = (
+            audit_events.select()
+            .where(audit_events.c.record_id == record_id)
+            .order_by(audit_events.c.occurred_at.desc())
+            .limit(limit)
+        )
+        with self._require_engine().begin() as connection:
+            return [dict(row) for row in connection.execute(statement).mappings()]
 
     def safe_create_record(self, **kwargs: Any) -> str | None:
         """Persistence must not turn an otherwise valid clinical workflow into a 500."""

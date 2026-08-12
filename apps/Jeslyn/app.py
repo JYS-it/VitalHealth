@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
+import hashlib
+import json
 import os
 import re
 from threading import Lock
@@ -9,7 +11,7 @@ from dotenv import load_dotenv
 import joblib
 import pandas as pd
 from pypdf import PdfReader
-from vitalhealth_storage import get_store
+from vitalhealth_storage import get_store, identity
 
 try:
     from google import genai
@@ -463,6 +465,14 @@ def parse_patient_form(form_data) -> dict:
     }
 
 
+def patient_data_fingerprint(patient_data) -> str:
+    """Identifies one particular set of answers, so a second assessment in the
+    same browser session is recognised as new rather than as an edit."""
+    return hashlib.sha256(
+        json.dumps(patient_data, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
 def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_calendar=None):
     """Store the assessment independently of the browser session when enabled."""
     output = {"prediction": prediction_result}
@@ -470,24 +480,48 @@ def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_
         output["care_plan"] = care_plan
     if care_calendar is not None:
         output["care_calendar"] = care_calendar
-    record_id = session.get("database_record_id")
-    if record_id:
-        SHARED_STORE.safe_update_record(record_id, status="CARE_PLAN_READY" if care_plan else "ASSESSED", output_payload=output)
+
+    # Who is logged in, and whose assessment this is. Read from the signed
+    # session cookie the gateway forwards rather than any X-Vitalhealth-*
+    # header, which anything on this host could set.
+    actor = identity.actor_from_cookies(request.cookies)
+    subject_ref, subject_name = identity.resolve_subject(request.cookies, actor)
+
+    fingerprint = patient_data_fingerprint(patient_data)
+    stored = session.get("database_record") or {}
+
+    # Only continue an existing record when it is the *same* assessment being
+    # enriched with a care plan. Keying on the session alone meant a second
+    # assessment silently overwrote the first, which is invisible today but
+    # destroys history the moment a dashboard lists it.
+    if stored.get("id") and stored.get("fingerprint") == fingerprint:
+        record_id = stored["id"]
+        SHARED_STORE.safe_update_record(
+            record_id,
+            status="CARE_PLAN_READY" if care_plan else "ASSESSED",
+            output_payload=output,
+            owner_user_id=actor.user_id if actor else None,
+        )
     else:
         record_id = SHARED_STORE.safe_create_record(
             source_app="stroke",
             record_type="stroke_risk_assessment",
-            status="ASSESSED",
+            status="CARE_PLAN_READY" if care_plan else "ASSESSED",
             input_payload=patient_data,
             output_payload=output,
             model_version="stroke_logistic_model",
+            patient_external_id=subject_ref,
+            patient_name=subject_name,
+            owner_user_id=actor.user_id if actor else None,
         )
         if record_id:
-            session["database_record_id"] = record_id
+            session["database_record"] = {"id": record_id, "fingerprint": fingerprint}
+
     SHARED_STORE.safe_append_audit_event(
         source_app="stroke",
         event_type="stroke_care_plan_generated" if care_plan else "stroke_assessed",
         record_id=record_id,
+        actor_reference=actor.email if actor else None,
         payload={"risk_category": prediction_result["risk_category"]},
     )
     return record_id

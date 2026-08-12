@@ -30,9 +30,41 @@ OUTPUT_DIR = DEMO_DIR / "output"
 sys.path.insert(0, str(DEMO_DIR))
 sys.path.insert(0, str(ROOT))
 
-from characters import CHARACTERS  # noqa: E402
+from characters import CHARACTERS, DEMO_CLINICIAN, DEMO_PASSWORD, demo_email  # noqa: E402
 from vitalhealth_storage import get_store  # noqa: E402
 from vitalhealth_storage.store import records as records_table  # noqa: E402
+
+
+def hash_password(password: str) -> str:
+    """bcrypt lives only in the gateway's venv — it is the only process that
+    handles credentials, and pulling it into all four would be gratuitous."""
+    try:
+        import bcrypt
+    except ImportError:
+        raise SystemExit(
+            "bcrypt is required to create the demo logins. Run this script with "
+            "the gateway's venv:\n"
+            "    apps\\gateway\\.venv\\Scripts\\python.exe demo_data\\seed_db.py"
+        )
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def ensure_account(store, *, email, display_name, role, patient_id=None) -> str:
+    """Create the login if absent, otherwise reuse it and make sure it still
+    points at the right patient. Re-running the seed must not duplicate users."""
+    existing = store.get_user_by_email(email)
+    if existing:
+        if patient_id and existing["patient_id"] != patient_id:
+            store.link_user_patient(existing["id"], patient_id)
+        return existing["id"]
+
+    return store.create_user(
+        email=email,
+        password_hash=hash_password(DEMO_PASSWORD),
+        role=role,
+        display_name=display_name,
+        patient_id=patient_id,
+    )
 
 APP_CONFIG = {
     "triage": {
@@ -94,11 +126,29 @@ def main():
 
     results_by_app = {app: load_results(app) for app in APP_CONFIG}
 
+    clinician_id = ensure_account(
+        store,
+        email=DEMO_CLINICIAN["email"],
+        display_name=DEMO_CLINICIAN["display_name"],
+        role="clinician",
+    )
+    print(f"{DEMO_CLINICIAN['display_name']} <{DEMO_CLINICIAN['email']}> -> clinician {clinician_id}")
+
     for character in CHARACTERS:
         external_id = character["external_id"]
         display_name = character["display_name"]
         patient_id = store.upsert_patient(external_id, display_name)
-        print(f"{display_name} ({external_id}) -> patient {patient_id}")
+        email = demo_email(external_id)
+        # Owning the records makes the patient dashboard populated on first
+        # login rather than empty until they re-run all three modules.
+        owner_user_id = ensure_account(
+            store,
+            email=email,
+            display_name=display_name,
+            role="patient",
+            patient_id=patient_id,
+        )
+        print(f"{display_name} ({external_id}) -> patient {patient_id}, login <{email}>")
 
         for source_app, config in APP_CONFIG.items():
             row = results_by_app[source_app].get(external_id)
@@ -114,6 +164,9 @@ def main():
                     status=status,
                     input_payload=row["input_payload"],
                     output_payload=row["output_payload"],
+                    # Also set on the update path, or re-seeding a database
+                    # created before ownership existed leaves rows unowned.
+                    owner_user_id=owner_user_id,
                 )
                 record_id, verb = existing_id, "updated"
             else:
@@ -126,6 +179,7 @@ def main():
                     model_version=config["model_version"],
                     patient_external_id=external_id,
                     patient_name=display_name,
+                    owner_user_id=owner_user_id,
                 )
                 verb = "created"
 

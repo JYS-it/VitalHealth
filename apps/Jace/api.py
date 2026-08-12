@@ -13,13 +13,17 @@ import os
 from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import ctrse_core as core
-from vitalhealth_storage import get_store
+from vitalhealth_storage import get_store, identity
+
+# Cross-module dashboard reads. Kept in its own module so this file stays what
+# its docstring says it is: transport for CTRSE and nothing else.
+from dashboard_api import router as dashboard_router
 
 # Resolve everything relative to this file so the app is CWD-independent
 # (equivalent to `core.init('.')` when launched from the project directory).
@@ -255,8 +259,21 @@ _CORRECTION_LOG = os.path.join(APP_DIR, "logs", "corrections.jsonl")
 _correction_count = 0
 
 
+def _actor_and_subject(request: Request):
+    """Who is making this request, and which patient it is about.
+
+    Read from the signed session cookie the gateway forwards, not from the
+    X-Vitalhealth-* headers — this app listens on 127.0.0.1 and those headers
+    can be forged by anything local. When there is no valid cookie both come
+    back None and persistence behaves exactly as it did before roles existed.
+    """
+    actor = identity.actor_from_cookies(request.cookies)
+    subject_ref, subject_name = identity.resolve_subject(request.cookies, actor)
+    return actor, subject_ref, subject_name
+
+
 @app.post("/api/log-correction")
-def post_log_correction(rec: CorrectionRecord):
+def post_log_correction(rec: CorrectionRecord, request: Request):
     # Correction logging (§12 Phase 4): every nurse override is an extraction-error
     # datapoint + the governance/audit story. Append-only JSONL, one line per record.
     global _correction_count
@@ -266,6 +283,7 @@ def post_log_correction(rec: CorrectionRecord):
     with open(_CORRECTION_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     _correction_count += 1
+    actor, subject_ref, subject_name = _actor_and_subject(request)
     record_id = SHARED_STORE.safe_create_record(
         source_app="triage",
         record_type="extraction_correction",
@@ -273,18 +291,22 @@ def post_log_correction(rec: CorrectionRecord):
         input_payload={"note": rec.note, "extracted": rec.extracted},
         output_payload={"corrected": rec.corrected, "prediction": rec.prediction},
         model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
     )
     SHARED_STORE.safe_append_audit_event(
         source_app="triage",
         event_type="extraction_corrected",
         record_id=record_id,
+        actor_reference=actor.email if actor else None,
         payload={"timestamp": rec.timestamp, "prediction": rec.prediction},
     )
     return {"logged": True, "count": _correction_count}
 
 
 @app.post("/api/predict")
-def post_predict(req: PredictRequest):
+def post_predict(req: PredictRequest, request: Request):
     # Transport only (§3): core.predict_from_fields owns assembly, the model chain,
     # explain(), and the OOD-age refusal. Refusal returns 200 with a structured
     # object (renderable); success returns the GET /api/patients/{id} payload shape
@@ -297,18 +319,26 @@ def post_predict(req: PredictRequest):
         "vitals": req.vitals.model_dump() if req.vitals is not None else {},
     }
     result = core.predict_from_fields(fields)
+    actor, subject_ref, subject_name = _actor_and_subject(request)
     record_id = SHARED_STORE.safe_create_record(
         source_app="triage",
         record_type="triage_assessment",
-        status="REFUSED" if result.get("refused") else "ASSESSED",
+        # core emits `model_refused`, not `refused` (ctrse_core.predict_from_fields).
+        # The old key never matched, so out-of-distribution refusals were being
+        # stored as ordinary assessments.
+        status="REFUSED" if result.get("model_refused") else "ASSESSED",
         input_payload=fields,
         output_payload=result,
         model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
     )
     SHARED_STORE.safe_append_audit_event(
         source_app="triage",
         event_type="triage_assessed",
         record_id=record_id,
+        actor_reference=actor.email if actor else None,
         payload={"predicted_level": result.get("predicted_level")},
     )
     return result
@@ -328,6 +358,8 @@ def post_extract(req: ExtractRequest):
         return JSONResponse(status_code=400, content=result)
     return result
 
+
+app.include_router(dashboard_router)
 
 # Static SPA mounted LAST so /api/* routes take precedence. check_dir=False lets the
 # app import before static/ exists (Phase 4); requests to / 404 until it is populated.

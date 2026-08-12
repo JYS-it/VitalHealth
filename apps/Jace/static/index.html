@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
   <script defer src="demo_character_seeds.js"></script>
   <script defer src="app.js?v=4"></script>
+  <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
@@ -47,39 +48,241 @@
   </header>
 
   <div class="app">
-    <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard home">
-      <article class="home-hero card">
-        <p class="hero-kicker">VitalHealth portal</p>
-        <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome, guest!</h1>
-        <h2>Choose a healthcare workflow to begin.</h2>
-        <p>
-          VitalHealth brings clinical triage, stroke assessment, and medical certificate workflows into
-          one guided platform.
-        </p>
-      </article>
+    <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak
+             x-data="vhDashboard()" x-init="load()" aria-label="VitalHealth dashboard home">
 
-      <div class="workflow-bubbles" aria-label="Primary workflows">
-        <button class="workflow-bubble workflow-bubble--triage" type="button" @click="openTriage()">
-          <span class="bubble-icon" aria-hidden="true">CT</span>
-          <h3>Clinical Triage</h3>
-          <p>Assess patient triage priority using intake details and clinician notes.</p>
-          <span class="bubble-cta">Start Triage</span>
-        </button>
+      <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
+      <p class="vh-loading" x-show="loading" x-cloak>Loading your dashboard…</p>
 
-        <a class="workflow-bubble workflow-bubble--stroke" href="/stroke/">
-          <span class="bubble-icon" aria-hidden="true">SA</span>
-          <h3>Stroke Assessment</h3>
-          <p>Estimate stroke risk and generate educational care planning guidance.</p>
-          <span class="bubble-cta">Start Stroke Assessment</span>
-        </a>
+      <!-- ==================== PATIENT DASHBOARD ==================== -->
+      <template x-if="!loading && !isClinician && summary">
+        <div>
+          <article class="home-hero card">
+            <p class="hero-kicker">Your health dashboard</p>
+            <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome!</h1>
+            <h2 x-show="summary.completed_count === 0">Choose a healthcare workflow to begin.</h2>
+            <h2 x-show="summary.completed_count > 0"
+                x-text="summary.completed_count === summary.total_count
+                  ? 'You have completed all three assessments.'
+                  : 'Your results so far.'"></h2>
 
-        <a class="workflow-bubble workflow-bubble--emc" href="/emc/">
-          <span class="bubble-icon" aria-hidden="true">EMC</span>
-          <h3>Electronic Medical Certificate</h3>
-          <p>Prepare and review electronic medical certificate drafts for clinician approval.</p>
-          <span class="bubble-cta">Start EMC Workflow</span>
-        </a>
-      </div>
+            <div class="vh-progress" role="group" aria-label="Assessment progress">
+              <div class="vh-progress__track">
+                <div class="vh-progress__fill"
+                     :style="`width:${(summary.completed_count / summary.total_count) * 100}%`"></div>
+              </div>
+              <span class="vh-progress__label"
+                    x-text="`${summary.completed_count} of ${summary.total_count} assessments completed`"></span>
+            </div>
+          </article>
+
+          <div class="workflow-bubbles" aria-label="Your assessments">
+            <template x-for="tile in summary.modules" :key="tile.module">
+              <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
+                <header class="vh-tile__head">
+                  <h3 x-text="tile.module_label"></h3>
+                  <span class="vh-tile__state"
+                        :class="tile.completed ? 'is-done' : 'is-todo'"
+                        x-text="tile.completed ? 'Completed' : 'Not started'"></span>
+                </header>
+
+                <p class="vh-tile__headline" x-text="tile.headline"></p>
+                <p class="vh-tile__blurb" x-show="!tile.completed" x-text="tile.blurb"></p>
+
+                <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
+                  <template x-for="fact in tile.facts" :key="fact.label + fact.value">
+                    <div class="vh-fact">
+                      <dt x-text="fact.label"></dt>
+                      <dd x-text="fact.value"></dd>
+                    </div>
+                  </template>
+                </dl>
+
+                <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
+                  <summary>What you entered</summary>
+                  <dl class="vh-facts">
+                    <template x-for="field in tile.inputs" :key="field.label">
+                      <div class="vh-fact">
+                        <dt x-text="field.label"></dt>
+                        <dd x-text="field.value"></dd>
+                      </div>
+                    </template>
+                  </dl>
+                </details>
+
+                <footer class="vh-tile__foot">
+                  <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
+                  <template x-if="tile.module === 'triage'">
+                    <button class="bubble-cta" type="button" @click="openTriage()"
+                            x-text="tile.completed ? 'Run again' : 'Start'"></button>
+                  </template>
+                  <template x-if="tile.module !== 'triage'">
+                    <a class="bubble-cta" :href="tile.href"
+                       x-text="tile.completed ? 'Run again' : 'Start'"></a>
+                  </template>
+                </footer>
+              </article>
+            </template>
+          </div>
+
+          <section class="card vh-history" x-show="summary.history.length" x-cloak>
+            <div class="eyebrow mb2">Recent activity</div>
+            <ul class="vh-history__list">
+              <template x-for="item in summary.history" :key="item.record_id">
+                <li class="vh-history__item">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline" x-text="item.headline"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                </li>
+              </template>
+            </ul>
+          </section>
+        </div>
+      </template>
+
+      <!-- ==================== CLINICIAN DASHBOARD ==================== -->
+      <template x-if="!loading && isClinician">
+        <div>
+          <article class="home-hero card">
+            <p class="hero-kicker">Clinician portal</p>
+            <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome!</h1>
+            <h2 x-text="`${patients.length} patient${patients.length === 1 ? '' : 's'} on record`"></h2>
+
+            <div class="vh-context" x-show="activeSubject" x-cloak>
+              <span>Working on <strong x-text="activeSubjectName()"></strong> — new triage and stroke
+                assessments will be filed under this patient.</span>
+              <button type="button" class="filter-btn" @click="setSubject(null)">Clear</button>
+            </div>
+
+            <form class="vh-search" @submit.prevent="loadPatients()" role="search">
+              <label class="sr-only" for="vh-patient-search">Search patients</label>
+              <input id="vh-patient-search" type="search" x-model="search"
+                     placeholder="Search by name or patient ID">
+              <button class="filter-btn" type="submit">Search</button>
+            </form>
+          </article>
+
+          <section class="card">
+            <div class="eyebrow mb2">All patients</div>
+            <div class="vh-table-wrap">
+              <table class="vh-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Patient</th>
+                    <th scope="col">Triage</th>
+                    <th scope="col">Stroke</th>
+                    <th scope="col">Certificate</th>
+                    <th scope="col">Last activity</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="patient in patients" :key="patient.patient_id">
+                    <tr :class="{ 'is-active': patient.external_id === activeSubject }">
+                      <th scope="row">
+                        <button type="button" class="vh-linkish" @click="openPatient(patient.patient_id)">
+                          <span x-text="patient.display_name"></span>
+                          <small x-text="patient.external_id"></small>
+                        </button>
+                      </th>
+                      <template x-for="tile in moduleList(patient)" :key="tile.module">
+                        <td>
+                          <span class="vh-pill" :class="`vh-pill--${tile.completed ? tile.tone : 'empty'}`"
+                                x-text="tile.completed ? tile.headline : '—'"></span>
+                        </td>
+                      </template>
+                      <td class="vh-nowrap" x-text="when(patient.last_activity) || '—'"></td>
+                      <td>
+                        <button type="button" class="filter-btn"
+                                :aria-pressed="patient.external_id === activeSubject"
+                                @click="setSubject(patient)"
+                                x-text="patient.external_id === activeSubject ? 'Working on' : 'Work on'"></button>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="!patients.length" x-cloak>
+                    <td colspan="6" class="vh-empty">No patients match that search.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card vh-history" x-show="unassigned.length" x-cloak>
+            <div class="eyebrow mb2">Unassigned records</div>
+            <p class="vh-note">
+              Assessments run without a patient selected. Choose a patient above before running
+              triage or stroke to file future results against them.
+            </p>
+            <ul class="vh-history__list">
+              <template x-for="item in unassigned" :key="item.record_id">
+                <li class="vh-history__item">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline" x-text="item.headline"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                </li>
+              </template>
+            </ul>
+          </section>
+
+          <!-- patient drill-down -->
+          <section class="card vh-detail" x-show="selected" x-cloak>
+            <div class="row-between mb2">
+              <div class="eyebrow" x-text="selected ? selected.patient.display_name : ''"></div>
+              <button type="button" class="filter-btn" @click="closePatient()">Close</button>
+            </div>
+
+            <div class="workflow-bubbles">
+              <template x-for="tile in (selected ? selected.modules : [])" :key="tile.module">
+                <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
+                  <header class="vh-tile__head">
+                    <h3 x-text="tile.module_label"></h3>
+                    <span class="vh-tile__state" :class="tile.completed ? 'is-done' : 'is-todo'"
+                          x-text="tile.completed ? 'Completed' : 'Not started'"></span>
+                  </header>
+                  <p class="vh-tile__headline" x-text="tile.headline"></p>
+                  <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
+                    <template x-for="fact in tile.facts" :key="fact.label + fact.value">
+                      <div class="vh-fact">
+                        <dt x-text="fact.label"></dt>
+                        <dd x-text="fact.value"></dd>
+                      </div>
+                    </template>
+                  </dl>
+                  <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
+                    <summary>Inputs</summary>
+                    <dl class="vh-facts">
+                      <template x-for="field in tile.inputs" :key="field.label">
+                        <div class="vh-fact">
+                          <dt x-text="field.label"></dt>
+                          <dd x-text="field.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </details>
+                  <footer class="vh-tile__foot">
+                    <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
+                  </footer>
+                </article>
+              </template>
+            </div>
+
+            <div class="eyebrow mb2">Full history</div>
+            <ul class="vh-history__list">
+              <template x-for="item in (selected ? selected.history : [])" :key="item.record_id">
+                <li class="vh-history__item">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline" x-text="item.headline"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                </li>
+              </template>
+            </ul>
+          </section>
+        </div>
+      </template>
     </section>
 
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
