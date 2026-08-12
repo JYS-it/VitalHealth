@@ -1,0 +1,1363 @@
+[
+  {
+    "external_id": "demo-nur-aini-yusof",
+    "display_name": "Nur Aini binte Yusof",
+    "input_payload": {
+      "age": 19,
+      "sex": "Female",
+      "arrival_mode": "walk_in",
+      "complaints": [
+        {
+          "token": "headache",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 72,
+        "sbp": 112,
+        "dbp": 72,
+        "rr": 16,
+        "o2": 99,
+        "o2_device": null,
+        "temp": 36.8,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P4",
+      "level_label": "NON-URGENT",
+      "level_colour": "#1f77b4",
+      "confidence_word": "Moderate",
+      "probabilities": {
+        "P4": 0.679,
+        "P3": 0.288,
+        "P2": 0.031,
+        "P1": 0.001
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "headache"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "headache",
+          "historical_emergency_rate": 0.106,
+          "n_historical": 613
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 19.0,
+      "arrival_mode": "Walk-in",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 99,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 112,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 72,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 72,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 16,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.8,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P4",
+        "probabilities": {
+          "P4": 0.679,
+          "P3": 0.288,
+          "P2": 0.031,
+          "P1": 0.001
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "headache"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "headache",
+            "historical_emergency_rate": 0.106,
+            "n_historical": 613
+          }
+        ],
+        "abnormal_vitals": [],
+        "age": 19.0,
+        "arrival_mode": "Walk-in",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "routine",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 99,
+            "status": "normal"
+          },
+          "sbp": {
+            "value": 112,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 72,
+            "status": "normal"
+          },
+          "hr": {
+            "value": 72,
+            "status": "normal"
+          },
+          "rr": {
+            "value": 16,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 36.8,
+            "status": "normal"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-david-tan",
+    "display_name": "David Tan",
+    "input_payload": {
+      "age": 74,
+      "sex": "Male",
+      "arrival_mode": "ambulance",
+      "complaints": [
+        {
+          "token": "strokealert",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 112,
+        "sbp": 188,
+        "dbp": 102,
+        "rr": 24,
+        "o2": 92,
+        "o2_device": null,
+        "temp": 37.4,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P1",
+      "level_label": "CRITICAL",
+      "level_colour": "#d62728",
+      "confidence_word": "High (red-flag driven)",
+      "probabilities": {
+        "P4": 0.002,
+        "P3": 0.002,
+        "P2": 0.228,
+        "P1": 0.768
+      },
+      "threshold_context": "well above the P1 alert threshold",
+      "red_flag_triggered": true,
+      "red_flag_complaint": "strokealert",
+      "active_chief_complaints": [
+        "strokealert"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "strokealert",
+          "historical_emergency_rate": 0.997,
+          "n_historical": 1463
+        }
+      ],
+      "abnormal_vitals": [
+        "o2=92",
+        "sbp=188",
+        "hr=112"
+      ],
+      "age": 74.0,
+      "arrival_mode": "ambulance",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr",
+        "cc_strokealert"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "red_flag",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 92,
+          "status": "low"
+        },
+        "sbp": {
+          "value": 188,
+          "status": "high"
+        },
+        "dbp": {
+          "value": 102,
+          "status": "high"
+        },
+        "hr": {
+          "value": 112,
+          "status": "high"
+        },
+        "rr": {
+          "value": 24,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 37.4,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P1",
+        "probabilities": {
+          "P4": 0.002,
+          "P3": 0.002,
+          "P2": 0.228,
+          "P1": 0.768
+        },
+        "threshold_context": "well above the P1 alert threshold",
+        "red_flag_triggered": true,
+        "red_flag_complaint": "strokealert",
+        "active_chief_complaints": [
+          "strokealert"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "strokealert",
+            "historical_emergency_rate": 0.997,
+            "n_historical": 1463
+          }
+        ],
+        "abnormal_vitals": [
+          "o2=92",
+          "sbp=188",
+          "hr=112"
+        ],
+        "age": 74.0,
+        "arrival_mode": "ambulance",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr",
+          "cc_strokealert"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "red_flag",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 92,
+            "status": "low"
+          },
+          "sbp": {
+            "value": 188,
+            "status": "high"
+          },
+          "dbp": {
+            "value": 102,
+            "status": "high"
+          },
+          "hr": {
+            "value": 112,
+            "status": "high"
+          },
+          "rr": {
+            "value": 24,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 37.4,
+            "status": "normal"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-grace-lim",
+    "display_name": "Grace Lim",
+    "input_payload": {
+      "age": 52,
+      "sex": "Female",
+      "arrival_mode": "car",
+      "complaints": [
+        {
+          "token": "abdominalpain",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 90,
+        "sbp": 142,
+        "dbp": 88,
+        "rr": 18,
+        "o2": 97,
+        "o2_device": null,
+        "temp": 37.6,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P3",
+      "level_label": "URGENT",
+      "level_colour": "#2ca02c",
+      "confidence_word": "High",
+      "probabilities": {
+        "P4": 0.017,
+        "P3": 0.92,
+        "P2": 0.061,
+        "P1": 0.001
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "abdominalpain"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "abdominalpain",
+          "historical_emergency_rate": 0.151,
+          "n_historical": 36887
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 52.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr",
+        "cc_abdominalpain"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 97,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 142,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 88,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 90,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 18,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 37.6,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P3",
+        "probabilities": {
+          "P4": 0.017,
+          "P3": 0.92,
+          "P2": 0.061,
+          "P1": 0.001
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "abdominalpain"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "abdominalpain",
+            "historical_emergency_rate": 0.151,
+            "n_historical": 36887
+          }
+        ],
+        "abnormal_vitals": [],
+        "age": 52.0,
+        "arrival_mode": "Car",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr",
+          "cc_abdominalpain"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "routine",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 97,
+            "status": "normal"
+          },
+          "sbp": {
+            "value": 142,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 88,
+            "status": "normal"
+          },
+          "hr": {
+            "value": 90,
+            "status": "normal"
+          },
+          "rr": {
+            "value": 18,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 37.6,
+            "status": "normal"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-marcus-wong",
+    "display_name": "Marcus Wong",
+    "input_payload": {
+      "age": 81,
+      "sex": "Male",
+      "arrival_mode": "ambulance",
+      "complaints": [
+        {
+          "token": "breathingdifficulty",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 118,
+        "sbp": 160,
+        "dbp": 95,
+        "rr": 28,
+        "o2": 89,
+        "o2_device": null,
+        "temp": 38.1,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P2",
+      "level_label": "EMERGENCY",
+      "level_colour": "#ff7f0e",
+      "confidence_word": "Moderate",
+      "probabilities": {
+        "P4": 0.013,
+        "P3": 0.13,
+        "P2": 0.79,
+        "P1": 0.067
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "breathingdifficulty"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "breathingdifficulty",
+          "historical_emergency_rate": 0.57,
+          "n_historical": 2219
+        }
+      ],
+      "abnormal_vitals": [
+        "o2=89",
+        "hr=118",
+        "rr=28",
+        "temp=38"
+      ],
+      "age": 81.0,
+      "arrival_mode": "ambulance",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "mixed",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 89,
+          "status": "low"
+        },
+        "sbp": {
+          "value": 160,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 95,
+          "status": "high"
+        },
+        "hr": {
+          "value": 118,
+          "status": "high"
+        },
+        "rr": {
+          "value": 28,
+          "status": "high"
+        },
+        "temp": {
+          "value": 38.1,
+          "status": "high"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P2",
+        "probabilities": {
+          "P4": 0.013,
+          "P3": 0.13,
+          "P2": 0.79,
+          "P1": 0.067
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "breathingdifficulty"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "breathingdifficulty",
+            "historical_emergency_rate": 0.57,
+            "n_historical": 2219
+          }
+        ],
+        "abnormal_vitals": [
+          "o2=89",
+          "hr=118",
+          "rr=28",
+          "temp=38"
+        ],
+        "age": 81.0,
+        "arrival_mode": "ambulance",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "mixed",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 89,
+            "status": "low"
+          },
+          "sbp": {
+            "value": 160,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 95,
+            "status": "high"
+          },
+          "hr": {
+            "value": 118,
+            "status": "high"
+          },
+          "rr": {
+            "value": 28,
+            "status": "high"
+          },
+          "temp": {
+            "value": 38.1,
+            "status": "high"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-timothy-ng",
+    "display_name": "Timothy Ng",
+    "input_payload": {
+      "age": 15,
+      "sex": "Male",
+      "arrival_mode": "walk_in",
+      "complaints": [
+        {
+          "token": "fall",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 88,
+        "sbp": 108,
+        "dbp": 70,
+        "rr": 18,
+        "o2": 98,
+        "o2_device": null,
+        "temp": 37.0,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "derived_from_note": true,
+      "model_refused": true,
+      "refusal_reason": "age 15 is outside the model's training distribution (adults 18\u2013102); the model is not run on out-of-distribution input",
+      "age": 15
+    }
+  },
+  {
+    "external_id": "demo-ethan-koh",
+    "display_name": "Ethan Koh",
+    "input_payload": {
+      "age": 45,
+      "sex": "Male",
+      "arrival_mode": "car",
+      "complaints": [
+        {
+          "token": "chestpain",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 102,
+        "sbp": 150,
+        "dbp": 92,
+        "rr": 20,
+        "o2": 95,
+        "o2_device": null,
+        "temp": 37.0,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P3",
+      "level_label": "URGENT",
+      "level_colour": "#2ca02c",
+      "confidence_word": "Borderline (split probabilities)",
+      "probabilities": {
+        "P4": 0.028,
+        "P3": 0.51,
+        "P2": 0.458,
+        "P1": 0.004
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "chestpain"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "chestpain",
+          "historical_emergency_rate": 0.53,
+          "n_historical": 24130
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 45.0,
+      "arrival_mode": "Car",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr",
+        "cc_chestpain"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 95,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 150,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 92,
+          "status": "high"
+        },
+        "hr": {
+          "value": 102,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 20,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 37.0,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P3",
+        "probabilities": {
+          "P4": 0.028,
+          "P3": 0.51,
+          "P2": 0.458,
+          "P1": 0.004
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "chestpain"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "chestpain",
+            "historical_emergency_rate": 0.53,
+            "n_historical": 24130
+          }
+        ],
+        "abnormal_vitals": [],
+        "age": 45.0,
+        "arrival_mode": "Car",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr",
+          "cc_chestpain"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "routine",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 95,
+            "status": "normal"
+          },
+          "sbp": {
+            "value": 150,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 92,
+            "status": "high"
+          },
+          "hr": {
+            "value": 102,
+            "status": "normal"
+          },
+          "rr": {
+            "value": 20,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 37.0,
+            "status": "normal"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-rosa-fernandez",
+    "display_name": "Rosa Fernandez",
+    "input_payload": {
+      "age": 68,
+      "sex": "Female",
+      "arrival_mode": "public_transport",
+      "complaints": [
+        {
+          "token": "fever",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 96,
+        "sbp": 128,
+        "dbp": 80,
+        "rr": 18,
+        "o2": 96,
+        "o2_device": null,
+        "temp": 38.6,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P3",
+      "level_label": "URGENT",
+      "level_colour": "#2ca02c",
+      "confidence_word": "Borderline (split probabilities)",
+      "probabilities": {
+        "P4": 0.197,
+        "P3": 0.597,
+        "P2": 0.203,
+        "P1": 0.003
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "fever-9weeksto74years"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "fever-9weeksto74years",
+          "historical_emergency_rate": 0.342,
+          "n_historical": 4154
+        }
+      ],
+      "abnormal_vitals": [
+        "temp=39"
+      ],
+      "age": 68.0,
+      "arrival_mode": "Public Transportation",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 96,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 128,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 80,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 96,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 18,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 38.6,
+          "status": "high"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P3",
+        "probabilities": {
+          "P4": 0.197,
+          "P3": 0.597,
+          "P2": 0.203,
+          "P1": 0.003
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "fever-9weeksto74years"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "fever-9weeksto74years",
+            "historical_emergency_rate": 0.342,
+            "n_historical": 4154
+          }
+        ],
+        "abnormal_vitals": [
+          "temp=39"
+        ],
+        "age": 68.0,
+        "arrival_mode": "Public Transportation",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "routine",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 96,
+            "status": "normal"
+          },
+          "sbp": {
+            "value": 128,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 80,
+            "status": "normal"
+          },
+          "hr": {
+            "value": 96,
+            "status": "normal"
+          },
+          "rr": {
+            "value": 18,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 38.6,
+            "status": "high"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  },
+  {
+    "external_id": "demo-balvinder-singh",
+    "display_name": "Balvinder Singh",
+    "input_payload": {
+      "age": 58,
+      "sex": "Male",
+      "arrival_mode": "wheelchair",
+      "complaints": [
+        {
+          "token": "dizziness",
+          "evidence": null
+        }
+      ],
+      "vitals": {
+        "hr": 84,
+        "sbp": 136,
+        "dbp": 84,
+        "rr": 16,
+        "o2": 97,
+        "o2_device": null,
+        "temp": 36.9,
+        "temp_unit": "C"
+      }
+    },
+    "output_payload": {
+      "id": null,
+      "predicted_level": "P3",
+      "level_label": "URGENT",
+      "level_colour": "#2ca02c",
+      "confidence_word": "Moderate",
+      "probabilities": {
+        "P4": 0.05,
+        "P3": 0.652,
+        "P2": 0.296,
+        "P1": 0.002
+      },
+      "threshold_context": "well below the P1 alert threshold",
+      "red_flag_triggered": false,
+      "red_flag_complaint": null,
+      "active_chief_complaints": [
+        "dizziness"
+      ],
+      "complaint_base_rates": [
+        {
+          "complaint": "dizziness",
+          "historical_emergency_rate": 0.309,
+          "n_historical": 8652
+        }
+      ],
+      "abnormal_vitals": [],
+      "age": 58.0,
+      "arrival_mode": "Wheelchair",
+      "department": null,
+      "utilisation_history": {},
+      "high_importance_features_present": [
+        "arrivalmode",
+        "triage_vital_hr"
+      ],
+      "shap_top_contributors": null,
+      "escalation_basis": "routine",
+      "threshold_sensitive": false,
+      "triage_vitals": {
+        "o2": {
+          "value": 97,
+          "status": "normal"
+        },
+        "sbp": {
+          "value": 136,
+          "status": "normal"
+        },
+        "dbp": {
+          "value": 84,
+          "status": "normal"
+        },
+        "hr": {
+          "value": 84,
+          "status": "normal"
+        },
+        "rr": {
+          "value": 16,
+          "status": "normal"
+        },
+        "temp": {
+          "value": 36.9,
+          "status": "normal"
+        }
+      },
+      "vitals_not_recorded": [],
+      "derived_from_note": true,
+      "model_refused": false,
+      "filled_feature_count": 10,
+      "provenance": {
+        "n_features": 552,
+        "full_records": {
+          "balanced_accuracy": 0.7289,
+          "macro_f2": 0.606,
+          "recall_at_p1": 0.8425
+        },
+        "note_shaped_with_vitals": {
+          "balanced_accuracy": 0.7067,
+          "macro_f2": 0.5888,
+          "recall_at_p1": 0.814
+        },
+        "note_shaped_no_vitals": {
+          "balanced_accuracy": 0.6774,
+          "macro_f2": 0.5295,
+          "recall_at_p1": 0.8435
+        },
+        "deltas_vs_full": {
+          "note_shaped_with_vitals": {
+            "balanced_accuracy": -0.0222,
+            "macro_f2": -0.0172,
+            "recall_at_p1": -0.0285
+          },
+          "note_shaped_no_vitals": {
+            "balanced_accuracy": -0.0515,
+            "macro_f2": -0.0765,
+            "recall_at_p1": 0.001
+          }
+        },
+        "label_noise_ceiling_pct": 80,
+        "label_noise_conflict_pct": 61.9
+      },
+      "payload": {
+        "predicted_level": "P3",
+        "probabilities": {
+          "P4": 0.05,
+          "P3": 0.652,
+          "P2": 0.296,
+          "P1": 0.002
+        },
+        "threshold_context": "well below the P1 alert threshold",
+        "red_flag_triggered": false,
+        "red_flag_complaint": null,
+        "active_chief_complaints": [
+          "dizziness"
+        ],
+        "complaint_base_rates": [
+          {
+            "complaint": "dizziness",
+            "historical_emergency_rate": 0.309,
+            "n_historical": 8652
+          }
+        ],
+        "abnormal_vitals": [],
+        "age": 58.0,
+        "arrival_mode": "Wheelchair",
+        "department": null,
+        "utilisation_history": {},
+        "high_importance_features_present": [
+          "arrivalmode",
+          "triage_vital_hr"
+        ],
+        "shap_top_contributors": null,
+        "escalation_basis": "routine",
+        "threshold_sensitive": false,
+        "triage_vitals": {
+          "o2": {
+            "value": 97,
+            "status": "normal"
+          },
+          "sbp": {
+            "value": 136,
+            "status": "normal"
+          },
+          "dbp": {
+            "value": 84,
+            "status": "normal"
+          },
+          "hr": {
+            "value": 84,
+            "status": "normal"
+          },
+          "rr": {
+            "value": 16,
+            "status": "normal"
+          },
+          "temp": {
+            "value": 36.9,
+            "status": "normal"
+          }
+        },
+        "vitals_not_recorded": []
+      }
+    }
+  }
+]

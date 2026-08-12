@@ -19,7 +19,6 @@ venv/
 .idea/
 
 # Demo data build artifacts — regenerate with demo_data/compute_*.py
-demo_data/output/
 
 # Note: each app may add its own .gitignore for app-specific artefacts
 # (e.g. apps/Jace ignores *.npy build arrays and logs/).
