@@ -517,28 +517,33 @@ document.addEventListener('alpine:init', () => {
     },
 
     buildConfirmFields(extraction) {
-      const field = (name) => extraction?.fields?.[name] || { value: '', span: null };
-      const complaints = extraction?.complaints || extraction?.fields?.complaints || [];
-      const allergies = extraction?.allergies || extraction?.fields?.allergies || [];
+      // extraction is the flat /api/extract response — {age, sex, arrival_mode,
+      // complaints, allergies, ...} at the top level (see api.py/ctrse_core.py).
+      // There is no `.fields` sub-object; reading through one here silently
+      // blanks age/sex/arrival_mode regardless of what was actually extracted.
+      const arrivalMode = extraction?.arrival_mode || {};
+      const complaints = extraction?.complaints || [];
+      const allergies = extraction?.allergies || [];
 
       return {
-        age: { ...field('age') },
-        sex: { ...field('sex') },
+        age: { value: extraction?.age?.value ?? '', span: extraction?.age?.span ?? null },
+        sex: { value: extraction?.sex?.value ?? '', span: extraction?.sex?.span ?? null },
         arrival: {
-          ...field('arrival'),
-          flagged: Boolean(field('arrival')?.flagged),
-          reason: field('arrival')?.reason || '',
-          alternates: field('arrival')?.alternates || [],
-          ack: !field('arrival')?.flagged,
+          value: arrivalMode.value ?? '',
+          span: arrivalMode.span ?? null,
+          flagged: Boolean(arrivalMode.ambiguous),
+          reason: arrivalMode.reason || '',
+          alternates: arrivalMode.alternates || [],
+          ack: !arrivalMode.ambiguous,
         },
         complaints: complaints.map((c) => ({
           token: c.token || c.value || '',
           span: c.span || null,
           evidence: c.evidence || null,
           fallback: Boolean(c.fallback),
-          flagged: Boolean(c.flagged),
+          flagged: Boolean(c.ambiguous),
           alternates: c.alternates || [],
-          ack: !c.flagged,
+          ack: !c.ambiguous,
         })),
         allergies: allergies.length
           ? allergies.map((a) => ({ value: a.value || a.text || '', span: a.span || null }))
