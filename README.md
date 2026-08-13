@@ -7,6 +7,16 @@ merged into a single codebase and do not share a Python environment.
 
 ## Quickstart (new clone)
 
+For login, dashboards, and demo accounts, PostgreSQL must also be running.
+Before the first launch, copy `.env.example` to `.env` at the repository root
+and set `DATABASE_URL` to your own local PostgreSQL connection. Each teammate
+needs their own `.env`; it is deliberately ignored by Git and never arrives
+with a clone. The default local pattern is:
+
+```text
+DATABASE_URL=postgresql+psycopg://vitalhealth:<your-postgres-password>@127.0.0.1:5432/vitalhealth
+```
+
 **Prerequisites:** Python 3.11 (tested; Jace also works on 3.9, its original
 target — anything in that range is fine) and Git.
 
