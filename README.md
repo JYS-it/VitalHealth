@@ -7,6 +7,21 @@ merged into a single codebase and do not share a Python environment.
 
 ## Quickstart (new clone)
 
+For login, dashboards, and demo accounts, all teammates must point to the
+same PostgreSQL database. Before the first launch, copy `.env.example` to
+`.env` at the repository root and set `DATABASE_URL` to the team Supabase
+connection URL. `.env` is deliberately ignored by Git; distribute the real
+URL through a password manager or another private channel, never by commit.
+The recommended Supabase Session pooler pattern is:
+
+```text
+DATABASE_URL=postgresql://postgres.<project-ref>:<database-password>@aws-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+`run_all.py` accepts both `postgres://` / `postgresql://` URLs copied from
+Supabase and the explicit `postgresql+psycopg://` form. See
+[Using one Supabase database](#using-one-supabase-database) for the setup.
+
 **Prerequisites:** Python 3.11 (tested; Jace also works on 3.9, its original
 target — anything in that range is fine) and Git.
 
@@ -28,6 +43,32 @@ roster and Dr Alex Lee demo clinician in the shared database before starting
 the web services. Missing demo model snapshots are generated on that first
 run only; later launches synchronise the same records without duplicating
 unchanged audit data.
+
+## Using one Supabase database
+
+One team member should create and own one Supabase project; this is the single
+PostgreSQL database used by every local copy of VitalHealth. No Supabase API,
+anon, or service-role key is needed by this application: it connects only from
+the Python server processes using `DATABASE_URL`.
+
+1. Create a Supabase project and wait until its database is ready.
+2. In its Dashboard, select **Connect** and copy the **Session pooler** URI.
+   It works on IPv4-only home/campus networks and is the appropriate pooler
+   mode for these persistent local servers. Keep the `:5432` port.
+3. Append `?sslmode=require` if the supplied URI does not already include an
+   `sslmode` parameter. Put the result in the root `.env` as `DATABASE_URL`.
+4. Privately give the *same complete URL* to each teammate. They each create
+   their own root `.env` file from `.env.example`; they do **not** install or
+   start PostgreSQL locally.
+5. Run `py -3.12 run_all.py` once. The launcher creates the VitalHealth tables
+   and seeds the demo accounts/records if they are missing. Later launches are
+   safe: the seeder is idempotent and does not duplicate unchanged records.
+
+For maintenance work such as migrations, database backups, or `pg_dump`, use
+Supabase's **Direct connection** rather than the pooler. If a teammate cannot
+connect, first verify that the project is running, that the copied URL has not
+been truncated/altered, and that any Supabase network restrictions include
+their network.
 
 Want the AI-drafted-text features (care plans, EMC drafts, note extraction),
 not just the ML predictions? Add API keys before running — see
@@ -278,8 +319,8 @@ Without `DATABASE_URL` set, nobody can log in and every proxied route
 (`/triage/*`, `/stroke/*`, `/emc/*`) becomes permanently inaccessible, even
 though the landing page at `/` still renders.
 
-For a local PostgreSQL installation, add the same URL to the three existing
-app `.env` files. Once `run_all.py` has built the app environments, initialise
+For an alternate self-hosted PostgreSQL installation, use its URL in the same
+root `.env` file. Once `run_all.py` has built the app environments, initialise
 or upgrade the schema after a storage-package update:
 
 ```powershell

@@ -121,6 +121,32 @@ def _positive_int_env(name: str, default: int) -> int:
         return default
 
 
+def _nonnegative_int_env(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, default)))
+    except ValueError:
+        return default
+
+
+def _normalise_database_url(database_url: str) -> str:
+    """Make PostgreSQL URLs copied from Supabase work with psycopg 3.
+
+    Supabase presents standard ``postgres://`` / ``postgresql://`` URLs in
+    its Connect dialog.  This project installs psycopg 3, so SQLAlchemy needs
+    the explicit ``postgresql+psycopg://`` driver prefix instead.
+    """
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgres://")
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url.removeprefix("postgresql://")
+    return database_url
+
+
+def _is_supabase_transaction_pooler(database_url: str) -> bool:
+    """Whether this URL uses Supavisor's transaction-pooling endpoint."""
+    return ".pooler.supabase.com:6543/" in database_url
+
+
 def _json_value(value: Any) -> Any:
     """Convert model/numpy/date values into JSON-safe primitive values."""
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -142,13 +168,26 @@ class ClinicalStore:
     """A thin repository layer. It is disabled when DATABASE_URL is absent."""
 
     def __init__(self, database_url: str | None = None):
-        self.database_url = (database_url or os.getenv("DATABASE_URL", "")).strip()
+        raw_database_url = (database_url or os.getenv("DATABASE_URL", "")).strip()
+        self.database_url = _normalise_database_url(raw_database_url)
         options: dict[str, Any] = {"pool_pre_ping": True}
         if self.database_url.startswith("postgresql"):
+            # Four local web processes connect to the same hosted database.
+            # Keep Supabase development usage small unless a deployment
+            # explicitly opts into a larger application-side pool.
+            is_supabase = "supabase.com" in self.database_url
+            connect_args: dict[str, Any] = {
+                "connect_timeout": _positive_int_env("DATABASE_CONNECT_TIMEOUT", 10),
+            }
+            if _is_supabase_transaction_pooler(self.database_url):
+                # Supavisor transaction mode does not support prepared
+                # statements; psycopg otherwise starts preparing them after a
+                # few repetitions.
+                connect_args["prepare_threshold"] = None
             options.update(
-                pool_size=_positive_int_env("DATABASE_POOL_SIZE", 5),
-                max_overflow=_positive_int_env("DATABASE_MAX_OVERFLOW", 5),
-                connect_args={"connect_timeout": _positive_int_env("DATABASE_CONNECT_TIMEOUT", 5)},
+                pool_size=_positive_int_env("DATABASE_POOL_SIZE", 1 if is_supabase else 5),
+                max_overflow=_nonnegative_int_env("DATABASE_MAX_OVERFLOW", 0 if is_supabase else 5),
+                connect_args=connect_args,
             )
         self.engine = create_engine(self.database_url, **options) if self.database_url else None
 
