@@ -147,8 +147,23 @@ forwards along with every other header. The `X-Vitalhealth-User` /
 `-User-Email` / `-Role` headers are still sent, but only for logging — the
 backends bind `127.0.0.1`, so anything running locally could forge a header,
 whereas the cookie's signature cannot be forged without `SESSION_SECRET`.
-That is also why all four processes must share one `SESSION_SECRET`;
-`run_all.py` copies the gateway's value into the three backends for you.
+
+That is also why all four processes must share one `SESSION_SECRET`, and why
+each one resolves it through `vitalhealth_storage.load_shared_env()` at
+startup rather than from its own `.env` alone. `SESSION_SECRET` and
+`DATABASE_URL` are shared platform state, not per-app config: if any process
+disagrees on either, it fails **silently** — signature checks just return
+"no session," so a logged-in user gets a bare `401`/`403` from a backend and
+their records look like they have vanished.
+
+`load_shared_env()` fills either key from the repo-root `.env` (falling back
+to `apps/gateway/.env`) whenever the process does not already have a
+non-empty value, treating an **empty** value as missing — an unfilled
+`SESSION_SECRET=` placeholder in an app's own `.env` must not win over the
+real shared one. Values already exported in the environment are never
+overridden, so `run_all.py`'s injection and any real deployment's
+environment still take precedence. The upshot: the stack behaves the same
+whether you launch it with `run_all.py` or start the four processes by hand.
 
 ### Dashboards
 
@@ -298,8 +313,8 @@ for the one exception: Jace's own code doesn't load `.env` itself).
 | `OPENROUTER_API_KEY` | YS | OpenRouter-hosted models via the `openai` client |
 | `OPENROUTER_MODEL` | YS | Optional; defaults to `openai/gpt-4o-mini` |
 | `SECRET_KEY` | Jeslyn | Flask session secret; defaults to a placeholder in development |
-| `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL. Optional for the three clinical apps (durable clinical records/audit events); required for the gateway (the `users` table backing login) |
-| `SESSION_SECRET` | gateway, Jace, Jeslyn, YS | Signs the login session cookie. **All four must share one value** — the gateway signs, the backends verify to decide whose record a result is. `run_all.py` copies the gateway's value into the backends; set it yourself if you start them by hand. Defaults to a placeholder in development — set a long random value in production |
+| `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL, resolved by `load_shared_env()` the same way as `SESSION_SECRET`. Required for the gateway (the `users` table backing login) and for Jace (which serves the dashboards — without it both dashboards render empty). Optional for Jeslyn/YS, where it only controls whether records persist |
+| `SESSION_SECRET` | gateway, Jace, Jeslyn, YS | Signs the login session cookie. **All four must share one value** — the gateway signs, the backends verify to decide whose record a result is. Put it in the repo-root `.env` (or `apps/gateway/.env`) and every process picks it up via `load_shared_env()`, however it is launched. Defaults to a placeholder in development — set a long random value in production |
 | `CLINICIAN_ACCESS_CODE` | gateway | Required to register a clinician account. Unset means clinician registration is refused outright (clinicians can read every patient's records) |
 | `SESSION_COOKIE_SECURE` | gateway | Optional; set to `true` once the gateway is served over HTTPS |
 | `TRIAGE_UPSTREAM` / `STROKE_UPSTREAM` / `EMC_UPSTREAM` | gateway | Optional; override where each prefix proxies to (default `127.0.0.1:8000` / `:5000` / `:5001`) |

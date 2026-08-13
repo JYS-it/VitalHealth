@@ -31,8 +31,12 @@ sys.path.insert(0, str(DEMO_DIR))
 sys.path.insert(0, str(ROOT))
 
 from characters import CHARACTERS, DEMO_CLINICIAN, DEMO_PASSWORD, demo_email  # noqa: E402
-from vitalhealth_storage import get_store  # noqa: E402
+from vitalhealth_storage import get_store, load_shared_env  # noqa: E402
 from vitalhealth_storage.store import records as records_table, users as users_table  # noqa: E402
+
+# Same shared-settings resolution the four apps use, so this works whether
+# run_all.py injects DATABASE_URL or you run it straight from a shell.
+load_shared_env()
 
 
 def hash_password(password: str) -> str:
@@ -120,17 +124,61 @@ def load_results(source_app: str) -> dict:
     return {row["external_id"]: row for row in json.loads(path.read_text(encoding="utf-8"))}
 
 
-def find_existing_record(store, patient_id: str, source_app: str, record_type: str) -> str | None:
+# Stamped into every seeded output_payload so re-seeding can recognise its own
+# rows. Without it this script matched on patient + app + record_type and
+# updated the *newest* match — which, once patients could submit for real, was
+# a live submission rather than the seeded row, silently reverting an approved
+# result to PENDING_REVIEW on every launch. Demo data must never overwrite
+# clinical work.
+SEED_MARKER_KEY = "seeded_by"
+SEED_MARKER_VALUE = "demo_data/seed_db.py"
+
+
+def seeded_payload(output_payload: dict) -> dict:
+    return {**output_payload, SEED_MARKER_KEY: SEED_MARKER_VALUE}
+
+
+def _is_seeded(record: dict) -> bool:
+    payload = record.get("output_payload")
+    return isinstance(payload, dict) and payload.get(SEED_MARKER_KEY) == SEED_MARKER_VALUE
+
+
+def find_existing_record(
+    store, patient_id: str, source_app: str, record_type: str, legacy_output: dict | None = None
+) -> str | None:
+    """The seeded row for this character/app, or None.
+
+    Only ever returns a row this script created. A patient's real submission
+    for the same character and module is deliberately invisible here, so
+    re-seeding leaves it untouched.
+
+    `legacy_output` adopts rows seeded before the marker existed: a row whose
+    payload is byte-identical to the fixture we are about to write is one of
+    ours by definition, and adopting it avoids duplicating the whole roster
+    once. A real submission never matches, because it carries the patient's
+    own answers and a full workflow snapshot.
+    """
     with store.engine.begin() as connection:
-        row = connection.execute(
-            records_table.select()
-            .where(records_table.c.patient_id == patient_id)
-            .where(records_table.c.source_app == source_app)
-            .where(records_table.c.record_type == record_type)
-            .order_by(records_table.c.created_at.desc())
-            .limit(1)
-        ).mappings().first()
-    return row["id"] if row else None
+        rows = [
+            dict(row)
+            for row in connection.execute(
+                records_table.select()
+                .where(records_table.c.patient_id == patient_id)
+                .where(records_table.c.source_app == source_app)
+                .where(records_table.c.record_type == record_type)
+                .order_by(records_table.c.created_at.desc())
+            ).mappings()
+        ]
+
+    for row in rows:
+        if _is_seeded(row):
+            return row["id"]
+
+    if legacy_output is not None:
+        for row in rows:
+            if row.get("output_payload") == legacy_output:
+                return row["id"]
+    return None
 
 
 def main():
@@ -175,13 +223,17 @@ def main():
                 continue
 
             status = config["status"](row["output_payload"])
-            existing_id = find_existing_record(store, patient_id, source_app, config["record_type"])
+            output_payload = seeded_payload(row["output_payload"])
+            existing_id = find_existing_record(
+                store, patient_id, source_app, config["record_type"],
+                legacy_output=row["output_payload"],
+            )
             if existing_id:
                 existing_record = store.get_record(existing_id) or {}
                 unchanged = (
                     existing_record.get("status") == status
                     and existing_record.get("input_payload") == row["input_payload"]
-                    and existing_record.get("output_payload") == row["output_payload"]
+                    and existing_record.get("output_payload") == output_payload
                     and existing_record.get("owner_user_id") == owner_user_id
                 )
                 if unchanged:
@@ -191,7 +243,7 @@ def main():
                     existing_id,
                     status=status,
                     input_payload=row["input_payload"],
-                    output_payload=row["output_payload"],
+                    output_payload=output_payload,
                     # Also set on the update path, or re-seeding a database
                     # created before ownership existed leaves rows unowned.
                     owner_user_id=owner_user_id,
@@ -203,7 +255,7 @@ def main():
                     record_type=config["record_type"],
                     status=status,
                     input_payload=row["input_payload"],
-                    output_payload=row["output_payload"],
+                    output_payload=output_payload,
                     model_version=config["model_version"],
                     patient_external_id=external_id,
                     patient_name=display_name,

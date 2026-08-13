@@ -19,11 +19,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import ctrse_core as core
-from vitalhealth_storage import get_store, identity
+from vitalhealth_storage import get_store, identity, load_shared_env, missing_shared_keys
+
+# SESSION_SECRET and DATABASE_URL are shared with the gateway, not local
+# config, and this app has no .env of its own to supply them. Without them
+# every gateway-signed cookie fails verification and the dashboard reads no
+# records at all. Must run before dashboard_api is imported below, because
+# that module resolves the store at import time.
+load_shared_env()
+for _key in missing_shared_keys():
+    print(f"[Jace] WARNING: {_key} is not set - sessions and the dashboard will not work.")
 
 # Cross-module dashboard reads. Kept in its own module so this file stays what
 # its docstring says it is: transport for CTRSE and nothing else.
-from dashboard_api import router as dashboard_router
+from dashboard_api import router as dashboard_router  # noqa: E402  (needs env above)
 
 # Resolve everything relative to this file so the app is CWD-independent
 # (equivalent to `core.init('.')` when launched from the project directory).

@@ -6,12 +6,12 @@ import os
 import re
 from threading import Lock
 
-from flask import Flask, abort, redirect, render_template, request, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 import joblib
 import pandas as pd
 from pypdf import PdfReader
-from vitalhealth_storage import get_store, identity
+from vitalhealth_storage import get_store, identity, load_shared_env, missing_shared_keys
 
 try:
     from google import genai
@@ -21,6 +21,13 @@ except Exception:
 
 # Load environment variables from .env
 load_dotenv()
+# SESSION_SECRET and DATABASE_URL are shared with the gateway, not local
+# config. This app's own .env ships them blank, and a blank value here means
+# every gateway-signed cookie fails verification and every record write is a
+# no-op — so fill them from the shared source before anything reads them.
+load_shared_env()
+for _key in missing_shared_keys():
+    print(f"[Jeslyn] WARNING: {_key} is not set - sessions and saved records will not work.")
 SHARED_STORE = get_store()
 
 app = Flask(__name__)
@@ -37,7 +44,10 @@ def require_clinician_role():
     The gateway always requires authentication. Keeping direct launches
     usable without a cookie preserves the documented local development path.
     """
-    if request.endpoint in {"submit_form", "submit", "submitted"}:
+    # "static" is Flask's built-in static-file endpoint (app.static_url_path),
+    # not a route this app defines — without it here, the CSS/JS a patient's
+    # allowed pages link to 403s even though the pages themselves load fine.
+    if request.endpoint in {"submit_form", "submit", "submitted", "submission_status", "static"}:
         return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
@@ -633,9 +643,71 @@ def submit():
 
 @app.get("/submitted/<record_id>")
 def submitted(record_id):
-    """Generic confirmation only. No risk category, percentage, or care-plan
-    text is ever rendered here."""
-    return render_template("submitted.html", page_title="Submitted")
+    """The patient's waiting page. Renders no result itself — it polls
+    /status/<record_id> and reveals the outcome in place once a clinician has
+    approved it, so the patient can simply wait here instead of being sent
+    away to the dashboard."""
+    return render_template("submitted.html", page_title="Submitted", record_id=record_id)
+
+
+def _patient_owns_record(actor, record):
+    """A patient may only ever poll their own submission."""
+    if actor is None or record is None:
+        return False
+    if record.get("owner_user_id") and record["owner_user_id"] == actor.user_id:
+        return True
+    if not record.get("patient_id") or not actor.patient_external_id:
+        return False
+    patient = SHARED_STORE.get_patient(record["patient_id"])
+    return bool(patient and patient["external_id"] == actor.patient_external_id)
+
+
+@app.get("/status/<record_id>")
+def submission_status(record_id):
+    """Patient-facing poll target for the waiting page.
+
+    Returns the clinician-approved result and nothing else. While a record is
+    pending there is deliberately no risk category, probability, or care-plan
+    text in the response at all — not hidden in the payload for the frontend
+    to filter, simply absent — so a patient watching the network tab still
+    cannot read a result their clinician has not released.
+    """
+    actor = identity.actor_from_cookies(request.cookies)
+    if actor is None:
+        return jsonify({"error": "authentication_required"}), 401
+
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if record is None or record.get("source_app") != "stroke":
+        abort(404)
+
+    # 404 rather than 403: a patient probing ids should not be able to learn
+    # which ones exist. Clinicians may read any record.
+    if not actor.is_clinician and not _patient_owns_record(actor, record):
+        abort(404)
+
+    status = str(record.get("status") or "").upper()
+    payload = {"status": status, "state": "pending", "ready": False, "result": None}
+
+    if status == "REJECTED":
+        payload["state"] = "rejected"
+        return jsonify(payload)
+
+    if status not in ("APPROVED", "ASSESSED", "CARE_PLAN_READY"):
+        return jsonify(payload)
+
+    output = record.get("output_payload") or {}
+    prediction = output.get("prediction") or {}
+    payload.update({
+        "state": "approved",
+        "ready": True,
+        "result": {
+            "risk_category": prediction.get("risk_category"),
+            "risk_probability_percent": prediction.get("risk_probability_percent"),
+            "care_plan": output.get("care_plan") or "",
+            "care_calendar": output.get("care_calendar") or [],
+        },
+    })
+    return jsonify(payload)
 
 
 @app.get("/review/<record_id>")

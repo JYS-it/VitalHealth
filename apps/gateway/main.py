@@ -29,6 +29,7 @@ from typing import Any, Optional
 from urllib.parse import quote
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parent
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -50,13 +51,19 @@ except Exception:
         pass
 
 import auth
-from vitalhealth_storage import identity
+from vitalhealth_storage import identity, load_shared_env, missing_shared_keys
 
 load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(BASE_DIR / ".env")
+# Same shared-settings resolution the three backends use, so the gateway
+# signs cookies with the value they verify against no matter which .env a
+# given machine actually has filled in.
+load_shared_env()
+for _key in missing_shared_keys():
+    print(f"[gateway] WARNING: {_key} is not set - login and sessions will not work.")
 
 app = FastAPI(title="VitalHealth gateway")
 
-BASE_DIR = Path(__file__).resolve().parent
 app.mount("/vh-assets", StaticFiles(directory=BASE_DIR / "static"), name="vh-assets")
 
 SHARED_STORE = get_store()
@@ -538,18 +545,22 @@ def _forbidden_for_role(request: Request, message: str) -> Response:
     return JSONResponse({"detail": message}, status_code=403)
 
 
-_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted"}
+_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted", "status", "static"}
 
 
 def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
     """What a patient account may reach through the proxy.
 
     Triage stays clinician-only and instant — out of scope for the review
-    workflow. Stroke and EMC now allow exactly two patient-facing routes each
-    (self-submission and its confirmation page); everything else there,
-    including the review/edit/approve pages, stays clinician-only. Jace's
-    static assets are allowed so the portal can load, while only its
-    explicit patient-safe dashboard API can be called.
+    workflow. Stroke and EMC allow exactly three patient-facing routes each:
+    self-submission, its waiting page, and the `status/` poll target that
+    waiting page reads to reveal a result once a clinician approves it. Each
+    Flask app's own `static/` folder (CSS/JS) is allowed too so those pages
+    don't render unstyled — it's Flask's built-in static file serving, no
+    clinical data lives there. Everything else, including the
+    review/edit/approve pages, stays clinician-only. Jace's static assets are
+    allowed so the portal can load, while only its explicit patient-safe
+    dashboard API can be called.
     """
     normalized = path.strip("/")
     if prefix == "triage":

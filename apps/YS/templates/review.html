@@ -153,10 +153,17 @@
             Certificate draft text
             <textarea name="draft_text" rows="14" class="draft-editor">{{ workflow.draft.text }}</textarea>
           </label>
-          <p class="hint wide">Editing this text and clicking Save re-runs the safety review against your edits before you approve.</p>
+          <p class="hint wide">
+            Editing this text and clicking Save re-runs the safety review against your edits before you
+            approve. If you changed the clinic or clinician details above, use “Regenerate draft from
+            current details” so the certificate text matches them — the safety review blocks approval
+            while the text and the confirmed details disagree.
+          </p>
 
           <div class="actions wide">
             <button class="btn-outline" type="submit" name="action" value="save">Save changes</button>
+            <button class="btn-warning" type="submit" name="action" value="regenerate"
+                    formnovalidate>Regenerate draft from current details</button>
             <button
               class="primary btn-submit"
               type="submit" name="action" value="approve"
