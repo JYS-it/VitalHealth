@@ -73,6 +73,14 @@ _BY_ID = {p["id"]: p for p in _PATIENTS}
 
 app = FastAPI(title="CTRSE — triage acuity")
 
+# The patient self-check API (§Patient self-check). Unlike /api/dashboard/*
+# — which is exempt below because it "serves no clinical logic at all" — this
+# DOES run the model, so it is not folded into that prefix. It is instead
+# named explicitly here and given its own authz below: either role may call
+# it, never neither role and neither role is *rejected*, because the whole
+# point of this surface is that a patient uses it directly.
+PATIENT_API_PATHS = {"/api/self-check", "/api/self-check/options"}
+
 
 @app.middleware("http")
 async def require_clinician_for_clinical_api(request: Request, call_next):
@@ -81,10 +89,14 @@ async def require_clinician_for_clinical_api(request: Request, call_next):
     The gateway is the public authentication boundary.  An unauthenticated
     direct launch remains available for the documented standalone development
     workflow, but a request that carries a VitalHealth session must be a valid
-    clinician session before it can use a clinical API.
+    clinician session before it can use a clinical API — except the patient
+    self-check paths, which a patient session is specifically allowed to use
+    (that route does its own, looser authz: a cookie must still resolve to a
+    valid actor, just not necessarily a clinician one).
     """
     path = request.url.path
-    if path.startswith("/api/") and not path.startswith("/api/dashboard/"):
+    if (path.startswith("/api/") and not path.startswith("/api/dashboard/")
+            and path not in PATIENT_API_PATHS):
         token = request.cookies.get(identity.COOKIE_NAME)
         if token:
             actor = identity.actor_from_cookies(request.cookies)
@@ -372,6 +384,80 @@ def post_predict(req: PredictRequest, request: Request):
         payload={"predicted_level": result.get("predicted_level")},
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Patient self-check (§Patient self-check) — reuses predict_from_fields
+# verbatim (CTRSE_Pipeline_Build_Spec.md §3: one model, one scoring path).
+# No `note` field on the request, same as PredictRequest above: the patient
+# surface never touches the extractor, redact_pii, or the LLM, so
+# span-or-silence is untouched by this feature entirely.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/self-check/options")
+def get_self_check_options():
+    # The full clinical vocabulary (/api/vocab) stays clinician-only — a picker
+    # where a patient could self-select e.g. cardiacarrest is a footgun. This
+    # serves only the pre-validated, plain-language patient subset. Emergency
+    # contact numbers come from here too (not hardcoded in the page) so the
+    # persistent banner can never drift from what ctrse_core actually uses in
+    # a released result's action_line.
+    return {
+        "complaints": core.PATIENT_SYMPTOM_OPTIONS or [],
+        "emergency_contacts": core.EMERGENCY_CONTACTS,
+        "scope_note": core.PATIENT_SCOPE_NOTE,
+    }
+
+
+@app.post("/api/self-check")
+def post_self_check(req: PredictRequest, request: Request):
+    # Same authz shape as the middleware's own philosophy (see
+    # PATIENT_API_PATHS above): no cookie is the documented standalone-dev
+    # path and is allowed; a cookie that fails to resolve to an actor is not.
+    token = request.cookies.get(identity.COOKIE_NAME)
+    actor, subject_ref, subject_name = _actor_and_subject(request)
+    if token and actor is None:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    fields = {
+        "age": req.age,
+        "sex": req.sex,
+        "arrival_mode": req.arrival_mode,
+        "complaints": [{"token": c.token, "evidence": c.evidence} for c in req.complaints],
+        "vitals": req.vitals.model_dump() if req.vitals is not None else {},
+    }
+    result = core.predict_from_fields(fields)
+    view = core.patient_view(result)
+
+    # A distinct record_type + status from a clinician's triage_assessment /
+    # ASSESSED, and specifically NOT PENDING_REVIEW: status is what
+    # list_pending_review filters on, and nothing is expected to action a
+    # self-check, so queueing it would be a false safety promise.
+    status = "REFUSED" if result.get("model_refused") else "PATIENT_SELF_CHECK"
+    record_id = SHARED_STORE.safe_create_record(
+        source_app="triage",
+        record_type="triage_self_check",
+        status=status,
+        input_payload=fields,
+        # The full result is kept for any future clinician-side audit view;
+        # patient_view is what the API response and dashboard tile actually
+        # read, so the two can never quietly drift from what was released.
+        output_payload={**result, "patient_view": view},
+        model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
+    )
+    SHARED_STORE.safe_append_audit_event(
+        source_app="triage",
+        event_type="triage_self_check_released",
+        record_id=record_id,
+        actor_reference=actor.email if actor else None,
+        payload={"band": view["urgency"]["band"]},
+    )
+    # The response body is patient_view + record_id and nothing else — result
+    # itself (and its 24-key payload/probabilities/etc.) never reaches here.
+    return {**view, "record_id": record_id}
 
 
 @app.post("/api/extract")

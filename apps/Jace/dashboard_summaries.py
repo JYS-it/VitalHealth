@@ -21,6 +21,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+# Only for PATIENT_LEVEL_HEADLINES / PATIENT_COMPLAINT_LABELS — plain constant
+# tables, not a call into init()-gated model state, so this stays cheap and
+# safe to import at module load. Keeps §0's "single source of truth" literally
+# true: the patient-facing wording lives in ctrse_core, this file only looks
+# it up rather than re-authoring it.
+import ctrse_core as core
+
 MODULE_LABELS = {
     "triage": "Clinical Triage",
     "stroke": "Stroke Assessment",
@@ -36,7 +43,7 @@ MODULE_HREFS = {
 # A patient's "Start"/"Run again" link must point at the patient-facing
 # submission route, not the clinician-instant one — the latter now 403s them.
 PATIENT_MODULE_HREFS = {
-    "triage": "/triage/",
+    "triage": "/triage/self-check.html",
     "stroke": "/stroke/submit",
     "emc": "/emc/submit",
 }
@@ -167,9 +174,30 @@ def _blank_tile(source_app: str, audience: str = AUDIENCE_CLINICIAN) -> dict:
 
 def _summarize_triage(output: Mapping, status: str, audience: str) -> tuple[str, str, list]:
     # Triage priority, confidence, and red-flag state are clinician decision
-    # support. A patient needs a clear workflow state, not an inferred acuity
-    # label that could be misread as medical advice.
+    # support and stay withheld from a *clinician-run* assessment on a
+    # patient's own tile. A patient's own self-check is different: it was
+    # released to them directly (ctrse_core.patient_view,
+    # released_without_clinician_review=True), so its own band belongs on
+    # their tile — read back from the stored patient_view, never re-derived
+    # here (this file computes no clinical fact of its own).
     if audience == AUDIENCE_PATIENT:
+        status_upper = status.upper()
+        if status_upper == "PATIENT_SELF_CHECK":
+            patient_view = output.get("patient_view")
+            urgency = patient_view.get("urgency") if isinstance(patient_view, Mapping) else None
+            if isinstance(urgency, Mapping) and urgency.get("band_label"):
+                # band_tone's values ("critical"/"warning"/"neutral") are the
+                # same strings this file's own TONE_* constants use.
+                tone = _text(urgency.get("band_tone")) or TONE_NEUTRAL
+                return _text(urgency["band_label"]), tone, []
+            return "Self-check completed", TONE_NEUTRAL, []
+        if status_upper == "REFUSED":
+            return "We could not complete this check", TONE_NEUTRAL, []
+        if status_upper in ("ASSESSED", "APPROVED"):
+            level = _text(output.get("predicted_level"))
+            headline = core.PATIENT_LEVEL_HEADLINES.get(level)
+            if headline:
+                return headline, _TRIAGE_TONES.get(level, TONE_NEUTRAL), []
         return "Submitted for clinician review", TONE_NEUTRAL, []
 
     # A refused prediction is checked two ways on purpose: records written
@@ -183,7 +211,12 @@ def _summarize_triage(output: Mapping, status: str, audience: str) -> tuple[str,
     label = _text(output.get("level_label"))
     headline = f"{level} — {label}".strip(" —") or "Assessed"
 
+    # A clinician must never mistake a patient's self-typed check for a
+    # colleague's triage — this is the most important safety line in this
+    # branch, so it goes first.
     facts: list[tuple[str, str]] = []
+    if status.upper() == "PATIENT_SELF_CHECK":
+        facts.append(("Source", "Patient self-check — self-reported, not clinician-verified"))
     if output.get("confidence_word"):
         facts.append(("Confidence", _text(output["confidence_word"])))
     if output.get("red_flag_triggered"):
@@ -328,6 +361,13 @@ def describe_inputs(record: Mapping, *, audience: str = AUDIENCE_CLINICIAN, limi
                     for item in value
                 ]
                 tokens = [token for token in tokens if token]
+                if audience == AUDIENCE_PATIENT and source_app == "triage":
+                    # Raw cc_ tokens (e.g. "cardiacarrest") are an internal
+                    # vocabulary, not patient-facing copy — map through the
+                    # same label table patient_view() itself uses, so a
+                    # patient's own "what I entered" list never shows one.
+                    tokens = [core.PATIENT_COMPLAINT_LABELS.get(token, "A reported concern")
+                              for token in tokens]
                 if tokens:
                     pairs.append(("Complaints", ", ".join(tokens)))
                 continue

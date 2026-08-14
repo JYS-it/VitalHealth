@@ -182,8 +182,9 @@ def clinician_pending(request: Request):
 
     Open shared queue: no per-item claiming, any clinician sees the same
     list, and a row simply drops off once its status moves past
-    PENDING_REVIEW. Triage is excluded — it stays instant and clinician-only,
-    out of scope for this queue.
+    PENDING_REVIEW. Triage is excluded — a clinician's own triage run stays
+    instant, and a patient's self-check is a different status
+    (PATIENT_SELF_CHECK) that is never queued for review in the first place.
     """
     actor = _actor(request)
 
