@@ -19,6 +19,7 @@ from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import (
+    CheckConstraint,
     JSON,
     Column,
     DateTime,
@@ -112,6 +113,7 @@ users = Table(
     # Set for patient accounts only — the patients row this login speaks for.
     Column("patient_id", String(36), ForeignKey("patients.id"), nullable=True, index=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint("role IN ('patient', 'clinician')", name="ck_users_role"),
 )
 
 
@@ -290,25 +292,37 @@ class ClinicalStore:
             $$;
         """))
 
-        # Accounts that predate roles are the team's own staff logins, so they
-        # become clinicians. Guarded by the migration row so it runs exactly
-        # once and can never come back later to promote a patient who signed
-        # up afterwards. Must precede the INSERT that records the version.
+        # Never infer that an old account is a clinician.  A database may
+        # already contain patients when this software is introduced; role
+        # assignment is an explicit administrator action, not a migration
+        # side-effect.  The constraint is added NOT VALID so an administrator
+        # can first audit any existing rows in Supabase, while all new writes
+        # are immediately restricted to the two supported roles.
         connection.execute(text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (
                     SELECT 1 FROM schema_migrations
-                    WHERE version = '2026_08_12_roles_and_ownership'
+                    WHERE version = '2026_08_14_role_constraint'
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_role'
                 ) THEN
-                    UPDATE users SET role = 'clinician' WHERE role = 'patient';
+                    ALTER TABLE users ADD CONSTRAINT ck_users_role
+                    CHECK (role IN ('patient', 'clinician')) NOT VALID;
                 END IF;
             END;
             $$;
         """))
         connection.execute(text("""
             INSERT INTO schema_migrations (version, applied_at)
-            VALUES ('2026_08_12_roles_and_ownership', CURRENT_TIMESTAMP)
+            VALUES ('2026_08_14_role_constraint', CURRENT_TIMESTAMP)
+            ON CONFLICT (version) DO NOTHING
+        """))
+        # This marker records the replacement for the former automatic role
+        # promotion. Existing roles remain untouched.
+        connection.execute(text("""
+            INSERT INTO schema_migrations (version, applied_at)
+            VALUES ('2026_08_14_explicit_role_assignment', CURRENT_TIMESTAMP)
             ON CONFLICT (version) DO NOTHING
         """))
 
@@ -453,6 +467,41 @@ class ClinicalStore:
             result = connection.execute(records.update().where(records.c.id == record_id).values(**values))
             if result.rowcount != 1:
                 raise KeyError(f"Unknown clinical record: {record_id}")
+
+    def update_record_if_status(
+        self,
+        record_id: str,
+        *,
+        expected_status: str,
+        status: str,
+        input_payload: dict | None = None,
+        output_payload: dict | None = None,
+        owner_user_id: str | None = None,
+    ) -> bool:
+        """Update a record only while it remains in its expected workflow state.
+
+        This is the compare-and-set primitive used for clinician decisions:
+        two reviewers may read the same pending item, but only the first
+        terminal decision can change it.  A false return is a normal review
+        conflict, not a database failure.
+        """
+        if not self.engine:
+            raise RuntimeError("Shared database is not configured.")
+        values: dict[str, Any] = {"status": status, "updated_at": _utcnow()}
+        if input_payload is not None:
+            values["input_payload"] = _json_value(input_payload)
+        if output_payload is not None:
+            values["output_payload"] = _json_value(output_payload)
+        if owner_user_id is not None:
+            values["owner_user_id"] = owner_user_id
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                records.update()
+                .where(records.c.id == record_id)
+                .where(records.c.status == expected_status)
+                .values(**values)
+            )
+        return result.rowcount == 1
 
     def append_audit_event(
         self,
@@ -737,6 +786,23 @@ class ClinicalStore:
             return True
         except (KeyError, RuntimeError, SQLAlchemyError) as exc:
             LOGGER.warning("Shared database record update failed: %s", type(exc).__name__)
+            return False
+
+    def safe_update_record_if_status(
+        self,
+        record_id: str | None,
+        *,
+        expected_status: str,
+        **kwargs: Any,
+    ) -> bool:
+        if not self.enabled or not record_id:
+            return False
+        try:
+            return self.update_record_if_status(
+                record_id, expected_status=expected_status, **kwargs
+            )
+        except (RuntimeError, SQLAlchemyError) as exc:
+            LOGGER.warning("Shared database conditional record update failed: %s", type(exc).__name__)
             return False
 
     def safe_append_audit_event(self, **kwargs: Any) -> str | None:

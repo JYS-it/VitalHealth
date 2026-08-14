@@ -539,18 +539,29 @@ def workflow_snapshot(workflow):
     }
 
 
-def persist_workflow(workflow, event_type):
+def persist_workflow(workflow, event_type, *, expected_status=None):
     """Mirror an EMC workflow to PostgreSQL when DATABASE_URL is configured."""
     snapshot = workflow_snapshot(workflow)
     owner_user_id = workflow.get("owner_user_id")
     record_id = workflow.get("database_record_id")
     if record_id:
-        SHARED_STORE.safe_update_record(
-            record_id,
-            status=workflow["issue_status"],
-            output_payload=snapshot,
-            owner_user_id=owner_user_id,
-        )
+        if expected_status is not None:
+            persisted = SHARED_STORE.safe_update_record_if_status(
+                record_id,
+                expected_status=expected_status,
+                status=workflow["issue_status"],
+                output_payload=snapshot,
+                owner_user_id=owner_user_id,
+            )
+        else:
+            persisted = SHARED_STORE.safe_update_record(
+                record_id,
+                status=workflow["issue_status"],
+                output_payload=snapshot,
+                owner_user_id=owner_user_id,
+            )
+        if not persisted:
+            return None
     else:
         record_id = SHARED_STORE.safe_create_record(
             source_app="emc",
@@ -992,10 +1003,16 @@ def review_submit(record_id):
         workflow["acting_actor_email"] = actor.email if actor else None
 
     if action in ("save", "regenerate"):
-        persist_workflow(
+        if not persist_workflow(
             workflow,
             "emc_draft_regenerated" if action == "regenerate" else "emc_reviewer_edited",
-        )
+            expected_status="PENDING_REVIEW",
+        ):
+            # A locally cached workflow may now contain edits from the losing
+            # reviewer. Discard it so the next GET reconstructs the winner's
+            # database state instead of displaying stale in-process data.
+            WORKFLOWS.pop(record_id, None)
+            abort(409, description="This certificate request was already reviewed by another clinician. Refresh the page.")
         return redirect(_prefixed_url_for("review_form", record_id=record_id))
 
     if action == "approve":
@@ -1029,14 +1046,18 @@ def review_submit(record_id):
         # since by definition it is no longer pending.
         workflow["final"] = finalise_certificate_text(workflow["draft"]["text"], metadata)
         workflow["issue_status"] = "APPROVED_FOR_ISSUE"
-        persist_workflow(workflow, "emc_approved")
+        if not persist_workflow(workflow, "emc_approved", expected_status="PENDING_REVIEW"):
+            WORKFLOWS.pop(record_id, None)
+            abort(409, description="This certificate request was already reviewed by another clinician. Refresh the page.")
         return redirect(_prefixed_url_for("review_form", record_id=record_id))
 
     if action == "reject":
         workflow["metadata"]["clinician_review_status"] = "REJECTED"
         workflow["issue_status"] = "REJECTED"
         workflow["acting_actor_email"] = actor.email if actor else None
-        persist_workflow(workflow, "emc_rejected")
+        if not persist_workflow(workflow, "emc_rejected", expected_status="PENDING_REVIEW"):
+            WORKFLOWS.pop(record_id, None)
+            abort(409, description="This certificate request was already reviewed by another clinician. Refresh the page.")
         return redirect(_prefixed_url_for("review_form", record_id=record_id))
 
     abort(400)

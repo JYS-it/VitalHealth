@@ -788,7 +788,10 @@ def review_submit(record_id):
             output["care_plan"] = edited_plan
 
     if action == "save":
-        SHARED_STORE.safe_update_record(record_id, status="PENDING_REVIEW", output_payload=output)
+        if not SHARED_STORE.safe_update_record_if_status(
+            record_id, expected_status="PENDING_REVIEW", status="PENDING_REVIEW", output_payload=output
+        ):
+            abort(409, description="This assessment was already reviewed by another clinician. Refresh the page.")
         SHARED_STORE.safe_append_audit_event(
             source_app="stroke", event_type="stroke_reviewer_edited", record_id=record_id,
             actor_reference=actor.email if actor else None,
@@ -796,7 +799,10 @@ def review_submit(record_id):
         return redirect(_prefixed_url_for("review_form", record_id=record_id))
 
     if action == "approve":
-        SHARED_STORE.safe_update_record(record_id, status="APPROVED", output_payload=output)
+        if not SHARED_STORE.safe_update_record_if_status(
+            record_id, expected_status="PENDING_REVIEW", status="APPROVED", output_payload=output
+        ):
+            abort(409, description="This assessment was already reviewed by another clinician. Refresh the page.")
         SHARED_STORE.safe_append_audit_event(
             source_app="stroke", event_type="stroke_approved", record_id=record_id,
             actor_reference=actor.email if actor else None,
@@ -804,7 +810,10 @@ def review_submit(record_id):
         return redirect(_prefixed_url_for("review_form", record_id=record_id))
 
     if action == "reject":
-        SHARED_STORE.safe_update_record(record_id, status="REJECTED", output_payload=output)
+        if not SHARED_STORE.safe_update_record_if_status(
+            record_id, expected_status="PENDING_REVIEW", status="REJECTED", output_payload=output
+        ):
+            abort(409, description="This assessment was already reviewed by another clinician. Refresh the page.")
         SHARED_STORE.safe_append_audit_event(
             source_app="stroke", event_type="stroke_rejected", record_id=record_id,
             actor_reference=actor.email if actor else None,
