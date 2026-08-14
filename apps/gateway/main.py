@@ -580,6 +580,29 @@ def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
     return False
 
 
+def _patient_pending_destination(actor: identity.Actor | None, prefix: str) -> str | None:
+    """Return a patient's newest pending request for a module, if any.
+
+    A patient returning to a module should resume an open request rather than
+    receive a blank form that can create a duplicate submission. The backend
+    still verifies record ownership before disclosing its status or outcome.
+    """
+    if actor is None or not actor.is_patient or not SHARED_STORE.enabled:
+        return None
+    try:
+        pending = SHARED_STORE.list_records(
+            owner_user_id=actor.user_id,
+            source_app=prefix,
+            status="PENDING_REVIEW",
+            limit=1,
+        )
+    except Exception:
+        return None
+    if not pending:
+        return None
+    return f"/{prefix}/submitted/{pending[0]['id']}"
+
+
 def _name_from_email(email: str) -> str:
     """Fallback display name for accounts registered before names were asked for."""
     local_part = str(email or "").split("@", 1)[0]
@@ -1105,10 +1128,17 @@ async def redirect_bare_prefix(prefix: str, request: Request):
         # that route is clinician-only now — a patient landing here needs the
         # submission form instead, or they'd just bounce off a 403.
         actor = _current_actor(request)
-        target = "/stroke/submit" if actor and actor.is_patient else "/stroke/prediction"
+        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
+        if not actor or not actor.is_patient:
+            target = "/stroke/prediction"
         return RedirectResponse(url=target, status_code=307)
 
     if prefix in BACKENDS:
+        if prefix == "emc":
+            actor = _current_actor(request)
+            if actor and actor.is_patient:
+                target = _patient_pending_destination(actor, "emc") or "/emc/submit"
+                return RedirectResponse(url=target, status_code=307)
         return RedirectResponse(url=f"/{prefix}/", status_code=307)
 
     return Response(status_code=404)
@@ -1131,11 +1161,14 @@ async def proxy(prefix: str, path: str, request: Request):
     # submission form instead, same as redirect_bare_prefix() already does
     # for the bare form.
     if prefix == "stroke" and path.strip("/") == "":
-        target = "/stroke/submit" if actor and actor.is_patient else "/stroke/prediction"
+        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
+        if not actor or not actor.is_patient:
+            target = "/stroke/prediction"
         return RedirectResponse(url=target, status_code=307)
 
     if prefix == "emc" and path.strip("/") == "" and actor and actor.is_patient:
-        return RedirectResponse(url="/emc/submit", status_code=307)
+        target = _patient_pending_destination(actor, "emc") or "/emc/submit"
+        return RedirectResponse(url=target, status_code=307)
 
     if actor is None:
         if "text/html" in request.headers.get("accept", ""):
