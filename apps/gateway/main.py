@@ -551,8 +551,13 @@ _PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted", "status", "static"}
 def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
     """What a patient account may reach through the proxy.
 
-    Triage stays clinician-only and instant — out of scope for the review
-    workflow. Stroke and EMC allow exactly three patient-facing routes each:
+    Triage's clinical *workspace* stays clinician-only and instant — out of
+    scope for the review workflow. A patient may instead reach the
+    self-check surface: its own static page plus its two explicit API
+    routes (`api/self-check`, `api/self-check/options`), which run the same
+    model but return only a patient-safe projection (see
+    ctrse_core.patient_view) and persist as a distinct, non-queued status.
+    Stroke and EMC allow exactly three patient-facing routes each:
     self-submission, its waiting page, and the `status/` poll target that
     waiting page reads to reveal a result once a clinician approves it. Each
     Flask app's own `static/` folder (CSS/JS) is allowed too so those pages
@@ -560,11 +565,15 @@ def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
     clinical data lives there. Everything else, including the
     review/edit/approve pages, stays clinician-only. Jace's static assets are
     allowed so the portal can load, while only its explicit patient-safe
-    dashboard API can be called.
+    dashboard and self-check APIs can be called.
     """
     normalized = path.strip("/")
     if prefix == "triage":
-        return not normalized.startswith("api/") or normalized.startswith("api/dashboard/")
+        if not normalized.startswith("api/"):
+            return True
+        return normalized.startswith("api/dashboard/") or normalized in (
+            "api/self-check", "api/self-check/options",
+        )
     if prefix in ("stroke", "emc"):
         first_segment = normalized.split("/", 1)[0] if normalized else ""
         return first_segment in _PATIENT_SUBMIT_FIRST_SEGMENTS

@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css?v=7">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
   <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=4"></script>
+  <script defer src="app.js?v=5"></script>
   <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -37,10 +37,11 @@
                 :class="{ 'nav-chip--active': activeNav==='dashboard' }"
                 :aria-pressed="activeNav==='dashboard'"
           @click="openDashboard()">Home</button>
-        <button type="button" class="nav-chip"
+        <button type="button" class="nav-chip" x-show="!isPatient" x-cloak
                 :class="{ 'nav-chip--active': activeNav==='triage' }"
                 :aria-pressed="activeNav==='triage'"
                 @click="openTriage()">Clinical Triage</button>
+        <a class="nav-chip" x-show="isPatient" x-cloak href="/triage/self-check.html">Triage Self-Check</a>
         <a class="nav-chip" href="/stroke/">Stroke Assessment</a>
         <a class="nav-chip" href="/emc/">EMC Workflow</a>
       </nav>
@@ -48,6 +49,15 @@
   </header>
 
   <div class="app">
+
+    <!-- ctrseApp's OWN error (e.g. init()'s "Could not reach the API…"), not
+         vhDashboard's — that one has its own banner just below, inside its
+         own x-data scope. Before this, ctrseApp.error had no renderer
+         anywhere on the page: the banner that looked like it would show it
+         actually resolves `error` against the nested vhDashboard scope, so a
+         clinical-workspace API failure rendered nothing at all. -->
+    <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
+
     <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak
              x-data="vhDashboard()" x-init="load()" aria-label="VitalHealth dashboard home">
 
@@ -112,14 +122,8 @@
 
                 <footer class="vh-tile__foot">
                   <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
-                  <template x-if="tile.module === 'triage'">
-                    <button class="bubble-cta" type="button" @click="openTriage()"
-                            x-text="tile.completed ? 'Run again' : 'Start'"></button>
-                  </template>
-                  <template x-if="tile.module !== 'triage'">
-                    <a class="bubble-cta" :href="tile.href"
-                       x-text="tile.completed ? 'Run again' : 'Start'"></a>
-                  </template>
+                  <a class="bubble-cta" :href="tile.href"
+                     x-text="tile.completed ? 'Run again' : 'Start'"></a>
                 </footer>
               </article>
             </template>
@@ -305,6 +309,13 @@
       </template>
     </section>
 
+    <!-- The clinical workspace — clinician-only. x-if, not x-show: a patient's
+         DOM must genuinely not contain the intake form, not just have it
+         hidden (see the patient/clinician triage split plan, "frontend" §3).
+         Every route this workspace calls is independently 403'd for a
+         patient session server-side regardless (api.py's
+         require_clinician_for_clinical_api); this is presentation only. -->
+    <template x-if="!isPatient">
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
 
       <section class="workspace-switch card" aria-label="Clinical triage workspace controls">
@@ -844,7 +855,10 @@
                 <template x-if="col.gen.justify && (col.view === 'both' || col.view === 'justify')">
                   <div class="reg-block">
                     <div class="reg-label">
-                      <span class="eyebrow">Justification</span>
+                      <span style="display:flex; align-items:center; gap:var(--s2);">
+                        <span class="eyebrow">Justification</span>
+                        <span class="derived-tag">Draft — requires clinician review</span>
+                      </span>
                       <span class="source">
                         <span class="dot" :class="sourceMeta(col.gen.justify.source).dot"></span>
                         <span x-text="sourceMeta(col.gen.justify.source).label"></span>
@@ -858,7 +872,10 @@
                 <template x-if="col.gen.handover && (col.view === 'both' || col.view === 'handover')">
                   <div class="reg-block">
                     <div class="reg-label">
-                      <span class="eyebrow">Handover note</span>
+                      <span style="display:flex; align-items:center; gap:var(--s2);">
+                        <span class="eyebrow">Handover note</span>
+                        <span class="derived-tag">Draft — requires clinician review</span>
+                      </span>
                       <span class="reg-actions">
                         <button class="btn-ghost" type="button" aria-label="Print handover note"
                                 @click="printHandover(ci)">Print</button>
@@ -958,6 +975,7 @@
         </template>
       </main>
     </div>
+    </template>
 
     <!-- ============================ FOOTER ============================ -->
     <footer class="footer">

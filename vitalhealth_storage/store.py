@@ -654,8 +654,12 @@ class ClinicalStore:
         """The open, shared clinician review queue: every patient-submitted
         item awaiting action, across modules, newest first.
 
-        Triage is excluded by the default source_apps — it stays instant and
-        clinician-only, out of scope for this queue. No per-item claiming: any
+        Triage is excluded by the default source_apps — a clinician's own
+        triage run stays instant, and a patient's self-check (status
+        PATIENT_SELF_CHECK, not PENDING_REVIEW — see ctrse_core.patient_view)
+        is deliberately never queued here either, since nothing is expected
+        to action it. Both exclusions are belt-and-braces: the status filter
+        alone already rules a self-check out. No per-item claiming: any
         clinician sees the same list, and a row simply drops off once its
         status moves past PENDING_REVIEW.
         """

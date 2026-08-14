@@ -53,6 +53,14 @@ __all__ = [
     "assemble_vector",
     "predict_from_fields",
     "age_refusal_reason",
+    # §Patient self-check (patient/clinician split) — deterministic banding +
+    # patient-safe projection. See patient_urgency_band()'s docstring.
+    "patient_urgency_band",
+    "patient_view",
+    "PATIENT_LEVEL_HEADLINES",
+    "PATIENT_COMPLAINT_LABELS",
+    "PATIENT_REASSURING_WORDS",
+    "PATIENT_SYMPTOM_OPTIONS_CANDIDATES",
 ]
 
 # ---------------------------------------------------------------------------
@@ -89,6 +97,7 @@ BASE_RATES = None
 TOP_FEATURES = None
 cc_cols = None
 PROTOCOL_COMPLAINTS = None   # validated subset of the candidates below (set in init)
+PATIENT_SYMPTOM_OPTIONS = None   # validated subset of PATIENT_SYMPTOM_OPTIONS_CANDIDATES (set in init)
 
 # §1.4 — behavioural/safety complaints triaged high by policy, not physiology.
 # Candidate list; only those present as cc_ columns survive validation in init().
@@ -158,7 +167,7 @@ def init(artefact_dir, prefer_precomputed=True):
     payloads requires the full arrays + SHAP environment they were computed in."""
     global model, THR_P1, CHOSEN_RECALL, RED_FLAGS, feature_cols, COL, LABELS, NAMES, p1c
     global BASE_RATES, TOP_FEATURES, cc_cols, _decode_cat, _shap_explainer, HAS_SHAP
-    global X_train, X_test, y_train, y_test, PROTOCOL_COMPLAINTS
+    global X_train, X_test, y_train, y_test, PROTOCOL_COMPLAINTS, PATIENT_SYMPTOM_OPTIONS
 
     def _p(name):
         return os.path.join(artefact_dir, name)
@@ -185,6 +194,19 @@ def init(artefact_dir, prefer_precomputed=True):
     print(f"PROTOCOL_COMPLAINTS validated ({len(PROTOCOL_COMPLAINTS)}/{len(PROTOCOL_COMPLAINT_CANDIDATES)}): {PROTOCOL_COMPLAINTS}")
     if _dropped:
         print(f"  candidates dropped (no cc_ column): {_dropped}")
+
+    # §Patient self-check — same validate-against-real-columns pattern as
+    # PROTOCOL_COMPLAINTS above, so a patient-facing picker can never offer a
+    # token this model doesn't actually have a feature for.
+    PATIENT_SYMPTOM_OPTIONS = [
+        opt for opt in PATIENT_SYMPTOM_OPTIONS_CANDIDATES if ("cc_" + opt["token"]) in COL
+    ]
+    _opt_dropped = [opt["token"] for opt in PATIENT_SYMPTOM_OPTIONS_CANDIDATES
+                    if ("cc_" + opt["token"]) not in COL]
+    print(f"PATIENT_SYMPTOM_OPTIONS validated ({len(PATIENT_SYMPTOM_OPTIONS)}/"
+          f"{len(PATIENT_SYMPTOM_OPTIONS_CANDIDATES)})")
+    if _opt_dropped:
+        print(f"  candidates dropped (no cc_ column): {_opt_dropped}")
 
     # --- BASE_RATES + TOP_FEATURES: precomputed JSON (deployable) or live from arrays ---
     stats_rel = os.path.join("vocab", "precomputed_stats.json")
@@ -449,6 +471,373 @@ def confidence_word(payload):
     if top >= 0.60:
         return "Moderate"
     return "Borderline (split probabilities)"
+
+
+# ---------------------------------------------------------------------------
+# §Patient self-check — deterministic urgency banding + patient-safe projection.
+#
+# Both live here, not in api.py and not in the frontend: CTRSE_App_Build_Spec.md
+# §0 makes this module the single source of truth for every clinical fact and
+# safety decision, and forbids a threshold comparison anywhere else. Banding a
+# patient's result into an action tier IS a threshold comparison over already-
+# computed core facts — it derives no new clinical fact, only combines existing
+# ones (red_flag_triggered, active_chief_complaints, abnormal_vitals,
+# predicted_level) into a single instruction. No LLM is involved anywhere in
+# this section: both GenAI prompts below are explicitly written "for a
+# CLINICIAN" and rule 6 of COMMON_RULES forbids the exact sentence a patient
+# page needs to say ("seek medical attention") — every patient-visible string
+# here is a plain code-owned constant instead.
+# ---------------------------------------------------------------------------
+
+EMERGENCY_CONTACTS = {
+    "emergency_number": "995",
+    "emergency_label": "Emergency ambulance (Singapore) — 995",
+    "crisis_number": "1767",
+    "crisis_label": "Samaritans of Singapore (SOS) 24-hour crisis line — 1767",
+}
+
+PATIENT_SCOPE_NOTE = (
+    "This self-check is educational information only. It is not a medical diagnosis, "
+    "it is not medical advice, and it does not replace being seen by a clinician. If this "
+    f"is a medical emergency, call {EMERGENCY_CONTACTS['emergency_number']} or go to the "
+    "nearest emergency department now."
+)
+
+# The four bands, from lowest to highest — index+1 is the numeric rank used by
+# patient_urgency_band()'s max-lattice below. There is deliberately no rank 0:
+# the floor of the lattice is SEE_CLINICIAN, so no combination of inputs can
+# ever produce "you don't need care".
+_BAND_ORDER = ("SEE_CLINICIAN", "URGENT_TODAY", "EMERGENCY_NOW")
+
+_BAND_LABELS = {
+    "EMERGENCY_NOW": "Seek emergency care now",
+    "URGENT_TODAY": "See a clinician urgently today",
+    "SEE_CLINICIAN": "See a clinician soon",
+    "UNDETERMINED": "We could not complete this check",
+}
+
+_BAND_TONES = {
+    "EMERGENCY_NOW": "critical",
+    "URGENT_TODAY": "warning",
+    "SEE_CLINICIAN": "neutral",
+    "UNDETERMINED": "warning",   # never neutral: an undetermined check is not a green light
+}
+
+# Basis-specific action lines. The (band, "protocol") entries carry crisis-line
+# wording, never resuscitation language — SYSTEM_PROMPT_HANDOVER already draws
+# exactly this line for the clinician register ("mental-health risk assessment;
+# do not route to medical resuscitation"); the patient register must honour it
+# too.
+_ACTION_LINES = {
+    ("EMERGENCY_NOW", "red_flag"): (
+        f"Call {EMERGENCY_CONTACTS['emergency_number']} or go to the nearest emergency "
+        "department now. Do not drive yourself."
+    ),
+    ("EMERGENCY_NOW", "protocol"): (
+        f"Please reach out right now — call {EMERGENCY_CONTACTS['crisis_number']} "
+        f"({EMERGENCY_CONTACTS['crisis_label']}) or {EMERGENCY_CONTACTS['emergency_number']}, "
+        "and try not to be alone while you wait for help."
+    ),
+    ("EMERGENCY_NOW", "physiology"): (
+        f"Call {EMERGENCY_CONTACTS['emergency_number']} or go to the nearest emergency "
+        "department now."
+    ),
+    ("EMERGENCY_NOW", "model_level"): (
+        f"Call {EMERGENCY_CONTACTS['emergency_number']} or go to the nearest emergency "
+        "department now."
+    ),
+    ("URGENT_TODAY", "physiology"): (
+        "Please see a clinician today — a same-day appointment or an urgent care clinic."
+    ),
+    ("URGENT_TODAY", "model_level"): (
+        "Please see a clinician today — a same-day appointment or an urgent care clinic."
+    ),
+    ("SEE_CLINICIAN", "model_level"): (
+        "Please arrange to see a clinician soon to have this looked at."
+    ),
+}
+
+_REASON_TEXTS = {
+    "red_flag": "What you described matches a pattern that always needs emergency care.",
+    "protocol": "What you described is something that always deserves immediate support from a person, right away.",
+    "physiology": "One or more of the numbers you entered were outside the usual range.",
+    "model_level": "Based on everything you entered, this check suggests you need prompt attention.",
+    "vitals_not_recorded": "No vital signs were recorded, so this check is based only on what you described.",
+}
+
+SAFETY_NETTING = (
+    f"If you feel worse, or you are worried at any point, call {EMERGENCY_CONTACTS['emergency_number']} "
+    "or go to the nearest emergency department — regardless of what this check says."
+)
+
+# The patient-register equivalent of REASSURING_WORDS (§3 below, scoped to the
+# clinician GenAI prose). Deliberately self-contained rather than importing
+# REASSURING_WORDS, which is defined later in this file — every one of these
+# strings is checked by test_patient_view.py against every patient-facing copy
+# table, so a future edit that quietly waters down an action line into
+# reassurance fails a test instead of shipping.
+PATIENT_REASSURING_WORDS = [
+    "reassuring", "no cause for concern", "not urgent", "nothing serious", "routine",
+    "low risk", "can safely wait", "no concern", "you're fine", "you are fine",
+    "nothing to worry", "no need to", "you don't need", "you do not need",
+    "wait and see", "it can wait", "probably fine", "just a", "mild", "harmless",
+    "unlikely to be serious", "vitals are normal", "vitals were normal",
+    "no further action", "safe to ignore", "don't need to be seen", "do not need to be seen",
+]
+
+_LEVEL_RANK = {"P1": 3, "P2": 2, "P3": 1, "P4": 1}
+_BASIS_PRIORITY = {"red_flag": 3, "protocol": 2, "physiology": 1, "model_level": 0}
+
+
+def patient_urgency_band(result):
+    """Deterministic urgency band for the patient self-check surface.
+
+    Takes the FULL predict_from_fields() return — either its 24-key success
+    shape or its 4-key refusal shape — so a caller cannot forget the refusal
+    branch. Combines already-computed core facts via a max-lattice: each rule
+    independently proposes a floor, and the band is the MAXIMUM floor. A max()
+    over ranks is structurally incapable of de-escalating — no rule here ever
+    assigns downward, so a P4 result cannot end up lower than "see a clinician
+    soon", and an abnormal vital or a red flag can only push the band up.
+
+    Rule precedence when floors tie mirrors _escalation_basis()'s own
+    precedence (red_flag > protocol > physiology > complaint/model_level), so
+    there is one precedence story in this file, not two.
+    """
+    if result.get("model_refused"):
+        return {
+            "band": "UNDETERMINED",
+            "band_label": _BAND_LABELS["UNDETERMINED"],
+            "band_tone": _BAND_TONES["UNDETERMINED"],
+            "action_line": (
+                "We can't complete this check for you. Please see a clinician today — and if "
+                f"things are severe or getting worse, call {EMERGENCY_CONTACTS['emergency_number']} "
+                "or go to the nearest emergency department now."
+            ),
+            "reasons": [{
+                "code": "refusal_age",
+                "text": f"This self-check is only set up for adults aged {AGE_MIN} to {AGE_MAX}.",
+            }],
+            "band_basis": "refusal",
+            "escalated_above_model": False,
+            "vitals_checked": False,
+            "safety_netting": SAFETY_NETTING,
+            "disclaimer": DISCLAIMER,
+        }
+
+    red_flag = bool(result.get("red_flag_triggered"))
+    active = set(result.get("active_chief_complaints") or [])
+    protocol_hit = bool(active & set(PROTOCOL_COMPLAINTS or []))
+    abnormal_vitals = result.get("abnormal_vitals") or []
+    level_rank = _LEVEL_RANK.get(result.get("predicted_level"), 1)
+
+    # Only the three non-model rules — used below to prove the band was never
+    # pushed BELOW what the model alone would have produced, and to report
+    # when it was pushed above.
+    rule_floors = []
+    if red_flag:
+        rule_floors.append((3, "red_flag"))
+    if protocol_hit:
+        rule_floors.append((3, "protocol"))
+    if abnormal_vitals:
+        rule_floors.append((2, "physiology"))
+
+    all_floors = rule_floors + [(level_rank, "model_level")]
+    best_rank = max(rank for rank, _basis in all_floors)
+    tied_bases = [basis for rank, basis in all_floors if rank == best_rank]
+    basis = max(tied_bases, key=_BASIS_PRIORITY.get)
+    band = _BAND_ORDER[best_rank - 1]
+
+    max_rule_rank = max((rank for rank, _basis in rule_floors), default=0)
+    escalated_above_model = max_rule_rank > level_rank
+
+    reasons = []
+    if red_flag:
+        reasons.append({"code": "red_flag", "text": _REASON_TEXTS["red_flag"]})
+    if protocol_hit:
+        reasons.append({"code": "protocol", "text": _REASON_TEXTS["protocol"]})
+    if abnormal_vitals:
+        reasons.append({"code": "physiology", "text": _REASON_TEXTS["physiology"]})
+    if not reasons:
+        reasons.append({"code": "model_level", "text": _REASON_TEXTS["model_level"]})
+
+    vitals_not_recorded = result.get("vitals_not_recorded") or []
+    if vitals_not_recorded:
+        reasons.append({"code": "vitals_not_recorded", "text": _REASON_TEXTS["vitals_not_recorded"]})
+
+    action_line = (
+        _ACTION_LINES.get((band, basis))
+        or _ACTION_LINES.get((band, "model_level"))
+        or "Please arrange to see a clinician soon to have this looked at."
+    )
+
+    return {
+        "band": band,
+        "band_label": _BAND_LABELS[band],
+        "band_tone": _BAND_TONES[band],
+        "action_line": action_line,
+        "reasons": reasons,
+        "band_basis": basis,
+        "escalated_above_model": escalated_above_model,
+        "vitals_checked": len(vitals_not_recorded) < 6,
+        "safety_netting": SAFETY_NETTING,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+# token -> plain-language label. Real cc_ tokens only (verified against the
+# shipped model bundle) — this dict is also the source PATIENT_SYMPTOM_OPTIONS
+# is validated from in init(), so a patient's picker and patient_view()'s
+# complaint labelling can never drift apart. Includes the RED_FLAGS tokens and
+# all four validated PROTOCOL_COMPLAINTS tokens deliberately: selecting one of
+# these in the self-check form must correctly escalate the band, the same way
+# it would in a clinician-entered intake.
+PATIENT_COMPLAINT_LABELS = {
+    "chestpain": "Chest pain or tightness",
+    "shortnessofbreath": "Shortness of breath",
+    "breathingdifficulty": "Difficulty breathing",
+    "respiratorydistress": "Severe difficulty breathing",
+    "abdominalpain": "Abdominal pain",
+    "headache": "Headache",
+    "fever": "Fever",
+    "emesis": "Vomiting",
+    "nausea": "Nausea",
+    "dizziness": "Dizziness",
+    "backpain": "Back pain",
+    "rash": "Rash or skin irritation",
+    "cough": "Cough",
+    "sorethroat": "Sore throat",
+    "fall": "A fall",
+    "laceration": "Cut or wound",
+    "burn": "Burn",
+    "allergicreaction": "Allergic reaction",
+    "bleeding/bruising": "Bleeding or bruising",
+    "seizures": "Seizure",
+    "syncope": "Fainting or loss of consciousness",
+    "palpitations": "Racing or irregular heartbeat",
+    "weakness": "Weakness",
+    "numbness": "Numbness or tingling",
+    "confusion": "Confusion",
+    "urinarytractinfection": "Urinary tract infection symptoms",
+    "dysuria": "Pain when urinating",
+    "legpain": "Leg pain",
+    "armpain": "Arm pain",
+    "vaginalbleeding": "Vaginal bleeding",
+    "pelvicpain": "Pelvic pain",
+    "earpain": "Ear pain",
+    "eyepain": "Eye pain",
+    "rectalbleeding": "Rectal bleeding",
+    "hematuria": "Blood in urine",
+    "withdrawal-alcohol": "Alcohol withdrawal symptoms",
+    # Red flags — RED_FLAGS itself is loaded from the model bundle at init(),
+    # not hardcoded, but these four labels must exist regardless of exactly
+    # which tokens the bundle names, so the picker never shows a raw cc_ token.
+    "cardiacarrest": "Cardiac arrest, or not breathing",
+    "unresponsive": "Someone is unresponsive",
+    "strokealert": "Sudden stroke symptoms (face drooping, arm weakness, slurred speech)",
+    "fulltrauma": "Major trauma or a severe injury",
+    # Protocol complaints — the validated subset is computed in init(); these
+    # four labels cover PROTOCOL_COMPLAINT_CANDIDATES's tokens that actually
+    # exist as cc_ columns.
+    "suicidal": "Thoughts of suicide or self-harm",
+    "homicidal": "Thoughts of harming someone else",
+    "alcoholintoxication": "Alcohol intoxication",
+    "psychiatricevaluation": "A mental health crisis",
+}
+
+PATIENT_SYMPTOM_OPTIONS_CANDIDATES = [
+    {"token": token, "label": label} for token, label in PATIENT_COMPLAINT_LABELS.items()
+]
+
+
+def _patient_complaint_label(token):
+    return PATIENT_COMPLAINT_LABELS.get(token, "one of the concerns you reported")
+
+
+PATIENT_LEVEL_HEADLINES = {
+    "P1": "Assessed as needing immediate care",
+    "P2": "Assessed as needing emergency care",
+    "P3": "Assessed as needing urgent care",
+    "P4": "Assessed by a clinician — follow the care advice you were given",
+}
+
+# Maps the clinician-register confidence_word() output onto a patient-safe
+# word. "Borderline (near P1 threshold)" would otherwise leak threshold_context
+# verbatim; "Lower certainty" always ships paired with _LOWER_CERTAINTY_NOTE
+# below, so lower certainty is never read as a reason to do less.
+PATIENT_CONFIDENCE = {
+    "High (red-flag driven)": "High",
+    "High": "High",
+    "Moderate": "Moderate",
+    "Borderline (near P1 threshold)": "Lower certainty",
+    "Borderline (split probabilities)": "Lower certainty",
+}
+
+_LOWER_CERTAINTY_NOTE = "When a check is less certain, it's safer to be seen by a clinician."
+
+
+def patient_view(result):
+    """Patient-safe projection of a predict_from_fields() result.
+
+    Builds a NEW dict — never dict(result) then del — so an unrecognised
+    future key on `result` defaults to hidden, not exposed. Per
+    CTRSE_App_Build_Spec.md §0, deciding which clinical facts a patient may
+    see is itself a safety decision, so it belongs here and not in
+    dashboard_summaries.py or the frontend.
+
+    Deliberately drops, and this function is the ONLY place responsible for
+    not leaking: probabilities, threshold_context, threshold_sensitive,
+    escalation_basis, shap_top_contributors, high_importance_features_present,
+    complaint_base_rates, provenance, the raw red_flag_complaint token,
+    department, utilisation_history, filled_feature_count, id, the verbatim
+    refusal_reason, and — the single biggest leak surface — payload (the
+    16-key explain() dict, which re-contains most of the above). Dropping
+    payload also means a patient cannot call /api/explain, which is intended:
+    both GenAI prompts are written for a clinician.
+    """
+    urgency = patient_urgency_band(result)
+
+    if result.get("model_refused"):
+        return {
+            "model_refused": True,
+            "urgency": urgency,
+            "disclaimer": DISCLAIMER,
+            "scope_note": PATIENT_SCOPE_NOTE,
+            "limitations": [],
+            "released_without_clinician_review": True,
+        }
+
+    vitals_not_recorded = result.get("vitals_not_recorded") or []
+    limitations = [
+        "This is a self-reported check based only on what you entered — it has not been "
+        "verified by a clinician.",
+    ]
+    if vitals_not_recorded:
+        limitations.append(_REASON_TEXTS["vitals_not_recorded"])
+
+    patient_confidence = PATIENT_CONFIDENCE.get(result.get("confidence_word"), "Moderate")
+
+    return {
+        "predicted_level": result.get("predicted_level"),
+        "level_label": result.get("level_label"),
+        "level_colour": result.get("level_colour"),
+        "age": result.get("age"),
+        "arrival_mode": result.get("arrival_mode"),
+        "reported_concerns": [
+            _patient_complaint_label(t) for t in (result.get("active_chief_complaints") or [])
+        ],
+        "recorded_vitals": result.get("triage_vitals") or {},
+        "vitals_not_recorded": vitals_not_recorded,
+        "red_flag_triggered": bool(result.get("red_flag_triggered")),
+        "model_refused": False,
+        "urgency": urgency,
+        "confidence_word": patient_confidence,
+        "confidence_note": _LOWER_CERTAINTY_NOTE if patient_confidence == "Lower certainty" else None,
+        "disclaimer": DISCLAIMER,
+        "scope_note": PATIENT_SCOPE_NOTE,
+        "limitations": limitations,
+        "released_without_clinician_review": True,
+    }
 
 
 # ---------------------------------------------------------------------------
