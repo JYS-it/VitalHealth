@@ -41,6 +41,11 @@ LOGGER = logging.getLogger(__name__)
 # `source_app` on every record is one of these.
 SOURCE_APPS = ("triage", "stroke", "emc")
 
+# ``demo_data.seed_db`` stamps its fixture output with this marker. Fixtures
+# are useful on an empty database, but they are not patient submissions.
+DEMO_SEED_MARKER_KEY = "seeded_by"
+DEMO_SEED_MARKER_VALUE = "demo_data/seed_db.py"
+
 patients = Table(
     "patients",
     metadata,
@@ -664,10 +669,21 @@ class ClinicalStore:
             .where(records.c.source_app.in_(source_apps))
             .where(records.c.status == status)
             .order_by(records.c.created_at.desc())
-            .limit(limit)
         )
         with self._require_engine().begin() as connection:
             rows = [dict(row) for row in connection.execute(statement).mappings()]
+
+        def is_demo_fixture(row: dict) -> bool:
+            payload = row.get("output_payload")
+            return (
+                isinstance(payload, dict)
+                and payload.get(DEMO_SEED_MARKER_KEY) == DEMO_SEED_MARKER_VALUE
+            )
+
+        # Seeded EMC fixtures are intentionally PENDING_REVIEW so the patient
+        # history is realistic. They are not real submissions, however, and
+        # must not clutter the shared clinician work queue.
+        rows = [row for row in rows if not is_demo_fixture(row)][:limit]
 
         patient_ids = {row["patient_id"] for row in rows if row.get("patient_id")}
         if patient_ids:
