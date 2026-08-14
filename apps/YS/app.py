@@ -913,7 +913,14 @@ def review_form(record_id):
 def review_submit(record_id):
     workflow = load_workflow(record_id)
     actor = current_actor()
-    action = request.form.get("action")
+    # A normal click on one of the named buttons sends its action. Treat an
+    # action-less submission as Save as well: browsers can submit a form with
+    # Enter and an already-open page may still have markup from immediately
+    # before the named Save button was introduced. Saving is the least
+    # privileged review action; approval and rejection always remain explicit.
+    action = (request.form.get("action") or "save").strip().lower()
+    if action not in {"save", "regenerate", "approve", "reject"}:
+        abort(400)
 
     # Defence in depth: the UI hides the edit form for a record with no real
     # draft (a demo/seed row that only ever ran the ML step), but a direct
