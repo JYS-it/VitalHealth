@@ -63,7 +63,7 @@ def require_clinician_role():
     # "static" is Flask's built-in static-file endpoint (app.static_url_path),
     # not a route this app defines — without it here, the CSS/JS a patient's
     # allowed pages link to 403s even though the pages themselves load fine.
-    if request.endpoint in {"submit_form", "submit", "submitted", "submission_status", "static"}:
+    if request.endpoint in {"submit_form", "submit", "submitted", "resume_submitted", "submission_status", "static"}:
         return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
@@ -848,6 +848,22 @@ def _patient_owns_record(actor, record):
         return False
     patient = SHARED_STORE.get_patient(record["patient_id"])
     return bool(patient and patient["external_id"] == actor.patient_external_id)
+
+
+@app.get("/submit/<record_id>")
+def resume_submitted(record_id):
+    """Support the common copied `/submit/<id>` URL without exposing data."""
+    actor = current_actor()
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if (
+        actor is None
+        or not actor.is_patient
+        or record is None
+        or record.get("source_app") != "emc"
+        or not _patient_owns_record(actor, record)
+    ):
+        abort(404)
+    return redirect(_prefixed_url_for("submitted", record_id=record_id))
 
 
 @app.get("/status/<record_id>")

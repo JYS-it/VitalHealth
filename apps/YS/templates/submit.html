@@ -167,7 +167,13 @@
 
     const form = document.querySelector('.workflow-form');
     if (form) {
-      form.addEventListener('submit', () => {
+      form.addEventListener('submit', (event) => {
+        if (form.dataset.submitting === 'true') {
+          event.preventDefault();
+          return;
+        }
+        form.dataset.submitting = 'true';
+        form.querySelectorAll('button[type="submit"]').forEach((button) => { button.disabled = true; });
         const overlay = document.getElementById('loading-overlay');
         if (overlay) overlay.hidden = false;
       });

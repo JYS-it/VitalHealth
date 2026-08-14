@@ -47,7 +47,7 @@ def require_clinician_role():
     # "static" is Flask's built-in static-file endpoint (app.static_url_path),
     # not a route this app defines — without it here, the CSS/JS a patient's
     # allowed pages link to 403s even though the pages themselves load fine.
-    if request.endpoint in {"submit_form", "submit", "submitted", "submission_status", "static"}:
+    if request.endpoint in {"submit_form", "submit", "submitted", "resume_submitted", "submission_status", "static"}:
         return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
@@ -598,6 +598,26 @@ def persist_stroke_record_for_review(patient_data, prediction_result, care_plan,
     output = {"prediction": prediction_result, "care_plan": care_plan, "care_calendar": care_calendar}
     actor = identity.actor_from_cookies(request.cookies)
     subject_ref, subject_name = identity.resolve_subject(request.cookies, actor)
+
+    # Care-plan generation can take long enough for a patient to double-click
+    # Submit. Do not create two open clinician tasks for identical answers;
+    # resume the already-pending request instead.
+    if actor and SHARED_STORE.enabled:
+        try:
+            for record in SHARED_STORE.list_records(
+                owner_user_id=actor.user_id,
+                source_app="stroke",
+                status="PENDING_REVIEW",
+                limit=50,
+            ):
+                if record.get("input_payload") == patient_data:
+                    return record["id"]
+        except Exception:
+            # Keep the existing availability behaviour if a database read is
+            # temporarily unavailable; safe_create_record handles its own
+            # write failures below.
+            pass
+
     record_id = SHARED_STORE.safe_create_record(
         source_app="stroke", record_type="stroke_risk_assessment", status="PENDING_REVIEW",
         input_payload=patient_data, output_payload=output, model_version="stroke_logistic_model",
@@ -660,6 +680,22 @@ def _patient_owns_record(actor, record):
         return False
     patient = SHARED_STORE.get_patient(record["patient_id"])
     return bool(patient and patient["external_id"] == actor.patient_external_id)
+
+
+@app.get("/submit/<record_id>")
+def resume_submitted(record_id):
+    """Support the common copied `/submit/<id>` URL without exposing data."""
+    actor = identity.actor_from_cookies(request.cookies)
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if (
+        actor is None
+        or not actor.is_patient
+        or record is None
+        or record.get("source_app") != "stroke"
+        or not _patient_owns_record(actor, record)
+    ):
+        abort(404)
+    return redirect(_prefixed_url_for("submitted", record_id=record_id))
 
 
 @app.get("/status/<record_id>")

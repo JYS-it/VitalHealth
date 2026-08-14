@@ -17,7 +17,7 @@
             clinician has reviewed your submission.
         </p>
 
-        <form method="post" action="{{ purl('submit') }}" class="form-grid">
+        <form method="post" action="{{ purl('submit') }}" class="form-grid" id="stroke-submit-form">
             <label>Age
                 <input type="number" name="Age" min="0" max="120" step="1" required />
             </label>
@@ -98,4 +98,21 @@
         </form>
     </article>
 </section>
+<script>
+(() => {
+    const form = document.getElementById('stroke-submit-form');
+    if (!form) return;
+    form.addEventListener('submit', (event) => {
+        if (form.dataset.submitting === 'true') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitting = 'true';
+        form.querySelectorAll('button[type="submit"]').forEach((button) => {
+            button.disabled = true;
+            button.textContent = 'Submitting…';
+        });
+    });
+})();
+</script>
 {% endblock %}
