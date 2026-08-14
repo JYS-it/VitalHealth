@@ -1073,7 +1073,9 @@ def revise(workflow_id):
     workflow["draft"] = generate_draft(workflow["evidence"], workflow["style"], workflow["api_key"], instructions, workflow["draft"]["text"])
     workflow["gate"] = review_gate(deterministic_review(workflow["draft"]["text"], workflow["evidence"], workflow["payload"]), critic_review(workflow["draft"]["text"], workflow["evidence"], workflow["api_key"]))
     workflow["internal"] = internal_summary(workflow["payload"], workflow["evidence"], workflow["gate"])
-    persist_workflow(workflow, "emc_draft_revised")
+    if not persist_workflow(workflow, "emc_draft_revised", expected_status="PENDING_REVIEW"):
+        WORKFLOWS.pop(workflow_id, None)
+        return render_state(message="This certificate request was already reviewed by another clinician. Refresh the page.")
     return render_state(workflow_id, "Draft regenerated from clinician instructions.")
 
 
@@ -1102,7 +1104,10 @@ def approve(workflow_id):
         return render_state(workflow_id, "Final issue is blocked by the final safety review.")
     workflow["final"], workflow["final_gate"], workflow["issue_status"] = result["text"], final_gate, "APPROVED_FOR_ISSUE"
     audit = make_audit(workflow)
-    record_id = persist_workflow(workflow, "emc_approved")
+    record_id = persist_workflow(workflow, "emc_approved", expected_status="PENDING_REVIEW")
+    if not record_id:
+        WORKFLOWS.pop(workflow_id, None)
+        return render_state(message="This certificate request was already reviewed by another clinician. Refresh the page.")
     SHARED_STORE.safe_append_audit_event(
         source_app="emc", event_type="emc_audit_snapshot", record_id=record_id, payload=audit
     )
@@ -1119,7 +1124,9 @@ def reject(workflow_id):
     workflow = load_workflow(workflow_id)
     workflow["metadata"]["clinician_review_status"] = "REJECTED"
     workflow["issue_status"] = "REJECTED"
-    persist_workflow(workflow, "emc_rejected")
+    if not persist_workflow(workflow, "emc_rejected", expected_status="PENDING_REVIEW"):
+        WORKFLOWS.pop(workflow_id, None)
+        return render_state(message="This certificate request was already reviewed by another clinician. Refresh the page.")
     return render_state(workflow_id, "Draft rejected. Add clinician revision instructions to prepare a new draft.")
 
 
