@@ -667,6 +667,19 @@ def submitted(record_id):
     /status/<record_id> and reveals the outcome in place once a clinician has
     approved it, so the patient can simply wait here instead of being sent
     away to the dashboard."""
+    # The waiting page is intentionally generic, but it is still a patient
+    # workflow resource.  Require the same ownership check as its polling
+    # endpoint so a copied or guessed id cannot be used to open it.
+    actor = identity.actor_from_cookies(request.cookies)
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if (
+        actor is None
+        or not actor.is_patient
+        or record is None
+        or record.get("source_app") != "stroke"
+        or not _patient_owns_record(actor, record)
+    ):
+        abort(404)
     return render_template("submitted.html", page_title="Submitted", record_id=record_id)
 
 

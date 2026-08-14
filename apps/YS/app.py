@@ -798,6 +798,19 @@ def submitted(record_id):
     /status/<record_id> and reveals the issued certificate in place once a
     clinician has approved it, so the patient can simply wait here instead of
     being sent away to the dashboard."""
+    # This page is generic by design, but it is not public. Match the status
+    # endpoint's ownership boundary so a copied or guessed id cannot open a
+    # patient workflow page belonging to somebody else.
+    actor = current_actor()
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if (
+        actor is None
+        or not actor.is_patient
+        or record is None
+        or record.get("source_app") != "emc"
+        or not _patient_owns_record(actor, record)
+    ):
+        abort(404)
     return render_template("submitted.html", title=APP_TITLE, record_id=record_id)
 
 
