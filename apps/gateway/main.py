@@ -616,6 +616,82 @@ def _safe_next_path(next_path: str) -> str:
     return "/triage/"
 
 
+def _shared_nav_html(role: str, active: str) -> str:
+    triage_href = "/triage/self-check.html" if role == "patient" else "/triage/"
+    triage_label = "Triage Self-Check" if role == "patient" else "Clinical Triage"
+    links = (
+        ("home", "/triage/", "Home"),
+        ("triage", triage_href, triage_label),
+        ("stroke", "/stroke/", "Stroke Assessment"),
+        ("emc", "/emc/", "EMC Workflow"),
+    )
+    return "".join(
+        f'<a class="{"active" if key == active else ""}" href="{href}">{label}</a>'
+        for key, href, label in links
+    )
+
+
+def _inject_shared_account_and_nav(page: str, actor: identity.Actor, prefix: str, path: str) -> str:
+    """Enforce one account control and role-aware nav on every proxied page.
+
+    This is performed at the gateway so individual workflow template caches or
+    server reload settings cannot cause the shared shell to disappear.
+    """
+    raw_display_name = actor.display_name or _name_from_email(actor.email) or actor.email
+    display_name = html.escape(raw_display_name)
+    initial = html.escape(raw_display_name[:1].upper() or "U")
+    account = (
+        '<div class="auth-status">'
+        f'<span class="auth-status__avatar" aria-hidden="true">{initial}</span>'
+        '<span class="auth-status__copy"><span class="auth-status__label">Signed in as</span>'
+        f'<strong class="auth-status__user">{display_name}</strong></span>'
+        '<a class="auth-status__logout" href="/logout">Log out</a>'
+        '</div>'
+    )
+
+    if re.search(r'<div\s+class="auth-status"[^>]*>.*?</div>', page, flags=re.DOTALL):
+        page = re.sub(
+            r'<div\s+class="auth-status"[^>]*>.*?</div>',
+            account,
+            page,
+            count=1,
+            flags=re.DOTALL,
+        )
+    else:
+        page = re.sub(
+            r'(<div\s+class="(?:container\s+)?header-wrap"[^>]*>)',
+            rf'\1{account}',
+            page,
+            count=1,
+        )
+
+    active = "triage" if prefix == "triage" and "self-check" in path else prefix
+    nav_links = _shared_nav_html(actor.role, active)
+    nav_pattern = r'(<nav\s+class="(?:navbar global-nav|global-nav navbar)"[^>]*>)(.*?)(</nav>)'
+    nav_match = re.search(nav_pattern, page, flags=re.DOTALL)
+    if nav_match and "<button" not in nav_match.group(2):
+        page = re.sub(nav_pattern, rf'\1{nav_links}\3', page, count=1, flags=re.DOTALL)
+    elif not nav_match:
+        nav = (
+            '<div class="container nav-wrap">'
+            '<nav class="navbar global-nav" aria-label="VitalHealth navigation">'
+            f'{nav_links}</nav></div>'
+        )
+        page = page.replace("</header>", f"{nav}</header>", 1)
+
+    page = re.sub(
+        r'/vh-assets/vitalhealth-shell\.css(?:\?[^"\']*)?',
+        '/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815c',
+        page,
+    )
+    page = re.sub(
+        r'/vh-assets/vita\.js(?:\?[^"\']*)?',
+        '/vh-assets/vita.js?v=vh-shell-20260815c',
+        page,
+    )
+    return page
+
+
 def _database_error_message() -> str | None:
     if not DATABASE_ERROR:
         return None
@@ -1165,6 +1241,10 @@ async def proxy(prefix: str, path: str, request: Request):
         if not actor or not actor.is_patient:
             target = "/stroke/prediction"
         return RedirectResponse(url=target, status_code=307)
+        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
+        if not actor or not actor.is_patient:
+            target = "/stroke/cases"
+        return RedirectResponse(url=target, status_code=307)
 
     if prefix == "emc" and path.strip("/") == "" and actor and actor.is_patient:
         target = _patient_pending_destination(actor, "emc") or "/emc/submit"
@@ -1245,11 +1325,15 @@ async def proxy(prefix: str, path: str, request: Request):
     content = upstream_response.content
     content_type = upstream_response.headers.get("content-type", "").lower()
 
+    if "text/html" in content_type:
+        shared_html = content.decode("utf-8", errors="replace")
+        content = _inject_shared_account_and_nav(shared_html, actor, prefix, path).encode("utf-8")
+
     if prefix == "stroke" and "text/html" in content_type:
         stroke_html = content.decode("utf-8", errors="replace")
 
         stroke_html = re.sub(
-            r'(href|src|action)="/(?!(?:stroke/|triage/|emc/|api/|vh-assets/|"))',
+            r'(href|src|action)="/(?!(?:stroke/|triage/|emc/|api/|vh-assets/|logout(?:[?"/])|"))',
             r'\1="/stroke/',
             stroke_html,
         )

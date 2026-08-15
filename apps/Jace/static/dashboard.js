@@ -40,6 +40,10 @@ document.addEventListener('alpine:init', () => {
       return this.role === 'clinician';
     },
 
+    get incomingPatientCount() {
+      return this.patients.length;
+    },
+
     async load() {
       this.loading = true;
       this.error = '';
@@ -123,6 +127,10 @@ document.addEventListener('alpine:init', () => {
     },
 
     async openPatient(patientId) {
+      if (this.selected && this.selected.patient.patient_id === patientId) {
+        this.closePatient();
+        return;
+      }
       this.loadingDetail = true;
       try {
         const res = await fetch(`api/dashboard/patients/${patientId}`);

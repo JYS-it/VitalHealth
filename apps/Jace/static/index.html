@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=7">
-  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
+  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
   <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=5"></script>
+  <script defer src="app.js?v=6"></script>
   <script defer src="dashboard.js?v=1"></script>
-  <script defer src="/vh-assets/vita.js"></script>
+  <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <body x-data="ctrseApp()" x-init="init()" data-vitalhealth-section="dashboard">
@@ -151,21 +151,125 @@
           <article class="home-hero card">
             <p class="hero-kicker">Clinician portal</p>
             <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome!</h1>
-            <h2 x-text="`${patients.length} patient${patients.length === 1 ? '' : 's'} on record`"></h2>
+            <h2 x-text="`${incomingPatientCount} patient${incomingPatientCount === 1 ? '' : 's'} on record`"></h2>
+          </article>
 
-            <div class="vh-context" x-show="activeSubject" x-cloak>
-              <span>Working on <strong x-text="activeSubjectName()"></strong> — new triage and stroke
-                assessments will be filed under this patient.</span>
-              <button type="button" class="filter-btn" @click="setSubject(null)">Clear</button>
+          <section class="card vh-history">
+            <div class="eyebrow mb2">Incoming requests</div>
+            <p class="vh-note" x-show="pending.length" x-cloak>
+              Patient-submitted Stroke and EMC requests awaiting clinician review.
+            </p>
+            <ul class="vh-history__list" x-show="pending.length" x-cloak>
+              <template x-for="item in pending" :key="item.record_id">
+                <li class="vh-history__item vh-history__item--actionable">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline"
+                        x-text="`${item.patient_display_name || 'Unknown patient'} — ${item.headline}`"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                  <a class="filter-btn" :href="item.href">Review</a>
+                </li>
+              </template>
+            </ul>
+            <p class="vh-empty" x-show="!pending.length" x-cloak>
+              No incoming requests require review.
+            </p>
+          </section>
+
+          <section class="card vh-history">
+            <div class="eyebrow mb2">My patients</div>
+            <div class="vh-table-wrap" x-show="patients.length" x-cloak>
+              <table class="vh-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Patient</th>
+                    <th scope="col">Triage</th>
+                    <th scope="col">Stroke</th>
+                    <th scope="col">EMC</th>
+                    <th scope="col">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="patient in patients" :key="patient.patient_id">
+                    <tr class="vh-patient-row"
+                        :class="{ 'is-active': selected && selected.patient.patient_id === patient.patient_id }"
+                        role="button" tabindex="0"
+                        :aria-expanded="selected && selected.patient.patient_id === patient.patient_id"
+                        @click="openPatient(patient.patient_id)"
+                        @keydown.enter.prevent="openPatient(patient.patient_id)"
+                        @keydown.space.prevent="openPatient(patient.patient_id)">
+                      <th scope="row">
+                        <span class="vh-patient-name" x-text="patient.display_name"></span>
+                        <small class="vh-patient-id" x-text="patient.external_id"></small>
+                      </th>
+                      <template x-for="tile in moduleList(patient)" :key="tile.module">
+                        <td>
+                          <span class="vh-pill" :class="`vh-pill--${tile.completed ? tile.tone : 'empty'}`"
+                                x-text="tile.completed ? tile.headline : '—'"></span>
+                        </td>
+                      </template>
+                      <td class="vh-nowrap" x-text="when(patient.last_activity) || '—'"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <p class="vh-empty" x-show="!patients.length" x-cloak>
+              No patients have submitted a request yet.
+            </p>
+          </section>
+
+          <!-- patient detail modal -->
+          <div class="vh-modal-backdrop" x-show="selected" x-cloak
+               x-transition.opacity
+               @click.self="closePatient()"
+               @keydown.escape.window="closePatient()">
+          <section class="card vh-detail" role="dialog" aria-modal="true"
+                   aria-labelledby="vh-patient-detail-title">
+            <div class="row-between mb2">
+              <div>
+                <div class="eyebrow">Patient details</div>
+                <h2 id="vh-patient-detail-title" class="vh-detail__title"
+                    x-text="selected ? selected.patient.display_name : ''"></h2>
+              </div>
+              <button type="button" class="filter-btn" @click="closePatient()"
+                      aria-label="Close patient details">Close</button>
             </div>
 
-            <form class="vh-search" @submit.prevent="loadPatients()" role="search">
-              <label class="sr-only" for="vh-patient-search">Search patients</label>
-              <input id="vh-patient-search" type="search" x-model="search"
-                     placeholder="Search by name or patient ID">
-              <button class="filter-btn" type="submit">Search</button>
-            </form>
-          </article>
+            <div class="workflow-bubbles">
+              <template x-for="tile in (selected ? selected.modules : [])" :key="tile.module">
+                <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
+                  <header class="vh-tile__head">
+                    <h3 x-text="tile.module_label"></h3>
+                    <span class="vh-tile__state" :class="tile.completed ? 'is-done' : 'is-todo'"
+                          x-text="tile.completed ? 'Completed' : 'Not started'"></span>
+                  </header>
+                  <p class="vh-tile__headline" x-text="tile.headline"></p>
+                  <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
+                    <template x-for="fact in tile.facts" :key="fact.label + fact.value">
+                      <div class="vh-fact">
+                        <dt x-text="fact.label"></dt>
+                        <dd x-text="fact.value"></dd>
+                      </div>
+                    </template>
+                  </dl>
+                  <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
+                    <summary>Inputs</summary>
+                    <dl class="vh-facts">
+                      <template x-for="field in tile.inputs" :key="field.label">
+                        <div class="vh-fact">
+                          <dt x-text="field.label"></dt>
+                          <dd x-text="field.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </details>
+                  <footer class="vh-tile__foot">
+                    <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
+                  </footer>
+                </article>
+              </template>
+            </div>
 
           <section class="card vh-history" x-show="pending.length" x-cloak>
             <div class="eyebrow mb2">Pending reviews</div>
@@ -232,65 +336,20 @@
               </table>
             </div>
           </section>
-
-          <section class="card vh-history" x-show="unassigned.length" x-cloak>
-            <div class="eyebrow mb2">Unassigned records</div>
-            <p class="vh-note">
-              Assessments run without a patient selected. Choose a patient above before running
-              triage or stroke to file future results against them.
-            </p>
-            <ul class="vh-history__list">
-              <template x-for="item in unassigned" :key="item.record_id">
-                <li class="vh-history__item">
-                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
-                  <span class="vh-history__module" x-text="item.module_label"></span>
-                  <span class="vh-history__headline" x-text="item.headline"></span>
-                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
-                </li>
-              </template>
-            </ul>
-          </section>
-
-          <!-- patient drill-down -->
-          <section class="card vh-detail" x-show="selected" x-cloak>
-            <div class="row-between mb2">
-              <div class="eyebrow" x-text="selected ? selected.patient.display_name : ''"></div>
-              <button type="button" class="filter-btn" @click="closePatient()">Close</button>
-            </div>
-
-            <div class="workflow-bubbles">
-              <template x-for="tile in (selected ? selected.modules : [])" :key="tile.module">
-                <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
-                  <header class="vh-tile__head">
-                    <h3 x-text="tile.module_label"></h3>
-                    <span class="vh-tile__state" :class="tile.completed ? 'is-done' : 'is-todo'"
-                          x-text="tile.completed ? 'Completed' : 'Not started'"></span>
-                  </header>
-                  <p class="vh-tile__headline" x-text="tile.headline"></p>
-                  <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
-                    <template x-for="fact in tile.facts" :key="fact.label + fact.value">
-                      <div class="vh-fact">
-                        <dt x-text="fact.label"></dt>
-                        <dd x-text="fact.value"></dd>
-                      </div>
-                    </template>
-                  </dl>
-                  <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
-                    <summary>Inputs</summary>
-                    <dl class="vh-facts">
-                      <template x-for="field in tile.inputs" :key="field.label">
-                        <div class="vh-fact">
-                          <dt x-text="field.label"></dt>
-                          <dd x-text="field.value"></dd>
-                        </div>
-                      </template>
-                    </dl>
-                  </details>
-                  <footer class="vh-tile__foot">
-                    <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
-                  </footer>
-                </article>
-              </template>
+            <div class="vh-patient-actions"
+                 x-show="selected && (selected.actions || []).length" x-cloak>
+              <div class="eyebrow mb2">Action required</div>
+              <ul class="vh-history__list">
+                <template x-for="item in (selected ? (selected.actions || []) : [])" :key="item.record_id">
+                  <li class="vh-history__item vh-history__item--actionable">
+                    <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                    <span class="vh-history__module" x-text="item.module_label"></span>
+                    <span class="vh-history__headline" x-text="item.headline"></span>
+                    <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                    <a class="filter-btn" :href="item.href">Review</a>
+                  </li>
+                </template>
+              </ul>
             </div>
 
             <div class="eyebrow mb2">Full history</div>
@@ -305,6 +364,7 @@
               </template>
             </ul>
           </section>
+          </div>
         </div>
       </template>
     </section>

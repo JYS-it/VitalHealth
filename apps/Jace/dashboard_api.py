@@ -237,6 +237,10 @@ def clinician_patient_detail(patient_id: str, request: Request):
 
         records = STORE.list_records(patient_id=patient_id, limit=100)
         latest = STORE.latest_record_per_app(patient_id=patient_id)
+        pending = [
+            record for record in STORE.list_pending_review(limit=100)
+            if record.get("patient_id") == patient_id
+        ]
     except SQLAlchemyError:
         LOGGER.warning("Clinician patient detail read failed", exc_info=True)
         return JSONResponse(_UNAVAILABLE, status_code=503)
@@ -254,6 +258,13 @@ def clinician_patient_detail(patient_id: str, request: Request):
             if latest.get(app)
             else summaries.blank_tile(app, audience=audience)
             for app in SOURCE_APPS
+        ],
+        "actions": [
+            {
+                **_record_view(record, audience=audience),
+                "href": f"/{'stroke' if record.get('source_app') == 'stroke' else 'emc'}/review/{record['id']}",
+            }
+            for record in pending
         ],
         "history": [_record_view(record, audience=audience) for record in records],
     }

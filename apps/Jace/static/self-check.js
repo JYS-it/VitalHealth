@@ -63,6 +63,7 @@ function selfCheckApp() {
     async submit() {
       this.error = '';
       this.submitting = true;
+      window.VitalHealthLoading?.show('Checking your symptoms');
       try {
         const vitals = this.noVitals
           ? {}
@@ -91,6 +92,7 @@ function selfCheckApp() {
         this.error = e.message || 'Something went wrong submitting your check. Please try again.';
       } finally {
         this.submitting = false;
+        window.VitalHealthLoading?.hide();
       }
     },
 

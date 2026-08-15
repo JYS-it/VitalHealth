@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="stroke-cases-shell">
+    <header class="stroke-cases-hero card">
+        <div>
+            <span class="case-eyebrow">Stroke workspace</span>
+            <h1>Stroke cases</h1>
+            <p>Review incoming patient requests and scan the latest stroke profile for each patient.</p>
+        </div>
+        <a class="btn btn-primary" href="{{ purl('prediction') }}">New stroke assessment</a>
+    </header>
+
+    {% if database_error %}
+    <div class="alert alert-error">{{ database_error }}</div>
+    {% endif %}
+
+    <section class="case-section card">
+        <div class="case-section__head">
+            <div>
+                <span class="case-eyebrow">Needs attention</span>
+                <h2>Pending stroke requests</h2>
+            </div>
+            <span class="case-count">{{ pending_cases|length }}</span>
+        </div>
+
+        {% if pending_cases %}
+        <div class="case-grid case-grid--pending">
+            {% for case in pending_cases %}
+            <article class="stroke-case stroke-case--pending">
+                <div class="stroke-case__top">
+                    <div>
+                        <h3>{{ case.patient_name }}</h3>
+                        <span class="case-reference">{{ case.patient_reference }}</span>
+                    </div>
+                    <span class="case-status case-status--pending">Pending review</span>
+                </div>
+                <dl class="case-facts">
+                    <div><dt>Profile</dt><dd>{{ case.age or '—' }} yrs · {{ case.gender or '—' }}</dd></div>
+                    <div><dt>Stroke result</dt><dd>{{ case.risk_category }}</dd></div>
+                    <div><dt>Probability</dt><dd>{{ case.risk_probability if case.risk_probability is not none else '—' }}{% if case.risk_probability is not none %}%{% endif %}</dd></div>
+                    <div><dt>Blood pressure</dt><dd>{{ case.systolic or '—' }}/{{ case.diastolic or '—' }}</dd></div>
+                </dl>
+                <a class="btn btn-primary case-action" href="{{ purl('review_form', record_id=case.id) }}">Review request</a>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="case-empty">No stroke requests are awaiting review.</p>
+        {% endif %}
+    </section>
+
+    <section class="case-section card">
+        <div class="case-section__head">
+            <div>
+                <span class="case-eyebrow">Patient profiles</span>
+                <h2>Stroke case library</h2>
+            </div>
+            <span class="case-count">{{ cases|length }}</span>
+        </div>
+
+        {% if cases %}
+        <div class="case-grid">
+            {% for case in cases %}
+            <article class="stroke-case">
+                <div class="stroke-case__top">
+                    <div>
+                        <h3>{{ case.patient_name }}</h3>
+                        <span class="case-reference">{{ case.patient_reference }}</span>
+                    </div>
+                    <span class="case-status">{{ case.status }}</span>
+                </div>
+                <dl class="case-facts">
+                    <div><dt>Profile</dt><dd>{{ case.age or '—' }} yrs · {{ case.gender or '—' }}</dd></div>
+                    <div><dt>Stroke result</dt><dd>{{ case.risk_category }}</dd></div>
+                    <div><dt>Probability</dt><dd>{{ case.risk_probability if case.risk_probability is not none else '—' }}{% if case.risk_probability is not none %}%{% endif %}</dd></div>
+                    <div><dt>Blood pressure</dt><dd>{{ case.systolic or '—' }}/{{ case.diastolic or '—' }}</dd></div>
+                </dl>
+                <time class="case-time">{{ case.created_at.strftime('%d %b %Y, %I:%M %p') if case.created_at else 'Date unavailable' }}</time>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="case-empty">No stroke profiles are available yet.</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

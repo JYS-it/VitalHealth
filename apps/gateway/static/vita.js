@@ -28,6 +28,152 @@
     document.head.appendChild(link);
   }
 
+  function activeSection() {
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/stroke')) return 'stroke';
+    if (path.startsWith('/emc')) return 'emc';
+    if (path.includes('self-check')) return 'triage';
+    return 'home';
+  }
+
+  function escapeMarkup(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]);
+  }
+
+  function navMarkup(role) {
+    const triageHref = role === 'patient' ? '/triage/self-check.html' : '/triage/';
+    const triageLabel = role === 'patient' ? 'Triage Self-Check' : 'Clinical Triage';
+    const active = activeSection();
+    const link = (key, href, label) =>
+      `<a class="${active === key ? 'active' : ''}" href="${href}">${label}</a>`;
+    return [
+      link('home', '/triage/', 'Home'),
+      link('triage', triageHref, triageLabel),
+      link('stroke', '/stroke/', 'Stroke Assessment'),
+      link('emc', '/emc/', 'EMC Workflow'),
+    ].join('');
+  }
+
+  async function buildSharedHeader() {
+    const header = document.querySelector('.site-header, .header, .topbar');
+    if (!header) return;
+
+    let me;
+    try {
+      const response = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!response.ok) return;
+      me = await response.json();
+    } catch (error) {
+      return;
+    }
+    if (!me || !me.authenticated) return;
+
+    const displayName = me.display_name || me.email || 'User';
+    let account = header.querySelector('.auth-status');
+    if (!account) {
+      account = document.createElement('div');
+      account.className = 'auth-status';
+      const topRow = header.querySelector('.header__top, .header-wrap, .topbar-inner');
+      if (topRow) topRow.appendChild(account);
+    }
+    if (account) {
+      const initial = displayName.trim().charAt(0).toUpperCase() || 'U';
+      account.innerHTML = [
+        `<span class="auth-status__avatar" aria-hidden="true">${initial}</span>`,
+        '<span class="auth-status__copy">',
+        '  <span class="auth-status__label">Signed in as</span>',
+        `  <strong class="auth-status__user">${escapeMarkup(displayName)}</strong>`,
+        '</span>',
+        '<a class="auth-status__logout" href="/logout">Log out</a>',
+      ].join('');
+    }
+
+    let nav = header.querySelector('.global-nav, .navbar');
+    if (!nav) {
+      const navWrap = document.createElement('div');
+      navWrap.className = 'container nav-wrap';
+      nav = document.createElement('nav');
+      nav.className = 'navbar global-nav';
+      nav.setAttribute('aria-label', 'VitalHealth navigation');
+      navWrap.appendChild(nav);
+      header.appendChild(navWrap);
+    }
+
+    // Link-based workflow headers can share one role-aware navigation. The
+    // dashboard keeps its Alpine buttons because they switch in-page views.
+    if (!nav.querySelector('button')) nav.innerHTML = navMarkup(me.role);
+  }
+
+  function loadingLabelFor(text) {
+    const label = String(text || '').trim().toLowerCase();
+    if (label.includes('care plan')) return 'Generating care plan';
+    if (label.includes('extract')) return 'Extracting clinical details';
+    if (label.includes('predict') || label.includes('check my symptoms')) return 'Calculating assessment output';
+    if (label.includes('regenerate')) return 'Regenerating draft';
+    if (label.includes('approve')) return 'Approving and preparing the result';
+    if (label.includes('reject')) return 'Processing rejection';
+    if (label.includes('submit')) return 'Submitting your request';
+    return 'Generating your output';
+  }
+
+  function ensureLoadingOverlay() {
+    let overlay = document.getElementById('loading-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.className = 'loading-overlay vh-loading-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.setAttribute('aria-busy', 'true');
+    overlay.innerHTML = [
+      '<div class="loading-dialog vh-loading-dialog" role="status">',
+      '  <span class="loading-label">Generating your output</span>',
+      '  <div class="skeleton title"></div>',
+      '  <div class="skeleton line"></div>',
+      '  <div class="skeleton line"></div>',
+      '  <div class="skeleton line short"></div>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function showLoading(label) {
+    const overlay = ensureLoadingOverlay();
+    const labelNode = overlay.querySelector('.loading-label');
+    if (labelNode) labelNode.textContent = label || 'Generating your output';
+    overlay.hidden = false;
+    document.body.classList.add('vh-is-loading');
+  }
+
+  function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.hidden = true;
+    document.body.classList.remove('vh-is-loading');
+  }
+
+  function installLoadingStates() {
+    window.VitalHealthLoading = { show: showLoading, hide: hideLoading };
+
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.checkValidity()) return;
+      if ((form.method || 'get').toLowerCase() !== 'post') return;
+      const submitter = event.submitter;
+      const text = submitter && (submitter.textContent || submitter.value);
+      showLoading(loadingLabelFor(text));
+    }, true);
+
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) return;
+      const link = event.target.closest('a[data-loading-label], a[href*="/care-plan"]');
+      if (!link) return;
+      showLoading(link.dataset.loadingLabel || loadingLabelFor(link.textContent));
+    });
+  }
+
   function buildWidget() {
     if (document.getElementById('vitalhealth-vita-root')) return;
 
@@ -288,9 +434,15 @@
 
   function init() {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', buildWidget, { once: true });
+      document.addEventListener('DOMContentLoaded', () => {
+        buildSharedHeader();
+        installLoadingStates();
+        buildWidget();
+      }, { once: true });
       return;
     }
+    buildSharedHeader();
+    installLoadingStates();
     buildWidget();
   }
 
