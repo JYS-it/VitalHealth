@@ -47,6 +47,58 @@ p {
 	border-radius: 12px;
 }
 
+.emc-workbench-shell {
+	display: grid;
+	gap: 14px;
+}
+
+.workbench-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+	align-items: center;
+}
+
+.request-list {
+	margin-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.request-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: 12px;
+	align-items: center;
+	padding: 13px 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.request-title {
+	font-weight: 700;
+}
+
+.request-meta {
+	margin-top: 2px;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.request-time {
+	color: var(--muted);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+	.request-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.request-time {
+		grid-column: 1 / -1;
+	}
+}
+
 .intake-card,
 .workbench-card {
 	padding: 16px;

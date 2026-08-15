@@ -701,8 +701,39 @@ def render_state(workflow_id=None, message=None):
     return render_template("index.html", title=APP_TITLE, today=date.today().isoformat(), symptom_fields=symptom_fields(), style_options=STYLE_OPTIONS, workflow=workflow, workflow_id=workflow_id, message=message, model_metadata=MODEL_METADATA, feature_count=len(FEATURE_LAYOUT), render_certificate=render_certificate, legacy_schema=any(feature in FEATURE_LAYOUT for feature in ("Gender", "Duration", "Medical_History")), genai_configured=bool(get_api_key()), patient_identity=patient_identity())
 
 
+def render_clinician_workbench(message=None):
+    """The clinician landing page: review incoming requests, don't recreate them."""
+    pending, recent, database_error = [], [], None
+    if not SHARED_STORE.enabled:
+        database_error = "The shared database is unavailable, so certificate requests cannot be listed."
+    else:
+        try:
+            pending = SHARED_STORE.list_pending_review(source_apps=("emc",), limit=100)
+            recent = [
+                record
+                for record in SHARED_STORE.list_records(source_app="emc", limit=50)
+                if str(record.get("status") or "").upper() in {"APPROVED_FOR_ISSUE", "REJECTED"}
+            ][:12]
+        except Exception:
+            database_error = "Certificate requests are temporarily unavailable. Please refresh the page."
+    return render_template(
+        "workbench.html",
+        title=APP_TITLE,
+        pending=pending,
+        recent=recent,
+        message=message,
+        database_error=database_error,
+    )
+
+
 @app.get("/")
 def index():
+    return render_clinician_workbench()
+
+
+@app.get("/create")
+def create_certificate():
+    """Optional clinician-initiated EMC flow for an in-clinic consultation."""
     return render_state()
 
 

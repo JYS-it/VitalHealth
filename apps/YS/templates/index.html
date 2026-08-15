@@ -41,8 +41,8 @@
       <article class="card panel-card workflow-card intake-card">
         <form method="post" action="{{ url_for('start') }}" class="form-grid workflow-form">
           <div class="section-heading">
-            <h2>Patient intake</h2>
-            <span>Required fields</span>
+            <h2>In-clinic certificate request</h2>
+            <a class="button" href="{{ url_for('index') }}">Back to workbench</a>
           </div>
 
           {# A signed-in patient certifies only themselves, so these two are
@@ -163,7 +163,7 @@
             </div>
           </details>
 
-          <button class="primary btn-submit wide" type="submit">Create clinician review draft</button>
+          <button class="primary btn-submit wide" type="submit">Create in-clinic EMC draft</button>
         </form>
       </article>
 
