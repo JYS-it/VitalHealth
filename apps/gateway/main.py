@@ -545,7 +545,7 @@ def _forbidden_for_role(request: Request, message: str) -> Response:
     return JSONResponse({"detail": message}, status_code=403)
 
 
-_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted", "status", "static"}
+_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted", "status", "download", "static"}
 
 
 def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:

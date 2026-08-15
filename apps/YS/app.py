@@ -262,7 +262,16 @@ def collect_features(form, metadata):
         if feature == "Age":
             values[feature] = metadata["patient_age"]
         elif feature == "Gender":
-            values[feature] = 1 if form.get("gender") == "1" else 0
+            # Keep the trained model's numeric feature internally, while the
+            # patient-facing form uses understandable labels. Numeric values
+            # remain accepted for older saved/direct form submissions.
+            gender = str(form.get("gender", "")).strip().lower()
+            if gender in {"female", "1"}:
+                values[feature] = 1
+            elif gender in {"male", "0"}:
+                values[feature] = 0
+            else:
+                raise ValueError("Select Male or Female for gender.")
         elif feature == "Duration":
             duration = as_int(form.get("duration"), 1)
             if not 1 <= duration <= 60:

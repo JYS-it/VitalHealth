@@ -246,6 +246,30 @@ button.primary:hover {
 	background: #1557b0;
 }
 
+/* The issued-EMC download is a link because it is a GET, but it should carry
+   the same visual affordance as the workflow's primary action buttons. */
+a.button {
+	display: inline-block;
+	border: 1px solid var(--teal);
+	border-radius: 8px;
+	padding: 9px 12px;
+	font: inherit;
+	font-weight: 700;
+	text-align: center;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.button.primary {
+	background: var(--teal);
+	color: #fff;
+}
+
+a.button.primary:hover {
+	background: #1557b0;
+	color: #fff;
+}
+
 button.danger,
 button.btn-danger {
 	background: var(--red);
