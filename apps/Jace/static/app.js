@@ -248,6 +248,7 @@ document.addEventListener('alpine:init', () => {
       col.generating = true;
       col.error = '';
       col.guardTest = null;
+      window.VitalHealthLoading?.show('Generating clinical explanation');
 
       try {
         const fetchJson = async (url, payload) => {
@@ -291,6 +292,7 @@ document.addEventListener('alpine:init', () => {
         col.error = 'Could not generate explanation. Check the API logs and Gen-AI configuration.';
       } finally {
         col.generating = false;
+        window.VitalHealthLoading?.hide();
       }
     },
 
@@ -298,6 +300,7 @@ document.addEventListener('alpine:init', () => {
       const col = this.columns[ci];
       col.guardTest = null;
       col.error = '';
+      window.VitalHealthLoading?.show('Running safety checks');
 
       try {
         const res = await fetch('api/guardrail-test', {
@@ -308,6 +311,8 @@ document.addEventListener('alpine:init', () => {
         col.guardTest = await res.json();
       } catch (e) {
         col.error = 'Could not run the guardrail test.';
+      } finally {
+        window.VitalHealthLoading?.hide();
       }
     },
 
@@ -490,6 +495,7 @@ document.addEventListener('alpine:init', () => {
       this.intake.refusal = null;
       this.intake.flagsAck = false;
       this.intake.backstop = null;
+      window.VitalHealthLoading?.show('Extracting clinical details');
 
       try {
         const res = await fetch('api/extract', {
@@ -513,6 +519,7 @@ document.addEventListener('alpine:init', () => {
         this.intake.extractError = 'Could not extract fields. Check the API logs.';
       } finally {
         this.intake.extracting = false;
+        window.VitalHealthLoading?.hide();
       }
     },
 

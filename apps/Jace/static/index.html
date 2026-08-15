@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=6">
-  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260811b">
+  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
   <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=4"></script>
-  <script defer src="/vh-assets/vita.js"></script>
+  <script defer src="app.js?v=6"></script>
+  <script defer src="dashboard.js?v=1"></script>
+  <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <body x-data="ctrseApp()" x-init="init()" data-vitalhealth-section="dashboard">
@@ -36,10 +37,11 @@
                 :class="{ 'nav-chip--active': activeNav==='dashboard' }"
                 :aria-pressed="activeNav==='dashboard'"
           @click="openDashboard()">Home</button>
-        <button type="button" class="nav-chip"
+        <button type="button" class="nav-chip" x-show="!isPatient" x-cloak
                 :class="{ 'nav-chip--active': activeNav==='triage' }"
                 :aria-pressed="activeNav==='triage'"
                 @click="openTriage()">Clinical Triage</button>
+        <a class="nav-chip" x-show="isPatient" x-cloak href="/triage/self-check.html">Triage Self-Check</a>
         <a class="nav-chip" href="/stroke/">Stroke Assessment</a>
         <a class="nav-chip" href="/emc/">EMC Workflow</a>
       </nav>
@@ -47,41 +49,268 @@
   </header>
 
   <div class="app">
-    <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak aria-label="VitalHealth dashboard home">
-      <article class="home-hero card">
-        <p class="hero-kicker">VitalHealth portal</p>
-        <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome, guest!</h1>
-        <h2>Choose a healthcare workflow to begin.</h2>
-        <p>
-          VitalHealth brings clinical triage, stroke assessment, and medical certificate workflows into
-          one guided platform.
-        </p>
-      </article>
 
-      <div class="workflow-bubbles" aria-label="Primary workflows">
-        <button class="workflow-bubble workflow-bubble--triage" type="button" @click="openTriage()">
-          <span class="bubble-icon" aria-hidden="true">CT</span>
-          <h3>Clinical Triage</h3>
-          <p>Assess patient triage priority using intake details and clinician notes.</p>
-          <span class="bubble-cta">Start Triage</span>
-        </button>
+    <!-- ctrseApp's OWN error (e.g. init()'s "Could not reach the API…"), not
+         vhDashboard's — that one has its own banner just below, inside its
+         own x-data scope. Before this, ctrseApp.error had no renderer
+         anywhere on the page: the banner that looked like it would show it
+         actually resolves `error` against the nested vhDashboard scope, so a
+         clinical-workspace API failure rendered nothing at all. -->
+    <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
 
-        <a class="workflow-bubble workflow-bubble--stroke" href="/stroke/">
-          <span class="bubble-icon" aria-hidden="true">SA</span>
-          <h3>Stroke Assessment</h3>
-          <p>Estimate stroke risk and generate educational care planning guidance.</p>
-          <span class="bubble-cta">Start Stroke Assessment</span>
-        </a>
+    <section class="dashboard home-portal" x-show="mode === 'dashboard'" x-cloak
+             x-data="vhDashboard()" x-init="load()" aria-label="VitalHealth dashboard home">
 
-        <a class="workflow-bubble workflow-bubble--emc" href="/emc/">
-          <span class="bubble-icon" aria-hidden="true">EMC</span>
-          <h3>Electronic Medical Certificate</h3>
-          <p>Prepare and review electronic medical certificate drafts for clinician approval.</p>
-          <span class="bubble-cta">Start EMC Workflow</span>
-        </a>
-      </div>
+      <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
+      <p class="vh-loading" x-show="loading" x-cloak>Loading your dashboard…</p>
+
+      <!-- ==================== PATIENT DASHBOARD ==================== -->
+      <template x-if="!loading && !isClinician && summary">
+        <div>
+          <article class="home-hero card">
+            <p class="hero-kicker">Your health dashboard</p>
+            <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome!</h1>
+            <h2 x-show="summary.completed_count === 0">Choose a healthcare workflow to begin.</h2>
+            <h2 x-show="summary.completed_count > 0"
+                x-text="summary.completed_count === summary.total_count
+                  ? 'You have completed all three assessments.'
+                  : 'Your results so far.'"></h2>
+
+            <div class="vh-progress" role="group" aria-label="Assessment progress">
+              <div class="vh-progress__track">
+                <div class="vh-progress__fill"
+                     :style="`width:${(summary.completed_count / summary.total_count) * 100}%`"></div>
+              </div>
+              <span class="vh-progress__label"
+                    x-text="`${summary.completed_count} of ${summary.total_count} assessments completed`"></span>
+            </div>
+          </article>
+
+          <div class="workflow-bubbles" aria-label="Your assessments">
+            <template x-for="tile in summary.modules" :key="tile.module">
+              <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
+                <header class="vh-tile__head">
+                  <h3 x-text="tile.module_label"></h3>
+                  <span class="vh-tile__state"
+                        :class="tile.completed ? 'is-done' : 'is-todo'"
+                        x-text="tile.completed ? 'Completed' : 'Not started'"></span>
+                </header>
+
+                <p class="vh-tile__headline" x-text="tile.headline"></p>
+                <p class="vh-tile__blurb" x-show="!tile.completed" x-text="tile.blurb"></p>
+
+                <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
+                  <template x-for="fact in tile.facts" :key="fact.label + fact.value">
+                    <div class="vh-fact">
+                      <dt x-text="fact.label"></dt>
+                      <dd x-text="fact.value"></dd>
+                    </div>
+                  </template>
+                </dl>
+
+                <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
+                  <summary>What you entered</summary>
+                  <dl class="vh-facts">
+                    <template x-for="field in tile.inputs" :key="field.label">
+                      <div class="vh-fact">
+                        <dt x-text="field.label"></dt>
+                        <dd x-text="field.value"></dd>
+                      </div>
+                    </template>
+                  </dl>
+                </details>
+
+                <footer class="vh-tile__foot">
+                  <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
+                  <a class="bubble-cta" :href="tile.href"
+                     x-text="tile.completed ? 'Run again' : 'Start'"></a>
+                </footer>
+              </article>
+            </template>
+          </div>
+
+          <section class="card vh-history" x-show="summary.history.length" x-cloak>
+            <div class="eyebrow mb2">Recent activity</div>
+            <ul class="vh-history__list">
+              <template x-for="item in summary.history" :key="item.record_id">
+                <li class="vh-history__item">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline" x-text="item.headline"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                </li>
+              </template>
+            </ul>
+          </section>
+        </div>
+      </template>
+
+      <!-- ==================== CLINICIAN DASHBOARD ==================== -->
+      <template x-if="!loading && isClinician">
+        <div>
+          <article class="home-hero card">
+            <p class="hero-kicker">Clinician portal</p>
+            <h1 x-text="`Welcome, ${welcomeName()}!`">Welcome!</h1>
+            <h2 x-text="`${incomingPatientCount} patient${incomingPatientCount === 1 ? '' : 's'} on record`"></h2>
+          </article>
+
+          <section class="card vh-history">
+            <div class="eyebrow mb2">Incoming requests</div>
+            <p class="vh-note" x-show="pending.length" x-cloak>
+              Patient-submitted Stroke and EMC requests awaiting clinician review.
+            </p>
+            <ul class="vh-history__list" x-show="pending.length" x-cloak>
+              <template x-for="item in pending" :key="item.record_id">
+                <li class="vh-history__item vh-history__item--actionable">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline"
+                        x-text="`${item.patient_display_name || 'Unknown patient'} — ${item.headline}`"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                  <a class="filter-btn" :href="item.href">Review</a>
+                </li>
+              </template>
+            </ul>
+            <p class="vh-empty" x-show="!pending.length" x-cloak>
+              No incoming requests require review.
+            </p>
+          </section>
+
+          <section class="card vh-history">
+            <div class="eyebrow mb2">My patients</div>
+            <div class="vh-table-wrap" x-show="patients.length" x-cloak>
+              <table class="vh-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Patient</th>
+                    <th scope="col">Triage</th>
+                    <th scope="col">Stroke</th>
+                    <th scope="col">EMC</th>
+                    <th scope="col">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="patient in patients" :key="patient.patient_id">
+                    <tr class="vh-patient-row"
+                        :class="{ 'is-active': selected && selected.patient.patient_id === patient.patient_id }"
+                        role="button" tabindex="0"
+                        :aria-expanded="selected && selected.patient.patient_id === patient.patient_id"
+                        @click="openPatient(patient.patient_id)"
+                        @keydown.enter.prevent="openPatient(patient.patient_id)"
+                        @keydown.space.prevent="openPatient(patient.patient_id)">
+                      <th scope="row">
+                        <span class="vh-patient-name" x-text="patient.display_name"></span>
+                        <small class="vh-patient-id" x-text="patient.external_id"></small>
+                      </th>
+                      <template x-for="tile in moduleList(patient)" :key="tile.module">
+                        <td>
+                          <span class="vh-pill" :class="`vh-pill--${tile.completed ? tile.tone : 'empty'}`"
+                                x-text="tile.completed ? tile.headline : '—'"></span>
+                        </td>
+                      </template>
+                      <td class="vh-nowrap" x-text="when(patient.last_activity) || '—'"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <p class="vh-empty" x-show="!patients.length" x-cloak>
+              No patients have submitted a request yet.
+            </p>
+          </section>
+
+          <!-- patient detail modal -->
+          <div class="vh-modal-backdrop" x-show="selected" x-cloak
+               x-transition.opacity
+               @click.self="closePatient()"
+               @keydown.escape.window="closePatient()">
+          <section class="card vh-detail" role="dialog" aria-modal="true"
+                   aria-labelledby="vh-patient-detail-title">
+            <div class="row-between mb2">
+              <div>
+                <div class="eyebrow">Patient details</div>
+                <h2 id="vh-patient-detail-title" class="vh-detail__title"
+                    x-text="selected ? selected.patient.display_name : ''"></h2>
+              </div>
+              <button type="button" class="filter-btn" @click="closePatient()"
+                      aria-label="Close patient details">Close</button>
+            </div>
+
+            <div class="workflow-bubbles">
+              <template x-for="tile in (selected ? selected.modules : [])" :key="tile.module">
+                <article class="vh-tile card" :class="`vh-tile--${tile.tone}`">
+                  <header class="vh-tile__head">
+                    <h3 x-text="tile.module_label"></h3>
+                    <span class="vh-tile__state" :class="tile.completed ? 'is-done' : 'is-todo'"
+                          x-text="tile.completed ? 'Completed' : 'Not started'"></span>
+                  </header>
+                  <p class="vh-tile__headline" x-text="tile.headline"></p>
+                  <dl class="vh-facts" x-show="tile.facts.length" x-cloak>
+                    <template x-for="fact in tile.facts" :key="fact.label + fact.value">
+                      <div class="vh-fact">
+                        <dt x-text="fact.label"></dt>
+                        <dd x-text="fact.value"></dd>
+                      </div>
+                    </template>
+                  </dl>
+                  <details class="vh-inputs" x-show="tile.inputs.length" x-cloak>
+                    <summary>Inputs</summary>
+                    <dl class="vh-facts">
+                      <template x-for="field in tile.inputs" :key="field.label">
+                        <div class="vh-fact">
+                          <dt x-text="field.label"></dt>
+                          <dd x-text="field.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </details>
+                  <footer class="vh-tile__foot">
+                    <span class="vh-tile__time" x-show="tile.created_at" x-text="when(tile.created_at)"></span>
+                  </footer>
+                </article>
+              </template>
+            </div>
+
+            <div class="vh-patient-actions"
+                 x-show="selected && (selected.actions || []).length" x-cloak>
+              <div class="eyebrow mb2">Action required</div>
+              <ul class="vh-history__list">
+                <template x-for="item in (selected ? (selected.actions || []) : [])" :key="item.record_id">
+                  <li class="vh-history__item vh-history__item--actionable">
+                    <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                    <span class="vh-history__module" x-text="item.module_label"></span>
+                    <span class="vh-history__headline" x-text="item.headline"></span>
+                    <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                    <a class="filter-btn" :href="item.href">Review</a>
+                  </li>
+                </template>
+              </ul>
+            </div>
+
+            <div class="eyebrow mb2">Full history</div>
+            <ul class="vh-history__list">
+              <template x-for="item in (selected ? selected.history : [])" :key="item.record_id">
+                <li class="vh-history__item">
+                  <span class="vh-dot" :class="`vh-dot--${item.tone}`" aria-hidden="true"></span>
+                  <span class="vh-history__module" x-text="item.module_label"></span>
+                  <span class="vh-history__headline" x-text="item.headline"></span>
+                  <span class="vh-history__time" x-text="when(item.created_at)"></span>
+                </li>
+              </template>
+            </ul>
+          </section>
+          </div>
+        </div>
+      </template>
     </section>
 
+    <!-- The clinical workspace — clinician-only. x-if, not x-show: a patient's
+         DOM must genuinely not contain the intake form, not just have it
+         hidden (see the patient/clinician triage split plan, "frontend" §3).
+         Every route this workspace calls is independently 403'd for a
+         patient session server-side regardless (api.py's
+         require_clinician_for_clinical_api); this is presentation only. -->
+    <template x-if="!isPatient">
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
 
       <section class="workspace-switch card" aria-label="Clinical triage workspace controls">
@@ -621,7 +850,10 @@
                 <template x-if="col.gen.justify && (col.view === 'both' || col.view === 'justify')">
                   <div class="reg-block">
                     <div class="reg-label">
-                      <span class="eyebrow">Justification</span>
+                      <span style="display:flex; align-items:center; gap:var(--s2);">
+                        <span class="eyebrow">Justification</span>
+                        <span class="derived-tag">Draft — requires clinician review</span>
+                      </span>
                       <span class="source">
                         <span class="dot" :class="sourceMeta(col.gen.justify.source).dot"></span>
                         <span x-text="sourceMeta(col.gen.justify.source).label"></span>
@@ -635,7 +867,10 @@
                 <template x-if="col.gen.handover && (col.view === 'both' || col.view === 'handover')">
                   <div class="reg-block">
                     <div class="reg-label">
-                      <span class="eyebrow">Handover note</span>
+                      <span style="display:flex; align-items:center; gap:var(--s2);">
+                        <span class="eyebrow">Handover note</span>
+                        <span class="derived-tag">Draft — requires clinician review</span>
+                      </span>
                       <span class="reg-actions">
                         <button class="btn-ghost" type="button" aria-label="Print handover note"
                                 @click="printHandover(ci)">Print</button>
@@ -735,6 +970,7 @@
         </template>
       </main>
     </div>
+    </template>
 
     <!-- ============================ FOOTER ============================ -->
     <footer class="footer">

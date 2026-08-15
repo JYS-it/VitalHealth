@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Triage self-check — VitalHealth</title>
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
+  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
+  <script defer src="self-check.js?v=2"></script>
+  <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<!--
+  Own Alpine root, own file — deliberately not a section of index.html's SPA.
+  A patient who opens this page never loads app.js, so they never fire the
+  three clinician-only calls app.js's init() makes on load (which would each
+  403 for a patient and render nothing, per the plan this page implements:
+  see apps/Jace/CLAUDE.md and the triage patient/clinician split plan).
+  No note field anywhere on this page, and no call to /api/explain — the
+  patient surface never touches the extractor or either GenAI use case
+  (both are written "for a CLINICIAN"; see ctrse_core.py's §Patient
+  self-check section for the full reasoning).
+-->
+<body x-data="selfCheckApp()" x-init="init()" data-vitalhealth-section="triage self-check">
+
+  <header class="header">
+    <div class="header__wrap">
+      <div class="header__top">
+        <div class="brand-group">
+          <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+            <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+          </a>
+          <span class="scope-badge">Triage self-check — plain-language and educational only</span>
+        </div>
+        <div class="auth-status">
+          <a class="auth-status__logout" href="/triage/">Back to your dashboard</a>
+        </div>
+      </div>
+
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a class="active" href="/triage/self-check.html">Triage Self-Check</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a href="/emc/">EMC Workflow</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="app" style="max-width:760px;">
+
+    <!-- ===================== PERSISTENT EMERGENCY BANNER =====================
+         Non-dismissible on purpose (safety constraint 3 in the plan: nothing
+         reviews a self-check, so the escape hatch must always be visible,
+         not just shown once at the top). Numbers come from the API, not
+         hardcoded here, so this can never drift from what a released
+         result's action_line says. -->
+    <div class="redflag" style="margin-bottom:var(--s5);">
+      <span>
+        This tool is <strong>not for emergencies</strong>. If this could be a medical emergency, call
+        <strong class="mono" x-text="emergencyNumber">995</strong> now or go to the nearest emergency department.
+        <template x-if="crisisNumber">
+          <span> If you are thinking about harming yourself or someone else, call
+            <strong class="mono" x-text="crisisNumber"></strong> (<span x-text="crisisLabel"></span>) —
+            you can talk to someone right now.</span>
+        </template>
+      </span>
+    </div>
+
+    <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
+
+    <!-- ===================== GUIDANCE ===================== -->
+    <template x-if="stage === 'intro'">
+      <article class="card stack">
+        <div>
+          <h1>Triage self-check</h1>
+          <p class="prose">This tool asks a few questions about how you are feeling and gives you plain-language
+            guidance on what to do next — for example, whether to see a clinician today or go to the emergency
+            department. It is educational information only. It is <strong>not a diagnosis</strong>, it does not
+            replace being seen by a clinician, and no clinician reviews your answers before you see the result.</p>
+        </div>
+
+        <div class="izone">
+          <p class="eyebrow">What to bring if you go in for care</p>
+          <ul class="prose">
+            <li>A list of your current medicines, or the medicines themselves</li>
+            <li>Your ID and any insurance or Medisave card</li>
+            <li>A short note of when your symptoms started, and what makes them better or worse</li>
+            <li>Any relevant medical history — allergies, recent surgeries, ongoing conditions</li>
+          </ul>
+        </div>
+
+        <div class="izone">
+          <p class="eyebrow">How to describe your symptoms</p>
+          <p class="prose">Be specific and concrete: where it hurts, how long it has lasted, how bad it feels
+            right now, and whether it is getting better, worse, or staying the same. There is no need to guess
+            a diagnosis — just describe what you are feeling in your own words on the next screen.</p>
+        </div>
+
+        <p class="scope-note" x-show="scopeNote" x-text="scopeNote"></p>
+
+        <button type="button" class="btn-generate" @click="stage = 'form'">Start the self-check</button>
+      </article>
+    </template>
+
+    <!-- ===================== INTAKE FORM ===================== -->
+    <template x-if="stage === 'form'">
+      <form class="card stack" @submit.prevent="submit()">
+        <h1>Tell us how you're feeling</h1>
+
+        <div class="frows">
+          <label class="frow">
+            <span class="frow__label">Age</span>
+            <span class="frow__control">
+              <input class="finput finput--num" type="number" min="0" max="120" x-model.number="age" required>
+            </span>
+          </label>
+          <label class="frow">
+            <span class="frow__label">Sex</span>
+            <span class="frow__control">
+              <select class="finput" x-model="sex">
+                <option value="">Prefer not to say</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </span>
+          </label>
+          <label class="frow">
+            <span class="frow__label">Getting here</span>
+            <span class="frow__control">
+              <select class="finput" x-model="arrivalMode" required>
+                <option value="">Select…</option>
+                <option value="ambulance">By ambulance</option>
+                <option value="car">By car</option>
+                <option value="walk_in">Walking in</option>
+                <option value="public_transport">Public transport</option>
+                <option value="wheelchair">Wheelchair</option>
+                <option value="other">Other</option>
+              </select>
+            </span>
+          </label>
+        </div>
+
+        <div>
+          <p class="eyebrow">What are you experiencing? (select all that apply)</p>
+          <div class="chips">
+            <template x-for="opt in symptomOptions" :key="opt.token">
+              <label class="ack" style="background:var(--surface-2); border-radius:var(--r-pill); padding:var(--s1) var(--s3);">
+                <input type="checkbox" @change="toggleSymptom(opt.token, $event.target.checked)">
+                <span x-text="opt.label"></span>
+              </label>
+            </template>
+          </div>
+          <p class="empty-inline" x-show="symptomOptions.length === 0">Loading options…</p>
+        </div>
+
+        <div>
+          <p class="eyebrow">Vital signs (optional — skip anything you don't have)</p>
+          <label class="ack">
+            <input type="checkbox" x-model="noVitals">
+            <span>I don't have any vital signs to enter</span>
+          </label>
+          <div class="vit-grid" x-show="!noVitals">
+            <span class="vfield"><span class="vfield__lbl">Heart rate</span>
+              <input class="finput finput--num" type="number" x-model.number="vitals.hr"></span>
+            <span class="vfield"><span class="vfield__lbl">Systolic BP</span>
+              <input class="finput finput--num" type="number" x-model.number="vitals.sbp"></span>
+            <span class="vfield"><span class="vfield__lbl">Diastolic BP</span>
+              <input class="finput finput--num" type="number" x-model.number="vitals.dbp"></span>
+            <span class="vfield"><span class="vfield__lbl">Resp. rate</span>
+              <input class="finput finput--num" type="number" x-model.number="vitals.rr"></span>
+            <span class="vfield"><span class="vfield__lbl">O2 sat</span>
+              <input class="finput finput--num" type="number" x-model.number="vitals.o2"></span>
+            <span class="vfield"><span class="vfield__lbl">Temp</span>
+              <span class="vfield__pair">
+                <input class="finput finput--num" type="number" step="0.1" x-model.number="vitals.temp">
+                <select class="finput" x-model="vitals.temp_unit" style="width:4.5rem;">
+                  <option value="C">&deg;C</option>
+                  <option value="F">&deg;F</option>
+                </select>
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div class="form-actions" style="display:flex; gap:var(--s3); align-items:center;">
+          <button type="submit" class="btn-generate" :disabled="submitting">
+            <span x-show="!submitting">Check my symptoms</span>
+            <span x-show="submitting">Checking…</span>
+          </button>
+          <button type="button" class="btn-ghost" @click="stage = 'intro'">Back</button>
+        </div>
+      </form>
+    </template>
+
+    <!-- ===================== RESULT =====================
+         Band headline + action line + reasons + safety netting come first,
+         per the plan; the model's own P-code is disclosed but demoted to a
+         collapsed "What the triage model predicted" block below it, never
+         the headline (safety constraint 1: "P1 — CRITICAL" reads to a
+         patient as "you are critically ill", which the model's own
+         DISCLAIMER explicitly says it is not). -->
+    <template x-if="stage === 'result' && result">
+      <div class="card stack">
+        <div class="badge" :style="{ background: bandColour(result.urgency.band_tone) }"
+             x-text="result.urgency.band_label"></div>
+
+        <p class="prose" style="font-weight:600;" x-text="result.urgency.action_line"></p>
+
+        <div class="frows" x-show="(result.urgency.reasons || []).length">
+          <template x-for="reason in (result.urgency.reasons || [])" :key="reason.code">
+            <div class="frow" style="grid-template-columns:1fr;">
+              <span class="prose" x-text="reason.text"></span>
+            </div>
+          </template>
+        </div>
+
+        <p class="scope-note" x-text="result.urgency.safety_netting"></p>
+
+        <template x-if="!result.model_refused">
+          <details class="footer">
+            <summary>What the triage model predicted</summary>
+            <div class="stack--tight" style="margin-top:var(--s3);">
+              <p class="mono" x-text="`${result.predicted_level} — ${result.level_label}`"></p>
+              <p class="mono" x-show="result.confidence_word">Confidence: <span x-text="result.confidence_word"></span></p>
+              <p class="prose" x-show="result.confidence_note" x-text="result.confidence_note"></p>
+              <p class="prose" x-text="result.disclaimer"></p>
+            </div>
+          </details>
+        </template>
+
+        <div class="izone">
+          <p class="eyebrow">Limitations</p>
+          <ul class="prose">
+            <template x-for="lim in (result.limitations || [])" :key="lim">
+              <li x-text="lim"></li>
+            </template>
+          </ul>
+          <p class="prose" x-text="result.scope_note"></p>
+        </div>
+
+        <div class="form-actions" style="display:flex; gap:var(--s3);">
+          <button type="button" class="btn-ghost" @click="reset()">Do another check</button>
+          <a class="btn-generate" href="/triage/" style="text-decoration:none;">Back to dashboard</a>
+        </div>
+      </div>
+    </template>
+
+  </div>
+
+  <footer class="footer app" style="max-width:760px;">
+    <p>VitalHealth — educational triage self-check. Not a substitute for professional medical advice or emergency
+      services.</p>
+  </footer>
+</body>
+</html>

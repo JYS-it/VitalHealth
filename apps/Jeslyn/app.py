@@ -495,7 +495,66 @@ def persist_stroke_record(patient_data, prediction_result, care_plan=None, care_
 
 @app.route("/")
 def home():
-    return redirect(url_for("prediction"))
+    return redirect(url_for("stroke_cases"))
+
+
+def _stroke_case_view(record):
+    patient = SHARED_STORE.get_patient(record["patient_id"]) if record.get("patient_id") else None
+    patient_data = record.get("input_payload") or {}
+    prediction_data = (record.get("output_payload") or {}).get("prediction") or {}
+    return {
+        "id": record["id"],
+        "patient_name": (patient or {}).get("display_name") or (patient or {}).get("external_id") or "Unassigned patient",
+        "patient_reference": (patient or {}).get("external_id") or "No patient reference",
+        "age": patient_data.get("Age"),
+        "gender": patient_data.get("Gender"),
+        "systolic": patient_data.get("Blood_Pressure_Systolic"),
+        "diastolic": patient_data.get("Blood_Pressure_Diastolic"),
+        "risk_category": prediction_data.get("risk_category") or "Not available",
+        "risk_probability": prediction_data.get("risk_probability_percent"),
+        "status": str(record.get("status") or "UNKNOWN").replace("_", " ").title(),
+        "status_code": str(record.get("status") or "UNKNOWN").upper(),
+        "created_at": record.get("created_at"),
+    }
+
+
+@app.get("/cases")
+def stroke_cases():
+    """Clinician landing page: open requests first, then stroke profiles."""
+    cases = []
+    pending_cases = []
+    database_error = None
+    if not SHARED_STORE.enabled:
+        database_error = "Stroke cases are temporarily unavailable because shared storage is not configured."
+    else:
+        try:
+            records = SHARED_STORE.list_records(source_app="stroke", limit=250)
+            pending_ids = {
+                record["id"]
+                for record in SHARED_STORE.list_pending_review(source_apps=("stroke",), limit=100)
+            }
+            seen_patients = set()
+            for record in records:
+                view = _stroke_case_view(record)
+                if record["id"] in pending_ids:
+                    pending_cases.append(view)
+                    continue
+                patient_key = record.get("patient_id") or record["id"]
+                if patient_key in seen_patients:
+                    continue
+                seen_patients.add(patient_key)
+                cases.append(view)
+        except Exception:
+            app.logger.exception("Stroke case dashboard read failed")
+            database_error = "Stroke cases could not be loaded. Please refresh the page."
+
+    return render_template(
+        "cases.html",
+        page_title="Stroke Cases",
+        cases=cases,
+        pending_cases=pending_cases,
+        database_error=database_error,
+    )
 
 
 @app.route("/prediction", methods=["GET", "POST"])

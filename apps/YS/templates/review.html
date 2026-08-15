@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
+
+  <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
+</head>
+
+<body data-vitalhealth-section="emc">
+  <header class="site-header clinical-header">
+    <div class="container header-wrap">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+            <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+          </a>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="container nav-wrap">
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a href="/triage/">Clinical Triage</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a class="active" href="/emc/">EMC Workflow</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section class="workflow-shell workflow-shell--emc">
+      <article class="card panel-card workflow-card workbench-card">
+        <div class="output-header">
+          <h2>Review certificate request</h2>
+          <a class="btn-outline" href="{{ url_for('index') }}">Back to workbench</a>
+        </div>
+
+        <div class="status-row">
+          <span class="badge {{ status_class(workflow.issue_status) }}">{{ workflow.issue_status }}</span>
+          <span class="badge {{ status_class(workflow.gate.local.verdict) }}">Safety Check: {{ workflow.gate.local.verdict }}</span>
+        </div>
+
+        <section class="box">
+          <h3>Patient-submitted profile</h3>
+          <p>
+            <strong>Patient:</strong> {{ workflow.metadata.patient_name }} ({{ workflow.metadata.patient_id }}),
+            age {{ workflow.metadata.patient_age }}
+          </p>
+          <p><strong>Requested leave starts:</strong> {{ workflow.metadata.medical_leave_start_date }},
+            {{ workflow.metadata.authorized_medical_leave_days }} day(s) requested</p>
+        </section>
+
+        {% if workflow.internal %}
+        <section class="box clinician-only">
+          <h3>Clinician context details</h3>
+          <p>
+            <strong>Model suggestion:</strong> {{ workflow.internal.model_label }}
+            ({{ workflow.internal.model_score }}%) — {{ workflow.internal.score_label }}
+          </p>
+          <p>
+            <strong>Alternative considerations:</strong>
+            {% for item in workflow.internal.alternatives %}
+              {{ item.alternative_condition }} ({{ item.confidence }}%){% if not loop.last %}, {% endif %}
+            {% endfor %}
+          </p>
+          <p>
+            <strong>Active intake findings:</strong>
+            {{ workflow.internal.active_symptoms|join(', ') or 'None selected' }}
+          </p>
+        </section>
+        {% endif %}
+
+        {% if not workflow.has_reviewable_draft %}
+        <section class="box">
+          <h3>No certificate draft to review</h3>
+          <p>
+            This record was not submitted through the certificate request workflow, so there is no draft
+            text to review, edit, or approve here.
+          </p>
+        </section>
+        {% elif not workflow.gate.approval_allowed %}
+        <section class="box safety-block">
+          <h3>Approval is currently blocked</h3>
+          <p>{{ workflow.gate.critic.summary }}</p>
+          {% if workflow.gate.local.issues or workflow.gate.critical_critic_issues %}
+          <ul>
+            {% for issue in workflow.gate.local.issues + workflow.gate.critical_critic_issues %}
+            <li>{{ issue.category }}: {{ issue.detail }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% if message %}
+        <p class="notice">{{ message }}</p>
+        {% endif %}
+
+        {% if workflow.issue_status in ('APPROVED_FOR_ISSUE', 'REJECTED') %}
+        <section class="box final">
+          <h3>{{ 'Final approved certificate' if workflow.final else 'This request was rejected' }}</h3>
+          {% if workflow.final %}
+          <div class="certificate">{{ render_certificate(workflow.final) }}</div>
+          <p>Certificate ID: {{ workflow.metadata.certificate_id }}</p>
+          {% endif %}
+        </section>
+        {% elif workflow.has_reviewable_draft %}
+        <form method="post" action="{{ url_for('review_submit', record_id=record_id) }}" class="form-grid workflow-form">
+          <div class="section-heading">
+            <h2>Editable certificate fields</h2>
+            <span>Clinician review</span>
+          </div>
+
+          <label>
+            Clinic name
+            <input name="clinic_name" value="{{ workflow.metadata.clinic_name }}" maxlength="120">
+          </label>
+
+          <label class="wide">
+            Clinic address
+            <input name="clinic_address" value="{{ workflow.metadata.clinic_address }}" maxlength="240">
+          </label>
+
+          <label>
+            Attending clinician
+            <input name="attending_clinician_name" value="{{ workflow.metadata.attending_clinician_name }}" maxlength="120">
+          </label>
+
+          <label>
+            Registration number
+            <input name="clinician_registration_no" value="{{ workflow.metadata.clinician_registration_no }}" maxlength="64">
+          </label>
+
+          <label>
+            Leave start date
+            <input name="medical_leave_start_date" type="date" value="{{ workflow.metadata.medical_leave_start_date }}">
+          </label>
+
+          <label>
+            Authorised leave days
+            <input name="authorized_medical_leave_days" type="number" min="1" max="60" value="{{ workflow.metadata.authorized_medical_leave_days }}">
+          </label>
+
+          <label class="wide">
+            Certificate draft text
+            <textarea name="draft_text" rows="14" class="draft-editor">{{ workflow.draft.text }}</textarea>
+          </label>
+          <p class="hint wide">
+            Editing this text and clicking Save re-runs the safety review against your edits before you
+            approve. If you changed the clinic or clinician details above, use “Regenerate draft from
+            current details” so the certificate text matches them — the safety review blocks approval
+            while the text and the confirmed details disagree.
+          </p>
+
+          <div class="actions wide">
+            <button class="btn-outline" type="submit" name="action" value="save">Save changes</button>
+            <button class="btn-warning" type="submit" name="action" value="regenerate"
+                    formnovalidate>Regenerate draft from current details</button>
+            <button
+              class="primary btn-submit"
+              type="submit" name="action" value="approve"
+              {% if not workflow.gate.approval_allowed %}disabled{% endif %}
+            >Approve and issue</button>
+            <button class="danger btn-danger" type="submit" name="action" value="reject">Reject</button>
+          </div>
+        </form>
+        {% endif %}
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
+    </div>
+  </footer>
+</body>
+</html>

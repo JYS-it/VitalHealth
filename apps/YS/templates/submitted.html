@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+
+  <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
+
+  <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
+</head>
+
+<body data-vitalhealth-section="emc">
+  <header class="site-header clinical-header">
+    <div class="container header-wrap">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
+            <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
+          </a>
+          <span class="scope-badge">Integrated educational clinical workflow support platform</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="container nav-wrap">
+      <nav class="navbar global-nav" aria-label="VitalHealth navigation">
+        <a href="/triage/">Home</a>
+        <a href="/triage/">Clinical Triage</a>
+        <a href="/stroke/">Stroke Assessment</a>
+        <a class="active" href="/emc/submit">EMC Workflow</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section class="workflow-shell workflow-shell--emc" id="wait-shell"
+             data-status-url="{{ url_for('submission_status', record_id=record_id) }}"
+             data-download-url="{{ url_for('download_issued_certificate', record_id=record_id) }}">
+
+      <article class="card panel-card workflow-card" id="pending-card">
+        <div class="output-header">
+          <h2>Waiting for clinician review</h2>
+        </div>
+
+        <div class="wait-status" role="status" aria-live="polite">
+          <span class="wait-spinner" aria-hidden="true"></span>
+          <span id="wait-message">Your certificate request has been submitted and is awaiting review.</span>
+        </div>
+
+        <div class="box">
+          <p>
+            You can stay on this page — your certificate appears here automatically once a clinician
+            approves it. Nothing is issued, and no certificate text is shown, until then.
+          </p>
+          <p><a class="btn-outline" href="/triage/">Go to your dashboard instead</a></p>
+        </div>
+      </article>
+
+      <article class="card panel-card workflow-card" id="rejected-card" hidden>
+        <div class="output-header">
+          <h2>Not approved</h2>
+        </div>
+        <div class="box">
+          <p>
+            A clinician reviewed your request and did not approve a certificate for issue. Please speak
+            with your clinician if you have questions.
+          </p>
+          <p><a class="btn-outline" href="/triage/">Back to your dashboard</a></p>
+        </div>
+      </article>
+
+      <article class="card panel-card workflow-card" id="approved-card" hidden>
+        <div class="output-header">
+          <h2>Your medical certificate</h2>
+          <span class="badge pass">APPROVED</span>
+        </div>
+
+        <div class="box">
+          <p><strong>Certificate ID:</strong> <span id="cert-id"></span></p>
+          <p><strong>Approved by:</strong> <span id="cert-approver"></span></p>
+        </div>
+
+        <section class="box">
+          <div class="certificate" id="cert-text"></div>
+        </section>
+
+        <p>
+          <a class="button primary" id="download-certificate" href="#" hidden>Download issued EMC (.txt)</a>
+          <a class="btn-outline" href="/triage/">Back to your dashboard</a>
+        </p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>VitalHealth is an educational clinical decision-support prototype. It does not provide a medical diagnosis and does not replace review by a qualified healthcare professional.</p>
+    </div>
+  </footer>
+
+  <script>
+  (() => {
+    const shell = document.getElementById('wait-shell');
+    const statusUrl = shell.dataset.statusUrl;
+    const POLL_MS = 10000;
+    let timer = null;
+
+    const el = (id) => document.getElementById(id);
+
+    function showApproved(result) {
+      el('cert-id').textContent = result.certificate_id || '—';
+      el('cert-approver').textContent = result.approved_by || '—';
+
+      // The certificate is model-generated text: render it as text nodes,
+      // one paragraph per line, never as HTML.
+      const target = el('cert-text');
+      target.textContent = '';
+      for (const line of String(result.certificate_text || '').split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          target.appendChild(document.createElement('br'));
+          continue;
+        }
+        const p = document.createElement('p');
+        p.textContent = trimmed;
+        target.appendChild(p);
+      }
+
+      el('pending-card').hidden = true;
+      el('approved-card').hidden = false;
+      const download = el('download-certificate');
+      download.href = shell.dataset.downloadUrl;
+      download.hidden = false;
+    }
+
+    function showRejected() {
+      el('pending-card').hidden = true;
+      el('rejected-card').hidden = false;
+    }
+
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    async function check() {
+      if (document.hidden) return;
+      try {
+        const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;             // transient; the next tick retries
+        const data = await res.json();
+        if (data.state === 'approved' && data.result) { stop(); showApproved(data.result); }
+        else if (data.state === 'rejected') { stop(); showRejected(); }
+      } catch (e) { /* offline or a blip — next tick retries */ }
+    }
+
+    check();
+    timer = setInterval(check, POLL_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+  })();
+  </script>
+</body>
+</html>

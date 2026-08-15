@@ -23,11 +23,13 @@ import html
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parent
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -49,12 +51,19 @@ except Exception:
         pass
 
 import auth
+from vitalhealth_storage import identity, load_shared_env, missing_shared_keys
 
 load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(BASE_DIR / ".env")
+# Same shared-settings resolution the three backends use, so the gateway
+# signs cookies with the value they verify against no matter which .env a
+# given machine actually has filled in.
+load_shared_env()
+for _key in missing_shared_keys():
+    print(f"[gateway] WARNING: {_key} is not set - login and sessions will not work.")
 
 app = FastAPI(title="VitalHealth gateway")
 
-BASE_DIR = Path(__file__).resolve().parent
 app.mount("/vh-assets", StaticFiles(directory=BASE_DIR / "static"), name="vh-assets")
 
 SHARED_STORE = get_store()
@@ -469,6 +478,45 @@ button:hover {
     border-top: 1px solid var(--vh-border);
     padding-top: 1rem;
 }
+.role-choice {
+    border: 1px solid var(--vh-border);
+    border-radius: 14px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 1.1rem 0 0.4rem;
+}
+.role-choice legend {
+    padding: 0 0.4rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--vh-muted);
+}
+.role-option {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    margin: 0.55rem 0 0;
+    font-weight: 400;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.role-option input {
+    width: auto;
+    margin: 0.25rem 0 0;
+    flex: none;
+}
+.role-option span {
+    font-size: 0.9rem;
+    color: var(--vh-muted);
+}
+.role-option strong {
+    color: inherit;
+    font-size: 0.95rem;
+}
+.hint--inline {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+}
 @media (max-width: 760px) {
     .workflow-links {
         grid-template-columns: 1fr;
@@ -486,11 +534,162 @@ def _authenticated_user(request: Request) -> dict | None:
     return auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
 
 
+def _current_actor(request: Request) -> identity.Actor | None:
+    return identity.actor_from_cookies(request.cookies)
+
+
+def _forbidden_for_role(request: Request, message: str) -> Response:
+    """Deny a role before the request reaches an upstream clinical app."""
+    if "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url="/triage/", status_code=303)
+    return JSONResponse({"detail": message}, status_code=403)
+
+
+_PATIENT_SUBMIT_FIRST_SEGMENTS = {"submit", "submitted", "status", "download", "static"}
+
+
+def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
+    """What a patient account may reach through the proxy.
+
+    Triage's clinical *workspace* stays clinician-only and instant — out of
+    scope for the review workflow. A patient may instead reach the
+    self-check surface: its own static page plus its two explicit API
+    routes (`api/self-check`, `api/self-check/options`), which run the same
+    model but return only a patient-safe projection (see
+    ctrse_core.patient_view) and persist as a distinct, non-queued status.
+    Stroke and EMC allow exactly three patient-facing routes each:
+    self-submission, its waiting page, and the `status/` poll target that
+    waiting page reads to reveal a result once a clinician approves it. Each
+    Flask app's own `static/` folder (CSS/JS) is allowed too so those pages
+    don't render unstyled — it's Flask's built-in static file serving, no
+    clinical data lives there. Everything else, including the
+    review/edit/approve pages, stays clinician-only. Jace's static assets are
+    allowed so the portal can load, while only its explicit patient-safe
+    dashboard and self-check APIs can be called.
+    """
+    normalized = path.strip("/")
+    if prefix == "triage":
+        if not normalized.startswith("api/"):
+            return True
+        return normalized.startswith("api/dashboard/") or normalized in (
+            "api/self-check", "api/self-check/options",
+        )
+    if prefix in ("stroke", "emc"):
+        first_segment = normalized.split("/", 1)[0] if normalized else ""
+        return first_segment in _PATIENT_SUBMIT_FIRST_SEGMENTS
+    return False
+
+
+def _patient_pending_destination(actor: identity.Actor | None, prefix: str) -> str | None:
+    """Return a patient's newest pending request for a module, if any.
+
+    A patient returning to a module should resume an open request rather than
+    receive a blank form that can create a duplicate submission. The backend
+    still verifies record ownership before disclosing its status or outcome.
+    """
+    if actor is None or not actor.is_patient or not SHARED_STORE.enabled:
+        return None
+    try:
+        pending = SHARED_STORE.list_records(
+            owner_user_id=actor.user_id,
+            source_app=prefix,
+            status="PENDING_REVIEW",
+            limit=1,
+        )
+    except Exception:
+        return None
+    if not pending:
+        return None
+    return f"/{prefix}/submitted/{pending[0]['id']}"
+
+
+def _name_from_email(email: str) -> str:
+    """Fallback display name for accounts registered before names were asked for."""
+    local_part = str(email or "").split("@", 1)[0]
+    return local_part.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
+
+
 def _safe_next_path(next_path: str) -> str:
     if next_path.startswith("/") and not next_path.startswith("//"):
         return next_path
 
     return "/triage/"
+
+
+def _shared_nav_html(role: str, active: str) -> str:
+    triage_href = "/triage/self-check.html" if role == "patient" else "/triage/"
+    triage_label = "Triage Self-Check" if role == "patient" else "Clinical Triage"
+    links = (
+        ("home", "/triage/", "Home"),
+        ("triage", triage_href, triage_label),
+        ("stroke", "/stroke/", "Stroke Assessment"),
+        ("emc", "/emc/", "EMC Workflow"),
+    )
+    return "".join(
+        f'<a class="{"active" if key == active else ""}" href="{href}">{label}</a>'
+        for key, href, label in links
+    )
+
+
+def _inject_shared_account_and_nav(page: str, actor: identity.Actor, prefix: str, path: str) -> str:
+    """Enforce one account control and role-aware nav on every proxied page.
+
+    This is performed at the gateway so individual workflow template caches or
+    server reload settings cannot cause the shared shell to disappear.
+    """
+    raw_display_name = actor.display_name or _name_from_email(actor.email) or actor.email
+    display_name = html.escape(raw_display_name)
+    initial = html.escape(raw_display_name[:1].upper() or "U")
+    account = (
+        '<div class="auth-status">'
+        f'<span class="auth-status__avatar" aria-hidden="true">{initial}</span>'
+        '<span class="auth-status__copy"><span class="auth-status__label">Signed in as</span>'
+        f'<strong class="auth-status__user">{display_name}</strong></span>'
+        '<a class="auth-status__logout" href="/logout">Log out</a>'
+        '</div>'
+    )
+
+    if re.search(r'<div\s+class="auth-status"[^>]*>.*?</div>', page, flags=re.DOTALL):
+        page = re.sub(
+            r'<div\s+class="auth-status"[^>]*>.*?</div>',
+            account,
+            page,
+            count=1,
+            flags=re.DOTALL,
+        )
+    else:
+        page = re.sub(
+            r'(<div\s+class="(?:container\s+)?header-wrap"[^>]*>)',
+            rf'\1{account}',
+            page,
+            count=1,
+        )
+
+    active = "triage" if prefix == "triage" and "self-check" in path else prefix
+    nav_links = _shared_nav_html(actor.role, active)
+    nav_pattern = r'(<nav\s+class="(?:navbar global-nav|global-nav navbar)"[^>]*>)(.*?)(</nav>)'
+    nav_match = re.search(nav_pattern, page, flags=re.DOTALL)
+    if nav_match and "<button" not in nav_match.group(2):
+        page = re.sub(nav_pattern, rf'\1{nav_links}\3', page, count=1, flags=re.DOTALL)
+    elif not nav_match:
+        nav = (
+            '<div class="container nav-wrap">'
+            '<nav class="navbar global-nav" aria-label="VitalHealth navigation">'
+            f'{nav_links}</nav></div>'
+        )
+        page = page.replace("</header>", f"{nav}</header>", 1)
+
+    page = re.sub(
+        r'/vh-assets/vitalhealth-shell\.css(?:\?[^"\']*)?',
+        '/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815c',
+        page,
+    )
+    page = re.sub(
+        r'/vh-assets/vita\.js(?:\?[^"\']*)?',
+        '/vh-assets/vita.js?v=vh-shell-20260815c',
+        page,
+    )
+    return page
 
 
 def _database_error_message() -> str | None:
@@ -578,7 +777,7 @@ def _render_login(error: str | None, next_path: str, email: str) -> str:
   <main class="auth-card">
     <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-    <span class="auth-kicker">Secure staff access</span>
+    <span class="auth-kicker">Secure sign in</span>
     <h1>Welcome back</h1>
     <p class="sub">Sign in to continue to VitalHealth workflows.</p>
 
@@ -603,9 +802,17 @@ def _render_login(error: str | None, next_path: str, email: str) -> str:
 """
 
 
-def _render_register(error: str | None, email: str) -> str:
+def _render_register(
+    error: str | None,
+    email: str,
+    display_name: str = "",
+    role: str = identity.ROLE_PATIENT,
+) -> str:
     error_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
     email_value = html.escape(email)
+    name_value = html.escape(display_name)
+    clinician_selected = " checked" if role == identity.ROLE_CLINICIAN else ""
+    patient_selected = "" if role == identity.ROLE_CLINICIAN else " checked"
 
     return f"""<!doctype html>
 <html lang="en">
@@ -621,21 +828,42 @@ def _render_register(error: str | None, email: str) -> str:
   <main class="auth-card">
     <img class="auth-logo" src="/vh-assets/brand/login.png" alt="VitalHealth">
 
-    <span class="auth-kicker">Create staff access</span>
+    <span class="auth-kicker">Patient and clinician access</span>
     <h1>Create account</h1>
-    <p class="sub">Register to access VitalHealth clinical workflow tools.</p>
+    <p class="sub">Register to access VitalHealth workflows.</p>
 
     {error_html}
 
     <form method="post" action="/register">
+      <label for="display_name">Full name</label>
+      <input type="text" id="display_name" name="display_name" value="{name_value}" required maxlength="120" autofocus>
+
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" value="{email_value}" required autofocus>
+      <input type="email" id="email" name="email" value="{email_value}" required>
 
       <label for="password">Password</label>
       <input type="password" id="password" name="password" required minlength="8">
 
       <label for="confirm">Confirm password</label>
       <input type="password" id="confirm" name="confirm" required minlength="8">
+
+      <fieldset class="role-choice">
+        <legend>This account is for</legend>
+
+        <label class="role-option">
+          <input type="radio" name="role" value="patient"{patient_selected}>
+          <span><strong>Patient</strong><br>See your own assessments and care guidance.</span>
+        </label>
+
+        <label class="role-option">
+          <input type="radio" name="role" value="clinician"{clinician_selected}>
+          <span><strong>Clinician</strong><br>Review every patient's records. Requires an access code.</span>
+        </label>
+      </fieldset>
+
+      <label for="clinician_code">Clinician access code</label>
+      <input type="password" id="clinician_code" name="clinician_code" autocomplete="off">
+      <p class="hint hint--inline">Leave blank when registering as a patient.</p>
 
       <button type="submit">Register</button>
     </form>
@@ -647,18 +875,48 @@ def _render_register(error: str | None, email: str) -> str:
 """
 
 
-def _set_session_cookie(response: Response, user_id: str, email: str) -> None:
-    token = auth.create_session_token(user_id, email)
+def _cookie_is_secure() -> bool:
+    return os.environ.get("SESSION_COOKIE_SECURE", "").lower() == "true"
+
+
+def _set_session_cookie(
+    response: Response,
+    *,
+    user_id: str,
+    email: str,
+    role: str,
+    patient_external_id: str | None = None,
+    display_name: str | None = None,
+) -> None:
+    token = auth.create_session_token(
+        user_id=user_id,
+        email=email,
+        role=role,
+        patient_external_id=patient_external_id,
+        display_name=display_name,
+    )
 
     response.set_cookie(
         auth.COOKIE_NAME,
         token,
         httponly=True,
         samesite="lax",
-        secure=os.environ.get("SESSION_COOKIE_SECURE", "").lower() == "true",
+        secure=_cookie_is_secure(),
         max_age=auth.SESSION_MAX_AGE_SECONDS,
         path="/",
     )
+
+
+def _patient_external_id_for(user: Any) -> str | None:
+    """The patients row a login speaks for, or None for clinicians."""
+    patient_id = user.get("patient_id") if hasattr(user, "get") else None
+    if not patient_id:
+        return None
+    try:
+        patient = SHARED_STORE.get_patient(patient_id)
+    except Exception:
+        return None
+    return patient["external_id"] if patient else None
 
 
 @app.get("/")
@@ -705,7 +963,14 @@ async def login_submit(request: Request):
         return RedirectResponse(url=f"/login?{query}", status_code=303)
 
     response = RedirectResponse(url=next_path, status_code=303)
-    _set_session_cookie(response, user["id"], user["email"])
+    _set_session_cookie(
+        response,
+        user_id=user["id"],
+        email=user["email"],
+        role=identity.normalise_role(user["role"]),
+        patient_external_id=_patient_external_id_for(user),
+        display_name=user["display_name"],
+    )
 
     return response
 
@@ -714,8 +979,10 @@ async def login_submit(request: Request):
 async def register_form(request: Request) -> HTMLResponse:
     error = request.query_params.get("error", "")
     email = request.query_params.get("email", "")
+    display_name = request.query_params.get("display_name", "")
+    role = identity.normalise_role(request.query_params.get("role", ""))
 
-    return HTMLResponse(_render_register(error or None, email))
+    return HTMLResponse(_render_register(error or None, email, display_name, role))
 
 
 @app.post("/register")
@@ -725,15 +992,27 @@ async def register_submit(request: Request):
     email = str(form.get("email", "")).strip()
     password = str(form.get("password", ""))
     confirm = str(form.get("confirm", ""))
+    display_name = str(form.get("display_name", "")).strip()
+    role = identity.normalise_role(form.get("role", ""))
+    clinician_code = str(form.get("clinician_code", "")).strip()
 
     def fail(message: str):
-        query = f"error={quote(message)}&email={quote(email)}"
+        query = (
+            f"error={quote(message)}&email={quote(email)}"
+            f"&display_name={quote(display_name)}&role={quote(role)}"
+        )
         return RedirectResponse(url=f"/register?{query}", status_code=303)
 
     db_error = _database_error_message()
 
     if db_error:
         return fail(db_error)
+
+    if not display_name:
+        return fail("Enter your full name.")
+
+    if len(display_name) > 120:
+        return fail("Name must be 120 characters or fewer.")
 
     if not email or "@" not in email:
         return fail("Enter a valid email address.")
@@ -744,10 +1023,34 @@ async def register_submit(request: Request):
     if password != confirm:
         return fail("Passwords do not match.")
 
+    # A clinician account can read every patient's records, so this gate fails
+    # closed: with no CLINICIAN_ACCESS_CODE configured, the role is simply not
+    # available for self-service registration.
+    if role == identity.ROLE_CLINICIAN:
+        expected_code = os.environ.get("CLINICIAN_ACCESS_CODE", "").strip()
+
+        if not expected_code:
+            return fail("Clinician registration is not enabled on this deployment.")
+
+        if clinician_code != expected_code:
+            return fail("That clinician access code is not valid.")
+
+    patient_external_id = None
+    patient_id = None
+
     try:
+        if role == identity.ROLE_PATIENT:
+            # Doubles as YS's patient_id, which only accepts [A-Za-z0-9-]{3,32}
+            # (apps/YS/app.py), so this must not be derived from the email.
+            patient_external_id = f"u-{uuid.uuid4().hex[:16]}"
+            patient_id = SHARED_STORE.upsert_patient(patient_external_id, display_name)
+
         user_id = SHARED_STORE.create_user(
             email=email,
             password_hash=auth.hash_password(password),
+            role=role,
+            display_name=display_name,
+            patient_id=patient_id,
         )
     except IntegrityError:
         return fail("Email already registered.")
@@ -755,7 +1058,14 @@ async def register_submit(request: Request):
         return fail("Could not create the account. Please check the shared database setup.")
 
     response = RedirectResponse(url="/triage/", status_code=303)
-    _set_session_cookie(response, user_id, email.strip().lower())
+    _set_session_cookie(
+        response,
+        user_id=user_id,
+        email=email.strip().lower(),
+        role=role,
+        patient_external_id=patient_external_id,
+        display_name=display_name,
+    )
 
     return response
 
@@ -764,28 +1074,33 @@ async def register_submit(request: Request):
 async def logout():
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie(auth.COOKIE_NAME, path="/")
+    # Otherwise the next clinician to sign in on this browser inherits whichever
+    # patient the previous one had selected.
+    response.delete_cookie(auth.SUBJECT_COOKIE_NAME, path="/")
 
     return response
 
 @app.get("/api/me")
 async def current_user(request: Request):
-    user = _authenticated_user(request)
+    actor = _current_actor(request)
 
-    if not user:
+    if not actor:
         return {
             "authenticated": False,
             "email": None,
             "display_name": "guest",
+            "role": None,
+            "patient_external_id": None,
         }
-
-    email = str(user.get("email", "")).strip()
-    name_part = email.split("@", 1)[0] if email else "user"
-    display_name = name_part.replace(".", " ").replace("_", " ").replace("-", " ").strip().title()
 
     return {
         "authenticated": True,
-        "email": email,
-        "display_name": display_name or email or "user",
+        "email": actor.email,
+        # Registered names beat the email-prefix guess, which is only a
+        # fallback for accounts created before names were collected.
+        "display_name": actor.display_name or _name_from_email(actor.email) or "user",
+        "role": actor.role,
+        "patient_external_id": actor.patient_external_id,
     }
 
 
@@ -832,12 +1147,74 @@ async def vita_chat(payload: VitaChatRequest):
     }
 
 
+class ClinicianContextRequest(BaseModel):
+    patient_external_id: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+# Declared above the /{prefix} catch-alls below: Starlette matches routes in
+# registration order, so anything added after them is swallowed by the proxy.
+@app.post("/api/clinician/context")
+async def set_clinician_context(payload: ClinicianContextRequest, request: Request):
+    """Choose which patient a clinician's next assessment is about.
+
+    Neither the triage nor the stroke form has a patient field, so without a
+    selected subject a clinician's assessments could never be filed against
+    anyone. The choice lives in a signed cookie rather than a form field so all
+    three backends read it the same way and none of them can be lied to.
+    """
+    actor = _current_actor(request)
+
+    if actor is None:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    if not actor.is_clinician:
+        return JSONResponse({"detail": "Clinician access required"}, status_code=403)
+
+    external_id = (payload.patient_external_id or "").strip()
+    response = JSONResponse({
+        "patient_external_id": external_id or None,
+        "display_name": payload.display_name if external_id else None,
+    })
+
+    if not external_id:
+        response.delete_cookie(auth.SUBJECT_COOKIE_NAME, path="/")
+        return response
+
+    response.set_cookie(
+        auth.SUBJECT_COOKIE_NAME,
+        auth.create_subject_token(
+            external_id=external_id,
+            display_name=payload.display_name,
+        ),
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_is_secure(),
+        max_age=auth.SESSION_MAX_AGE_SECONDS,
+        path="/",
+    )
+
+    return response
+
+
 @app.api_route("/{prefix}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def redirect_bare_prefix(prefix: str):
+async def redirect_bare_prefix(prefix: str, request: Request):
     if prefix == "stroke":
-        return RedirectResponse(url="/stroke/prediction", status_code=307)
+        # Bare /stroke used to always mean "the clinician-instant form," but
+        # that route is clinician-only now — a patient landing here needs the
+        # submission form instead, or they'd just bounce off a 403.
+        actor = _current_actor(request)
+        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
+        if not actor or not actor.is_patient:
+            target = "/stroke/prediction"
+        return RedirectResponse(url=target, status_code=307)
 
     if prefix in BACKENDS:
+        if prefix == "emc":
+            actor = _current_actor(request)
+            if actor and actor.is_patient:
+                target = _patient_pending_destination(actor, "emc") or "/emc/submit"
+                return RedirectResponse(url=target, status_code=307)
         return RedirectResponse(url=f"/{prefix}/", status_code=307)
 
     return Response(status_code=404)
@@ -850,12 +1227,26 @@ async def proxy(prefix: str, path: str, request: Request):
     if upstream is None:
         return Response(status_code=404)
 
+    actor = _current_actor(request)
+
+    # The nav links to /stroke/ and /emc/ (trailing slash — a distinct route
+    # from bare /stroke and /emc, which redirect_bare_prefix() handles) always
+    # meant "the clinician-instant entry point" until patient submission
+    # existed. For a patient that now clinician-only landing 403s and bounces
+    # them back to the dashboard with no explanation — send them to the
+    # submission form instead, same as redirect_bare_prefix() already does
+    # for the bare form.
     if prefix == "stroke" and path.strip("/") == "":
-        return RedirectResponse(url="/stroke/prediction", status_code=307)
+        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
+        if not actor or not actor.is_patient:
+            target = "/stroke/cases"
+        return RedirectResponse(url=target, status_code=307)
 
-    user = _authenticated_user(request)
+    if prefix == "emc" and path.strip("/") == "" and actor and actor.is_patient:
+        target = _patient_pending_destination(actor, "emc") or "/emc/submit"
+        return RedirectResponse(url=target, status_code=307)
 
-    if user is None:
+    if actor is None:
         if "text/html" in request.headers.get("accept", ""):
             next_path_value = f"/{prefix}/{path}"
             if request.query_params:
@@ -865,6 +1256,12 @@ async def proxy(prefix: str, path: str, request: Request):
             return RedirectResponse(url=f"/login?next={next_path}", status_code=303)
 
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    if actor.is_patient and not _patient_may_use_proxy_path(prefix, path):
+        return _forbidden_for_role(
+            request,
+            "This workflow is available to clinician accounts only.",
+        )
 
     url = f"{upstream}/{path}"
 
@@ -876,14 +1273,21 @@ async def proxy(prefix: str, path: str, request: Request):
     forward_headers["X-Forwarded-Prefix"] = f"/{prefix}"
     forward_headers["X-Forwarded-Host"] = request.headers.get("host", "")
     forward_headers["X-Forwarded-Proto"] = request.url.scheme
-    forward_headers["X-Vitalhealth-User"] = user["uid"]
-    forward_headers["X-Vitalhealth-User-Email"] = user["email"]
+    # Useful in backend logs, but NOT the basis for any authorisation decision.
+    # The backends bind 127.0.0.1, so anything running locally can forge these;
+    # they authenticate off the signed vh_session cookie (forwarded above with
+    # the rest of the headers) instead.
+    forward_headers["X-Vitalhealth-User"] = actor.user_id
+    forward_headers["X-Vitalhealth-User-Email"] = actor.email
+    forward_headers["X-Vitalhealth-Role"] = actor.role
 
     body = await request.body()
 
     request_timeout = None
-    if prefix == "stroke" and path.strip("/").startswith("care-plan"):
-        # Care-plan generation may take longer because the stroke app calls an LLM.
+    if prefix == "stroke" and path.strip("/").startswith(("care-plan", "submit")):
+        # Care-plan generation, and now patient self-submission (which
+        # generates the care plan eagerly too), both call an LLM and can take
+        # longer than the default timeout.
         request_timeout = httpx.Timeout(180.0, connect=10.0, read=180.0)
 
     try:
@@ -917,11 +1321,15 @@ async def proxy(prefix: str, path: str, request: Request):
     content = upstream_response.content
     content_type = upstream_response.headers.get("content-type", "").lower()
 
+    if "text/html" in content_type:
+        shared_html = content.decode("utf-8", errors="replace")
+        content = _inject_shared_account_and_nav(shared_html, actor, prefix, path).encode("utf-8")
+
     if prefix == "stroke" and "text/html" in content_type:
         stroke_html = content.decode("utf-8", errors="replace")
 
         stroke_html = re.sub(
-            r'(href|src|action)="/(?!(?:stroke/|triage/|emc/|api/|vh-assets/|"))',
+            r'(href|src|action)="/(?!(?:stroke/|triage/|emc/|api/|vh-assets/|logout(?:[?"/])|"))',
             r'\1="/stroke/',
             stroke_html,
         )
