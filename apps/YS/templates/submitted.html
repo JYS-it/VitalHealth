@@ -37,7 +37,8 @@
 
   <main class="container main-content">
     <section class="workflow-shell workflow-shell--emc" id="wait-shell"
-             data-status-url="{{ url_for('submission_status', record_id=record_id) }}">
+             data-status-url="{{ url_for('submission_status', record_id=record_id) }}"
+             data-download-url="{{ url_for('download_issued_certificate', record_id=record_id) }}">
 
       <article class="card panel-card workflow-card" id="pending-card">
         <div class="output-header">
@@ -86,7 +87,10 @@
           <div class="certificate" id="cert-text"></div>
         </section>
 
-        <p><a class="btn-outline" href="/triage/">Back to your dashboard</a></p>
+        <p>
+          <a class="btn-outline" id="download-certificate" href="#" hidden>Download issued EMC (.txt)</a>
+          <a class="btn-outline" href="/triage/">Back to your dashboard</a>
+        </p>
       </article>
     </section>
   </main>
@@ -127,6 +131,9 @@
 
       el('pending-card').hidden = true;
       el('approved-card').hidden = false;
+      const download = el('download-certificate');
+      download.href = shell.dataset.downloadUrl;
+      download.hidden = false;
     }
 
     function showRejected() {

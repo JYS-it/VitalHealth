@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import joblib
 import numpy as np
 import pandas as pd
-from flask import Flask, abort, jsonify, redirect, render_template, request
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request
 from markupsafe import Markup, escape
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -63,7 +63,7 @@ def require_clinician_role():
     # "static" is Flask's built-in static-file endpoint (app.static_url_path),
     # not a route this app defines — without it here, the CSS/JS a patient's
     # allowed pages link to 403s even though the pages themselves load fine.
-    if request.endpoint in {"submit_form", "submit", "submitted", "resume_submitted", "submission_status", "static"}:
+    if request.endpoint in {"submit_form", "submit", "submitted", "resume_submitted", "submission_status", "download_issued_certificate", "static"}:
         return
     if request.cookies.get(identity.COOKIE_NAME):
         actor = identity.actor_from_cookies(request.cookies)
@@ -938,6 +938,39 @@ def submission_status(record_id):
         },
     })
     return jsonify(payload)
+
+
+@app.get("/download/<record_id>")
+def download_issued_certificate(record_id):
+    """Download only the final EMC belonging to the signed-in patient.
+
+    The check is intentionally independent of the waiting/status page: a
+    copied download URL must not disclose a certificate, and pending or
+    rejected requests must never produce a downloadable document.
+    """
+    actor = current_actor()
+    record = SHARED_STORE.get_record(record_id) if SHARED_STORE.enabled else None
+    if (
+        actor is None
+        or not actor.is_patient
+        or record is None
+        or record.get("source_app") != "emc"
+        or not _patient_owns_record(actor, record)
+    ):
+        abort(404)
+
+    snapshot = record.get("output_payload") or {}
+    status = str(snapshot.get("issue_status") or record.get("status") or "").upper()
+    certificate_text = str(snapshot.get("final") or "").strip()
+    if status != "APPROVED_FOR_ISSUE" or not certificate_text:
+        abort(404)
+
+    certificate_id = str((snapshot.get("metadata") or {}).get("certificate_id") or record_id)
+    safe_id = re.sub(r"[^A-Za-z0-9._-]+", "-", certificate_id).strip(".-") or "issued-emc"
+    response = Response(certificate_text + "\n", mimetype="text/plain")
+    response.headers["Content-Disposition"] = f'attachment; filename="{safe_id}.txt"'
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.get("/review/<record_id>")
