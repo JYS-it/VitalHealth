@@ -1,0 +1,210 @@
+[
+  {
+    "external_id": "demo-nur-aini-yusof",
+    "display_name": "Nur Aini binte Yusof",
+    "input_payload": {
+      "Age": 19,
+      "Gender": "Female",
+      "BMI": 21.4,
+      "Blood_Pressure_Systolic": 112,
+      "Blood_Pressure_Diastolic": 72,
+      "Cholesterol": 160,
+      "Glucose_Level": 85,
+      "Smoking": 0,
+      "Alcohol_Intake": 0,
+      "Physical_Activity": 1,
+      "Family_History": 0,
+      "Heart_Disease": 0,
+      "Diabetes": 0
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.0,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-david-tan",
+    "display_name": "David Tan",
+    "input_payload": {
+      "Age": 74,
+      "Gender": "Male",
+      "BMI": 29.5,
+      "Blood_Pressure_Systolic": 188,
+      "Blood_Pressure_Diastolic": 102,
+      "Cholesterol": 265,
+      "Glucose_Level": 150,
+      "Smoking": 1,
+      "Alcohol_Intake": 1,
+      "Physical_Activity": 0,
+      "Family_History": 1,
+      "Heart_Disease": 1,
+      "Diabetes": 1
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "High risk",
+        "risk_probability_percent": 99.14,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-grace-lim",
+    "display_name": "Grace Lim",
+    "input_payload": {
+      "Age": 52,
+      "Gender": "Female",
+      "BMI": 27.0,
+      "Blood_Pressure_Systolic": 142,
+      "Blood_Pressure_Diastolic": 88,
+      "Cholesterol": 215,
+      "Glucose_Level": 130,
+      "Smoking": 0,
+      "Alcohol_Intake": 1,
+      "Physical_Activity": 0,
+      "Family_History": 1,
+      "Heart_Disease": 0,
+      "Diabetes": 0
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.0,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-marcus-wong",
+    "display_name": "Marcus Wong",
+    "input_payload": {
+      "Age": 81,
+      "Gender": "Male",
+      "BMI": 31.0,
+      "Blood_Pressure_Systolic": 160,
+      "Blood_Pressure_Diastolic": 95,
+      "Cholesterol": 240,
+      "Glucose_Level": 160,
+      "Smoking": 1,
+      "Alcohol_Intake": 0,
+      "Physical_Activity": 0,
+      "Family_History": 1,
+      "Heart_Disease": 1,
+      "Diabetes": 1
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "High risk",
+        "risk_probability_percent": 95.9,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-timothy-ng",
+    "display_name": "Timothy Ng",
+    "input_payload": {
+      "Age": 15,
+      "Gender": "Male",
+      "BMI": 19.0,
+      "Blood_Pressure_Systolic": 108,
+      "Blood_Pressure_Diastolic": 70,
+      "Cholesterol": 150,
+      "Glucose_Level": 80,
+      "Smoking": 0,
+      "Alcohol_Intake": 0,
+      "Physical_Activity": 1,
+      "Family_History": 0,
+      "Heart_Disease": 0,
+      "Diabetes": 0
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.0,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-ethan-koh",
+    "display_name": "Ethan Koh",
+    "input_payload": {
+      "Age": 45,
+      "Gender": "Male",
+      "BMI": 26.5,
+      "Blood_Pressure_Systolic": 150,
+      "Blood_Pressure_Diastolic": 92,
+      "Cholesterol": 230,
+      "Glucose_Level": 110,
+      "Smoking": 1,
+      "Alcohol_Intake": 0,
+      "Physical_Activity": 0,
+      "Family_History": 0,
+      "Heart_Disease": 0,
+      "Diabetes": 0
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.59,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-rosa-fernandez",
+    "display_name": "Rosa Fernandez",
+    "input_payload": {
+      "Age": 68,
+      "Gender": "Female",
+      "BMI": 24.0,
+      "Blood_Pressure_Systolic": 128,
+      "Blood_Pressure_Diastolic": 80,
+      "Cholesterol": 190,
+      "Glucose_Level": 105,
+      "Smoking": 0,
+      "Alcohol_Intake": 0,
+      "Physical_Activity": 1,
+      "Family_History": 0,
+      "Heart_Disease": 0,
+      "Diabetes": 0
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.0,
+        "threshold_used": 0.3
+      }
+    }
+  },
+  {
+    "external_id": "demo-balvinder-singh",
+    "display_name": "Balvinder Singh",
+    "input_payload": {
+      "Age": 58,
+      "Gender": "Male",
+      "BMI": 28.0,
+      "Blood_Pressure_Systolic": 136,
+      "Blood_Pressure_Diastolic": 84,
+      "Cholesterol": 205,
+      "Glucose_Level": 120,
+      "Smoking": 1,
+      "Alcohol_Intake": 1,
+      "Physical_Activity": 0,
+      "Family_History": 0,
+      "Heart_Disease": 0,
+      "Diabetes": 1
+    },
+    "output_payload": {
+      "prediction": {
+        "risk_category": "Low risk",
+        "risk_probability_percent": 0.55,
+        "threshold_used": 0.3
+      }
+    }
+  }
+]

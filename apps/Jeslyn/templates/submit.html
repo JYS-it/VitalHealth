@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="workflow-shell">
+    <article class="card panel-card workflow-card">
+        <div class="panel-head">
+            <h1>Request a stroke risk assessment</h1>
+            <p>A clinician will review your submission before you see any result.</p>
+        </div>
+
+        {% if error_message %}
+        <div class="alert alert-error">{{ error_message }}</div>
+        {% endif %}
+
+        <p class="review-note">
+            You won't see a risk category or score here — you'll see the outcome on your dashboard once a
+            clinician has reviewed your submission.
+        </p>
+
+        <form method="post" action="{{ purl('submit') }}" class="form-grid" id="stroke-submit-form">
+            <label>Age
+                <input type="number" name="Age" min="0" max="120" step="1" required />
+            </label>
+
+            <label>Gender
+                <select name="Gender" required>
+                    <option value="">Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
+            </label>
+
+            <label>BMI
+                <input type="number" name="BMI" min="10" max="80" step="0.1" required />
+            </label>
+
+            <label>Systolic Blood Pressure
+                <input type="number" name="Blood_Pressure_Systolic" min="60" max="260" step="1" required />
+            </label>
+
+            <label>Diastolic Blood Pressure
+                <input type="number" name="Blood_Pressure_Diastolic" min="40" max="160" step="1" required />
+            </label>
+
+            <label>Cholesterol
+                <input type="number" name="Cholesterol" min="50" max="500" step="1" required />
+            </label>
+
+            <label>Glucose Level
+                <input type="number" name="Glucose_Level" min="40" max="500" step="1" required />
+            </label>
+
+            <label>Smoking
+                <select name="Smoking" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <label>Alcohol Intake
+                <select name="Alcohol_Intake" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <label>Physical Activity
+                <select name="Physical_Activity" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <label>Family History
+                <select name="Family_History" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <label>Heart Disease
+                <select name="Heart_Disease" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <label>Diabetes
+                <select name="Diabetes" required>
+                    <option value="0">No</option>
+                    <option value="1">Yes</option>
+                </select>
+            </label>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Submit for clinician review</button>
+            </div>
+        </form>
+    </article>
+</section>
+<script>
+(() => {
+    const form = document.getElementById('stroke-submit-form');
+    if (!form) return;
+    form.addEventListener('submit', (event) => {
+        if (form.dataset.submitting === 'true') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitting = 'true';
+        form.querySelectorAll('button[type="submit"]').forEach((button) => {
+            button.disabled = true;
+            button.textContent = 'Submitting…';
+        });
+    });
+})();
+</script>
+{% endblock %}

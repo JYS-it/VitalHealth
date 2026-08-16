@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="workflow-shell" id="wait-shell" data-status-url="{{ purl('submission_status', record_id=record_id) }}">
+
+    <article class="card panel-card workflow-card" id="pending-card">
+        <div class="panel-head">
+            <h1>Waiting for clinician review</h1>
+            <p>You can stay on this page — your result appears here automatically once a clinician approves it.</p>
+        </div>
+
+        <div class="wait-status" role="status" aria-live="polite">
+            <span class="wait-spinner" aria-hidden="true"></span>
+            <span id="wait-message">Your stroke risk assessment has been submitted and is awaiting review.</span>
+        </div>
+
+        <p class="review-note">
+            No risk category, score, or care plan is shown until a clinician has reviewed and approved it.
+        </p>
+
+        <div class="form-actions">
+            <a class="btn" href="/triage/">Go to your dashboard instead</a>
+        </div>
+    </article>
+
+    <article class="card panel-card workflow-card" id="rejected-card" hidden>
+        <div class="panel-head">
+            <h1>Not approved</h1>
+        </div>
+        <p>
+            A clinician reviewed your submission and did not approve a result for release. Please speak with
+            your clinician if you have questions.
+        </p>
+        <div class="form-actions">
+            <a class="btn btn-primary" href="/triage/">Back to your dashboard</a>
+        </div>
+    </article>
+
+    <div id="approved-view" hidden>
+        <article class="card panel-card workflow-card">
+            <div class="panel-head">
+                <h1>Your reviewed result</h1>
+                <p>Approved by a clinician.</p>
+            </div>
+
+            <div class="metric-list">
+                <p><span class="metric-label">Risk category</span><span class="metric-value" id="risk-category"></span></p>
+                <p><span class="metric-label">Risk probability</span><span class="metric-value" id="risk-probability"></span></p>
+            </div>
+
+            <p class="disclaimer">
+                Educational support output only. This result is not a diagnosis and does not replace
+                professional clinical advice.
+            </p>
+        </article>
+
+        <article class="card panel-card workflow-card" id="care-plan-card" hidden>
+            <div class="panel-head">
+                <h2>Your care plan</h2>
+            </div>
+            <div class="care-plan-text" id="care-plan-text"></div>
+        </article>
+
+        <article class="card panel-card workflow-card" id="calendar-card" hidden>
+            <div class="panel-head">
+                <h2>7-day care calendar</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th><th>Day</th><th>Main Focus</th>
+                            <th>Morning Action</th><th>Afternoon Action</th><th>Evening Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendar-body"></tbody>
+                </table>
+            </div>
+        </article>
+
+        <div class="form-actions">
+            <a class="btn btn-primary" href="/triage/">Back to your dashboard</a>
+        </div>
+    </div>
+</section>
+
+<script>
+(() => {
+  const shell = document.getElementById('wait-shell');
+  const statusUrl = shell.dataset.statusUrl;
+  const POLL_MS = 10000;
+  let timer = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function showApproved(result) {
+    el('risk-category').textContent = result.risk_category || '—';
+    el('risk-probability').textContent =
+      result.risk_probability_percent === null || result.risk_probability_percent === undefined
+        ? '—' : `${result.risk_probability_percent}%`;
+
+    if (result.care_plan) {
+      el('care-plan-text').textContent = result.care_plan;
+      el('care-plan-card').hidden = false;
+    }
+
+    const rows = Array.isArray(result.care_calendar) ? result.care_calendar : [];
+    if (rows.length) {
+      const body = el('calendar-body');
+      // textContent per cell, never innerHTML — this is model-generated text.
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        for (const key of ['Date', 'Day', 'Main Focus', 'Morning Action', 'Afternoon Action', 'Evening Action']) {
+          const td = document.createElement('td');
+          td.textContent = row[key] ?? '';
+          tr.appendChild(td);
+        }
+        body.appendChild(tr);
+      }
+      el('calendar-card').hidden = false;
+    }
+
+    el('pending-card').hidden = true;
+    el('approved-view').hidden = false;
+  }
+
+  function showRejected() {
+    el('pending-card').hidden = true;
+    el('rejected-card').hidden = false;
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  async function check() {
+    if (document.hidden) return;
+    try {
+      const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) return;               // transient; the next tick retries
+      const data = await res.json();
+      if (data.state === 'approved' && data.result) { stop(); showApproved(data.result); }
+      else if (data.state === 'rejected') { stop(); showRejected(); }
+    } catch (e) { /* offline or a blip — next tick retries */ }
+  }
+
+  check();
+  timer = setInterval(check, POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+})();
+</script>
+{% endblock %}

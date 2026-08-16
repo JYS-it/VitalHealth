@@ -61,6 +61,7 @@ document.addEventListener('alpine:init', () => {
     levelFilter: 'all',
     error: '',
     viewerName: 'guest',
+    role: null,                // 'patient' | 'clinician' | null (unauth / standalone dev)
 
     // ---- surface mode + intake (§5) ----
     mode: 'dashboard',         // 'dashboard' | 'browse' | 'intake'
@@ -98,12 +99,25 @@ document.addEventListener('alpine:init', () => {
           const me = await meRes.json();
           if (me?.authenticated) {
             this.viewerName = me.display_name || me.email || 'user';
+            this.role = me.role || null;
           } else {
             this.viewerName = 'guest';
+            this.role = null;
           }
         }
       } catch (e) {
         this.viewerName = 'guest';
+      }
+
+      // A patient never needs the clinical workspace's own data, and every
+      // one of the three calls below 403s for a patient session anyway
+      // (require_clinician_for_clinical_api) — skip them so a patient's
+      // dashboard load doesn't surface an avoidable error banner for calls
+      // it was never going to use. Everything else in init() (the /api/me
+      // call above, syncSharedSection below) still runs for both roles.
+      if (this.isPatient) {
+        this.syncSharedSection();
+        return;
       }
 
       window.addEventListener('afterprint', () => {
@@ -133,8 +147,28 @@ document.addEventListener('alpine:init', () => {
       document.body.dataset.vitalhealthSection = section || this.activeNav || this.mode || 'dashboard';
     },
 
+    // ---- role (§Patient self-check patient/clinician split) ----
+    // Mirrors dashboard.js's own isClinician getter but reads app.js's own
+    // `role` (captured from /api/me above) rather than dashboard.js's —
+    // deliberately not shared state, since the two are separate Alpine
+    // roots and dashboard.js's own comment already documents why it keeps
+    // its own copy: "Editing `role` in devtools changes nothing about what
+    // the API will hand back." The clinical workspace's own gate below is
+    // presentation only, same as that one — every route it calls is
+    // independently enforced server-side regardless of what isPatient says.
+    get isPatient() {
+      return this.role === 'patient';
+    },
+    get isClinician() {
+      return this.role === 'clinician';
+    },
+
     // ---- surface mode switch ----
     setMode(m) {
+      // Defence in depth: a patient has no clinical workspace to switch
+      // into (the workspace itself is gated out of the DOM by isPatient in
+      // index.html), so this can only be reached by a stray call.
+      if (this.isPatient) return;
       if (m === this.mode) return;
       this.mode = m;
       if (m !== 'browse') {
@@ -281,8 +315,13 @@ document.addEventListener('alpine:init', () => {
         };
         col.gen.handover = {
           source: handoverResult.source,
-          assessment: handoverResult.synthesis,
-          recommendation: handoverResult.caveat,
+          // core._envelope emits `assessment`/`recommendation` for the
+          // handover use case (ctrse_core.py's _envelope, uc == "B") — this
+          // adapter previously read `.synthesis`/`.caveat`, which the API
+          // never sends, so both boxes rendered blank and handoverText()
+          // silently dropped them from Copy and Print.
+          assessment: handoverResult.assessment,
+          recommendation: handoverResult.recommendation,
           guardrail: handoverResult.guardrails,
           disclaimer: handoverResult.disclaimer,
         };
@@ -524,28 +563,33 @@ document.addEventListener('alpine:init', () => {
     },
 
     buildConfirmFields(extraction) {
-      const field = (name) => extraction?.fields?.[name] || { value: '', span: null };
-      const complaints = extraction?.complaints || extraction?.fields?.complaints || [];
-      const allergies = extraction?.allergies || extraction?.fields?.allergies || [];
+      // extraction is the flat /api/extract response — {age, sex, arrival_mode,
+      // complaints, allergies, ...} at the top level (see api.py/ctrse_core.py).
+      // There is no `.fields` sub-object; reading through one here silently
+      // blanks age/sex/arrival_mode regardless of what was actually extracted.
+      const arrivalMode = extraction?.arrival_mode || {};
+      const complaints = extraction?.complaints || [];
+      const allergies = extraction?.allergies || [];
 
       return {
-        age: { ...field('age') },
-        sex: { ...field('sex') },
+        age: { value: extraction?.age?.value ?? '', span: extraction?.age?.span ?? null },
+        sex: { value: extraction?.sex?.value ?? '', span: extraction?.sex?.span ?? null },
         arrival: {
-          ...field('arrival'),
-          flagged: Boolean(field('arrival')?.flagged),
-          reason: field('arrival')?.reason || '',
-          alternates: field('arrival')?.alternates || [],
-          ack: !field('arrival')?.flagged,
+          value: arrivalMode.value ?? '',
+          span: arrivalMode.span ?? null,
+          flagged: Boolean(arrivalMode.ambiguous),
+          reason: arrivalMode.reason || '',
+          alternates: arrivalMode.alternates || [],
+          ack: !arrivalMode.ambiguous,
         },
         complaints: complaints.map((c) => ({
           token: c.token || c.value || '',
           span: c.span || null,
           evidence: c.evidence || null,
           fallback: Boolean(c.fallback),
-          flagged: Boolean(c.flagged),
+          flagged: Boolean(c.ambiguous),
           alternates: c.alternates || [],
-          ack: !c.flagged,
+          ack: !c.ambiguous,
         })),
         allergies: allergies.length
           ? allergies.map((a) => ({ value: a.value || a.text || '', span: a.span || null }))

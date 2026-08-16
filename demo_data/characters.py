@@ -300,3 +300,38 @@ CHARACTERS = [
 
 def by_external_id():
     return {c["external_id"]: c for c in CHARACTERS}
+
+
+# --- Demo logins -------------------------------------------------------------
+#
+# seed_db.py creates one patient account per character plus the clinician below,
+# so both dashboards have content the moment you log in. Emails are derived from
+# external_id rather than stored per character: there is exactly one login per
+# patient, and deriving it keeps the roster above as the single source of truth.
+#
+# .local is reserved by RFC 6762 and cannot resolve on the public internet, so
+# these addresses can never accidentally reach a real mailbox.
+
+DEMO_PASSWORD = "demo1234"  # 8 chars: the gateway's registration minimum
+DEMO_EMAIL_DOMAIN = "demo.vitalhealth.local"
+
+DEMO_CLINICIAN = {
+    # Matches the attending_clinician_name already used across the EMC scenarios.
+    "display_name": "Dr Alex Lee",
+    "email": f"dr.alex.lee@{DEMO_EMAIL_DOMAIN}",
+    "password": DEMO_PASSWORD,
+}
+
+
+def demo_email(external_id: str) -> str:
+    """demo-grace-lim -> grace.lim@demo.vitalhealth.local"""
+    local_part = external_id.removeprefix("demo-").replace("-", ".")
+    return f"{local_part}@{DEMO_EMAIL_DOMAIN}"
+
+
+def demo_logins():
+    """(email, password, display_name, external_id) for every demo patient."""
+    return [
+        (demo_email(c["external_id"]), DEMO_PASSWORD, c["display_name"], c["external_id"])
+        for c in CHARACTERS
+    ]

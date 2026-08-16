@@ -13,13 +13,26 @@ import os
 from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import ctrse_core as core
-from vitalhealth_storage import get_store
+from vitalhealth_storage import get_store, identity, load_shared_env, missing_shared_keys
+
+# SESSION_SECRET and DATABASE_URL are shared with the gateway, not local
+# config, and this app has no .env of its own to supply them. Without them
+# every gateway-signed cookie fails verification and the dashboard reads no
+# records at all. Must run before dashboard_api is imported below, because
+# that module resolves the store at import time.
+load_shared_env()
+for _key in missing_shared_keys():
+    print(f"[Jace] WARNING: {_key} is not set - sessions and the dashboard will not work.")
+
+# Cross-module dashboard reads. Kept in its own module so this file stays what
+# its docstring says it is: transport for CTRSE and nothing else.
+from dashboard_api import router as dashboard_router  # noqa: E402  (needs env above)
 
 # Resolve everything relative to this file so the app is CWD-independent
 # (equivalent to `core.init('.')` when launched from the project directory).
@@ -59,6 +72,39 @@ _PINNED_GEN = [rec for entry in _PINNED_EXTRACTIONS.values()
 _BY_ID = {p["id"]: p for p in _PATIENTS}
 
 app = FastAPI(title="CTRSE — triage acuity")
+
+# The patient self-check API (§Patient self-check). Unlike /api/dashboard/*
+# — which is exempt below because it "serves no clinical logic at all" — this
+# DOES run the model, so it is not folded into that prefix. It is instead
+# named explicitly here and given its own authz below: either role may call
+# it, never neither role and neither role is *rejected*, because the whole
+# point of this surface is that a patient uses it directly.
+PATIENT_API_PATHS = {"/api/self-check", "/api/self-check/options"}
+
+
+@app.middleware("http")
+async def require_clinician_for_clinical_api(request: Request, call_next):
+    """Reject patient sessions from clinical APIs as defence in depth.
+
+    The gateway is the public authentication boundary.  An unauthenticated
+    direct launch remains available for the documented standalone development
+    workflow, but a request that carries a VitalHealth session must be a valid
+    clinician session before it can use a clinical API — except the patient
+    self-check paths, which a patient session is specifically allowed to use
+    (that route does its own, looser authz: a cookie must still resolve to a
+    valid actor, just not necessarily a clinician one).
+    """
+    path = request.url.path
+    if (path.startswith("/api/") and not path.startswith("/api/dashboard/")
+            and path not in PATIENT_API_PATHS):
+        token = request.cookies.get(identity.COOKIE_NAME)
+        if token:
+            actor = identity.actor_from_cookies(request.cookies)
+            if actor is None:
+                return JSONResponse({"detail": "Authentication required"}, status_code=401)
+            if not actor.is_clinician:
+                return JSONResponse({"detail": "Clinician access required"}, status_code=403)
+    return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +301,21 @@ _CORRECTION_LOG = os.path.join(APP_DIR, "logs", "corrections.jsonl")
 _correction_count = 0
 
 
+def _actor_and_subject(request: Request):
+    """Who is making this request, and which patient it is about.
+
+    Read from the signed session cookie the gateway forwards, not from the
+    X-Vitalhealth-* headers — this app listens on 127.0.0.1 and those headers
+    can be forged by anything local. When there is no valid cookie both come
+    back None and persistence behaves exactly as it did before roles existed.
+    """
+    actor = identity.actor_from_cookies(request.cookies)
+    subject_ref, subject_name = identity.resolve_subject(request.cookies, actor)
+    return actor, subject_ref, subject_name
+
+
 @app.post("/api/log-correction")
-def post_log_correction(rec: CorrectionRecord):
+def post_log_correction(rec: CorrectionRecord, request: Request):
     # Correction logging (§12 Phase 4): every nurse override is an extraction-error
     # datapoint + the governance/audit story. Append-only JSONL, one line per record.
     global _correction_count
@@ -266,6 +325,7 @@ def post_log_correction(rec: CorrectionRecord):
     with open(_CORRECTION_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     _correction_count += 1
+    actor, subject_ref, subject_name = _actor_and_subject(request)
     record_id = SHARED_STORE.safe_create_record(
         source_app="triage",
         record_type="extraction_correction",
@@ -273,18 +333,22 @@ def post_log_correction(rec: CorrectionRecord):
         input_payload={"note": rec.note, "extracted": rec.extracted},
         output_payload={"corrected": rec.corrected, "prediction": rec.prediction},
         model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
     )
     SHARED_STORE.safe_append_audit_event(
         source_app="triage",
         event_type="extraction_corrected",
         record_id=record_id,
+        actor_reference=actor.email if actor else None,
         payload={"timestamp": rec.timestamp, "prediction": rec.prediction},
     )
     return {"logged": True, "count": _correction_count}
 
 
 @app.post("/api/predict")
-def post_predict(req: PredictRequest):
+def post_predict(req: PredictRequest, request: Request):
     # Transport only (§3): core.predict_from_fields owns assembly, the model chain,
     # explain(), and the OOD-age refusal. Refusal returns 200 with a structured
     # object (renderable); success returns the GET /api/patients/{id} payload shape
@@ -297,21 +361,103 @@ def post_predict(req: PredictRequest):
         "vitals": req.vitals.model_dump() if req.vitals is not None else {},
     }
     result = core.predict_from_fields(fields)
+    actor, subject_ref, subject_name = _actor_and_subject(request)
     record_id = SHARED_STORE.safe_create_record(
         source_app="triage",
         record_type="triage_assessment",
-        status="REFUSED" if result.get("refused") else "ASSESSED",
+        # core emits `model_refused`, not `refused` (ctrse_core.predict_from_fields).
+        # The old key never matched, so out-of-distribution refusals were being
+        # stored as ordinary assessments.
+        status="REFUSED" if result.get("model_refused") else "ASSESSED",
         input_payload=fields,
         output_payload=result,
         model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
     )
     SHARED_STORE.safe_append_audit_event(
         source_app="triage",
         event_type="triage_assessed",
         record_id=record_id,
+        actor_reference=actor.email if actor else None,
         payload={"predicted_level": result.get("predicted_level")},
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Patient self-check (§Patient self-check) — reuses predict_from_fields
+# verbatim (CTRSE_Pipeline_Build_Spec.md §3: one model, one scoring path).
+# No `note` field on the request, same as PredictRequest above: the patient
+# surface never touches the extractor, redact_pii, or the LLM, so
+# span-or-silence is untouched by this feature entirely.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/self-check/options")
+def get_self_check_options():
+    # The full clinical vocabulary (/api/vocab) stays clinician-only — a picker
+    # where a patient could self-select e.g. cardiacarrest is a footgun. This
+    # serves only the pre-validated, plain-language patient subset. Emergency
+    # contact numbers come from here too (not hardcoded in the page) so the
+    # persistent banner can never drift from what ctrse_core actually uses in
+    # a released result's action_line.
+    return {
+        "complaints": core.PATIENT_SYMPTOM_OPTIONS or [],
+        "emergency_contacts": core.EMERGENCY_CONTACTS,
+        "scope_note": core.PATIENT_SCOPE_NOTE,
+    }
+
+
+@app.post("/api/self-check")
+def post_self_check(req: PredictRequest, request: Request):
+    # Same authz shape as the middleware's own philosophy (see
+    # PATIENT_API_PATHS above): no cookie is the documented standalone-dev
+    # path and is allowed; a cookie that fails to resolve to an actor is not.
+    token = request.cookies.get(identity.COOKIE_NAME)
+    actor, subject_ref, subject_name = _actor_and_subject(request)
+    if token and actor is None:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    fields = {
+        "age": req.age,
+        "sex": req.sex,
+        "arrival_mode": req.arrival_mode,
+        "complaints": [{"token": c.token, "evidence": c.evidence} for c in req.complaints],
+        "vitals": req.vitals.model_dump() if req.vitals is not None else {},
+    }
+    result = core.predict_from_fields(fields)
+    view = core.patient_view(result)
+
+    # A distinct record_type + status from a clinician's triage_assessment /
+    # ASSESSED, and specifically NOT PENDING_REVIEW: status is what
+    # list_pending_review filters on, and nothing is expected to action a
+    # self-check, so queueing it would be a false safety promise.
+    status = "REFUSED" if result.get("model_refused") else "PATIENT_SELF_CHECK"
+    record_id = SHARED_STORE.safe_create_record(
+        source_app="triage",
+        record_type="triage_self_check",
+        status=status,
+        input_payload=fields,
+        # The full result is kept for any future clinician-side audit view;
+        # patient_view is what the API response and dashboard tile actually
+        # read, so the two can never quietly drift from what was released.
+        output_payload={**result, "patient_view": view},
+        model_version="ctrse_p1p4",
+        patient_external_id=subject_ref,
+        patient_name=subject_name,
+        owner_user_id=actor.user_id if actor else None,
+    )
+    SHARED_STORE.safe_append_audit_event(
+        source_app="triage",
+        event_type="triage_self_check_released",
+        record_id=record_id,
+        actor_reference=actor.email if actor else None,
+        payload={"band": view["urgency"]["band"]},
+    )
+    # The response body is patient_view + record_id and nothing else — result
+    # itself (and its 24-key payload/probabilities/etc.) never reaches here.
+    return {**view, "record_id": record_id}
 
 
 @app.post("/api/extract")
@@ -328,6 +474,8 @@ def post_extract(req: ExtractRequest):
         return JSONResponse(status_code=400, content=result)
     return result
 
+
+app.include_router(dashboard_router)
 
 # Static SPA mounted LAST so /api/* routes take precedence. check_dir=False lets the
 # app import before static/ exists (Phase 4); requests to / 404 until it is populated.

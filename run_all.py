@@ -67,6 +67,12 @@ APPS = [
 ]
 
 GATEWAY_URL = "http://127.0.0.1:8080/"
+DEMO_OUTPUT_DIR = ROOT / "demo_data" / "output"
+DEMO_COMPUTE_JOBS = [
+    ("triage", ROOT / "apps" / "Jace", ROOT / "demo_data" / "compute_triage.py"),
+    ("stroke", ROOT / "apps" / "Jeslyn", ROOT / "demo_data" / "compute_stroke.py"),
+    ("emc", ROOT / "apps" / "YS", ROOT / "demo_data" / "compute_emc.py"),
+]
 
 
 def venv_python(app_dir: Path) -> Path:
@@ -221,6 +227,48 @@ def ensure_shared_storage(app: dict, py: Path):
     )
 
 
+def seed_demo_database():
+    """Populate the shared database with the mock patients and demo clinician.
+
+    The output snapshots are generated only when absent, so normal launches do
+    not repeatedly load models. ``seed_db.py`` is idempotent for unchanged
+    records, preventing duplicate demo audit entries on every startup.
+    """
+    root_env = load_env_file(ROOT / ".env")
+    jace_env = load_env_file(ROOT / "apps" / "Jace" / ".env")
+    gateway_env = load_env_file(ROOT / "apps" / "gateway" / ".env")
+    env = os.environ.copy()
+    env.update({key: value for key, value in root_env.items() if value.strip()})
+    env.update({key: value for key, value in jace_env.items() if value.strip()})
+    # A gateway .env often exists solely for optional settings. Do not let an
+    # empty placeholder there erase Jace's shared DATABASE_URL.
+    env.update({key: value for key, value in gateway_env.items() if value.strip()})
+
+    if not env.get("DATABASE_URL", "").strip():
+        print("[demo] DATABASE_URL is not configured; skipping mock patient seeding.")
+        return
+
+    for name, app_dir, script in DEMO_COMPUTE_JOBS:
+        output = DEMO_OUTPUT_DIR / f"{name}.json"
+        if output.exists():
+            continue
+        print(f"[demo] generating {name} model results (first run only)...")
+        subprocess.run(
+            [str(venv_python(app_dir)), str(script)],
+            cwd=ROOT,
+            env=env,
+            check=True,
+        )
+
+    print("[demo] synchronising mock patients and clinician to PostgreSQL...")
+    subprocess.run(
+        [str(venv_python(ROOT / "apps" / "gateway")), str(ROOT / "demo_data" / "seed_db.py")],
+        cwd=ROOT,
+        env=env,
+        check=True,
+    )
+
+
 def stream_output(name: str, proc: subprocess.Popen):
     for line in iter(proc.stdout.readline, ""):
         if not line:
@@ -237,7 +285,19 @@ def start_app(app: dict) -> subprocess.Popen:
         cmd = [str(py), *args]
 
     env = os.environ.copy()
-    env.update(load_env_file(app["dir"] / ".env"))
+    # Repository-root .env contains shared platform configuration (notably
+    # DATABASE_URL). App-local files override that baseline for settings that
+    # genuinely belong to one service, such as provider API keys.
+    env.update({
+        key: value
+        for key, value in load_env_file(ROOT / ".env").items()
+        if value.strip()
+    })
+    env.update({
+        key: value
+        for key, value in load_env_file(app["dir"] / ".env").items()
+        if value.strip()
+    })
 
     if app["name"] == "gateway":
         # The gateway owns login (shared DATABASE_URL) and Vita (Gemini), but
@@ -250,6 +310,30 @@ def start_app(app: dict) -> subprocess.Popen:
             env["DATABASE_URL"] = jace_env.get("DATABASE_URL", "")
         if not env.get("GEMINI_API_KEY", "").strip():
             env["GEMINI_API_KEY"] = jace_env.get("GEMINI_API_KEY", "")
+    else:
+        # Two settings are shared platform state rather than per-app config, so
+        # a backend that doesn't define them inherits the gateway's:
+        #
+        #   SESSION_SECRET  the gateway signs the session cookie and the three
+        #                   backends verify it to decide whose record this is.
+        #                   Disagree on the secret and every signature check
+        #                   fails silently — no error, just records attributed
+        #                   to nobody.
+        #   DATABASE_URL    all four write to the same shared database.
+        #
+        # Provider API keys stay deliberately per-app and are never copied.
+        gateway_env = load_env_file(ROOT / "apps" / "gateway" / ".env")
+        for key in ("SESSION_SECRET", "DATABASE_URL"):
+            if env.get(key, "").strip():
+                continue
+            inherited = gateway_env.get(key, "").strip()
+            if inherited:
+                env[key] = inherited
+            else:
+                print(
+                    f"[{app['name']}] {key} is not set here or in apps/gateway/.env - "
+                    "records from this app will not appear on any dashboard."
+                )
 
     env.update(app["extra_env"])
 
@@ -295,6 +379,7 @@ def main():
     try:
         for app in APPS:
             ensure_app_ready(app)
+        seed_demo_database()
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Setup failed: {exc}", file=sys.stderr)
         return 1

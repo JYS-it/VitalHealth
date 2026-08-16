@@ -47,6 +47,58 @@ p {
 	border-radius: 12px;
 }
 
+.emc-workbench-shell {
+	display: grid;
+	gap: 14px;
+}
+
+.workbench-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+	align-items: center;
+}
+
+.request-list {
+	margin-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.request-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: 12px;
+	align-items: center;
+	padding: 13px 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.request-title {
+	font-weight: 700;
+}
+
+.request-meta {
+	margin-top: 2px;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.request-time {
+	color: var(--muted);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+	.request-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.request-time {
+		grid-column: 1 / -1;
+	}
+}
+
 .intake-card,
 .workbench-card {
 	padding: 16px;
@@ -244,6 +296,30 @@ button.primary {
 
 button.primary:hover {
 	background: #1557b0;
+}
+
+/* The issued-EMC download is a link because it is a GET, but it should carry
+   the same visual affordance as the workflow's primary action buttons. */
+a.button {
+	display: inline-block;
+	border: 1px solid var(--teal);
+	border-radius: 8px;
+	padding: 9px 12px;
+	font: inherit;
+	font-weight: 700;
+	text-align: center;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.button.primary {
+	background: var(--teal);
+	color: #fff;
+}
+
+a.button.primary:hover {
+	background: #1557b0;
+	color: #fff;
 }
 
 button.danger,
@@ -481,3 +557,43 @@ pre {
 	}
 }
 
+
+/* ==========================================================================
+   Patient waiting page (templates/submitted.html)
+   The patient stays here after submitting; a poll reveals the clinician-
+   approved certificate in place. Nothing here is certificate data — it is
+   the "still waiting" affordance only.
+   ========================================================================== */
+
+.wait-status {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	padding: .9rem 1rem;
+	margin: 0 0 1rem;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--blue-soft);
+	color: var(--ink);
+	font-size: .95rem;
+}
+
+.wait-spinner {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--blue);
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: wait-spin .9s linear infinite;
+}
+
+@keyframes wait-spin {
+	to { transform: rotate(360deg); }
+}
+
+/* A spinner that never stops is noise for anyone who reads with reduced
+   motion enabled; the live-region text still announces the state. */
+@media (prefers-reduced-motion: reduce) {
+	.wait-spinner { animation: none; opacity: .55; }
+}

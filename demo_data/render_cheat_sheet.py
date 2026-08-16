@@ -14,7 +14,12 @@ OUTPUT_DIR = DEMO_DIR / "output"
 CHEAT_SHEET_PATH = DEMO_DIR / "CHEAT_SHEET.md"
 
 sys.path.insert(0, str(DEMO_DIR))
-from characters import CHARACTERS  # noqa: E402
+from characters import (  # noqa: E402
+    CHARACTERS,
+    DEMO_CLINICIAN,
+    DEMO_PASSWORD,
+    demo_email,
+)
 
 ARRIVAL_MODE_LABEL = {
     "ambulance": "Ambulance", "car": "Car", "walk_in": "Walk-in",
@@ -115,7 +120,23 @@ def main():
         "if a section has no \"Expect\" line, the compute script for that app hasn't been "
         "run yet -- see `demo_data/README.md`.",
         "",
+        "## Logins",
+        "",
+        "Created by `seed_db.py`, which also marks each character's seeded records as "
+        "theirs -- so a character's dashboard is already populated at first login.",
+        "",
+        "| Who | Email | Password |",
+        "| --- | --- | --- |",
+        f"| Clinician ({DEMO_CLINICIAN['display_name']}) | `{DEMO_CLINICIAN['email']}` "
+        f"| `{DEMO_CLINICIAN['password']}` |",
     ]
+    for character in CHARACTERS:
+        parts.append(
+            f"| {character['display_name']} | `{demo_email(character['external_id'])}` "
+            f"| `{DEMO_PASSWORD}` |"
+        )
+    parts.append("")
+
     for character in CHARACTERS:
         parts.append(f"## {character['display_name']} (`{character['external_id']}`)")
         parts.append("")

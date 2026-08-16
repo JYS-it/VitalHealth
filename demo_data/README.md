@@ -24,6 +24,13 @@ the database with any venv that has `vitalhealth_storage` installed.
 
 ## Run order
 
+For normal local development, simply run `py -3.12 run_all.py` from the
+repository root. Once the four environments are ready, the launcher creates
+missing output snapshots and runs `seed_db.py` automatically whenever
+`DATABASE_URL` is configured. The commands below remain useful when you want
+to regenerate model snapshots deliberately after changing the demo roster or
+a model.
+
 From the repo root, in order:
 
 ```powershell
@@ -41,8 +48,11 @@ python demo_data\sync_jace_seeds.py
   anytime.
 - `seed_db.py` needs `DATABASE_URL` set (e.g. via `apps/gateway/.env`) and
   writes to the same Postgres database the three apps already share. It's
-  always safe to re-run: patients are upserted by `external_id`, and each
-  character's per-app record is updated in place rather than duplicated.
+  always safe to re-run: patients are upserted by `external_id`, users by
+  email, and each character's per-app record is updated in place rather than
+  duplicated. It must run with the **gateway's** venv, which is the only one
+  carrying `bcrypt` (needed to hash the demo logins); the script says so and
+  exits cleanly if you use another.
   **Exception:** `audit_events` are database-enforced append-only (see the
   `vitalhealth_prevent_audit_mutation` trigger in
   `vitalhealth_storage/store.py`) — re-seeding appends a fresh audit event
@@ -60,6 +70,31 @@ python demo_data\sync_jace_seeds.py
   row. **This generated file is committed**, not gitignored — a fresh
   clone needs it present for Jace's UI to work, not only after someone
   thinks to run this script.
+
+## Demo logins
+
+`seed_db.py` also creates a login for every character plus one clinician, and
+marks each character's seeded records as owned by their own account. That
+means both dashboards have real content the first time you log in, instead of
+being empty until someone re-runs all three modules by hand.
+
+| Account | Email | Password |
+| --- | --- | --- |
+| Patient (×8) | `<first>.<last>@demo.vitalhealth.local` — e.g. `grace.lim@demo.vitalhealth.local` | `demo1234` |
+| Clinician | `dr.alex.lee@demo.vitalhealth.local` | `demo1234` |
+
+Emails are derived from `external_id` by `demo_email()` in `characters.py`,
+so the roster stays the single source of truth. `.local` is reserved by
+RFC 6762 and cannot resolve publicly, so these can never reach a real mailbox.
+
+Log in as a character to see the patient dashboard already at 3 of 3 —
+**Timothy Ng** is the interesting one, since he is 15 and outside the triage
+model's validated range, so his triage tile reads "Model declined to assess"
+rather than showing a priority. Log in as the clinician to see all eight in
+one table.
+
+These are demo credentials in a gitignored seed script; they are not a
+production auth story.
 
 ## Demoing Jace's note extractor
 
