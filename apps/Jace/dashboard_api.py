@@ -157,8 +157,7 @@ def clinician_patients(request: Request, q: str | None = None):
         return JSONResponse(_UNAVAILABLE, status_code=503)
 
     try:
-        rows = STORE.list_patient_summaries(search=q)
-        unassigned = STORE.list_unassigned_records(limit=25)
+        rows = STORE.list_patient_summaries(search=q, submitted_requests_only=True)
     except SQLAlchemyError:
         LOGGER.warning("Clinician patient list read failed", exc_info=True)
         return JSONResponse(_UNAVAILABLE, status_code=503)
@@ -170,9 +169,6 @@ def clinician_patients(request: Request, q: str | None = None):
         "role": actor.role,
         "active_subject": active_subject,
         "patients": [_patient_row_view(row, audience=audience) for row in rows],
-        # Triage and stroke have no patient field on their forms, so anything
-        # run without a selected subject lands here instead of disappearing.
-        "unassigned": [_record_view(record, audience=audience) for record in unassigned],
     }
 
 

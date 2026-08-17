@@ -670,7 +670,7 @@ def _inject_shared_account_and_nav(page: str, actor: identity.Actor, prefix: str
 
     active = "triage" if prefix == "triage" and "self-check" in path else prefix
     nav_links = _shared_nav_html(actor.role, active)
-    nav_pattern = r'(<nav\s+class="(?:navbar global-nav|global-nav navbar)"[^>]*>)(.*?)(</nav>)'
+    nav_pattern = r'(<nav\s+class="(?:navbar global-nav|global-nav navbar|global-nav)"[^>]*>)(.*?)(</nav>)'
     nav_match = re.search(nav_pattern, page, flags=re.DOTALL)
     if nav_match and "<button" not in nav_match.group(2):
         page = re.sub(nav_pattern, rf'\1{nav_links}\3', page, count=1, flags=re.DOTALL)
@@ -1240,10 +1240,6 @@ async def proxy(prefix: str, path: str, request: Request):
     # submission form instead, same as redirect_bare_prefix() already does
     # for the bare form.
     if prefix == "stroke" and path.strip("/") == "":
-        target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
-        if not actor or not actor.is_patient:
-            target = "/stroke/prediction"
-        return RedirectResponse(url=target, status_code=307)
         target = _patient_pending_destination(actor, "stroke") or "/stroke/submit"
         if not actor or not actor.is_patient:
             target = "/stroke/cases"
