@@ -3,7 +3,7 @@
 window.DEMO_CHARACTER_SEEDS = [
   {
     "label": "Nur Aini binte Yusof",
-    "note": "19yo woman walked in, headache since this morning",
+    "note": "19yo woman walked in on her own. Headache since this morning, pain 4/10, no vomiting and no visual changes. Not on any regular medication. NKDA.",
     "vitals": {
       "hr": 72,
       "sbp": 112,
@@ -17,7 +17,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "David Tan",
-    "note": "74yo man brought in by ambulance, sudden slurred speech and one-sided weakness, family suspects stroke",
+    "note": "74yo man brought in by ambulance. Sudden slurred speech and one-sided weakness starting 40 minutes ago, family suspects stroke. Hx hypertension, atrial fibrillation, previous TIA two years ago. On warfarin and amlodipine. Allergic to penicillin.",
     "vitals": {
       "hr": 112,
       "sbp": 188,
@@ -31,7 +31,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Grace Lim",
-    "note": "52yo woman, drove herself in, abdominal pain since last night",
+    "note": "52yo woman drove herself in. Abdominal pain since last night, worse over the right side, pain 7/10. Vomited twice this morning. Hx gallstones. Takes omeprazole. NKDA.",
     "vitals": {
       "hr": 90,
       "sbp": 142,
@@ -45,7 +45,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Marcus Wong",
-    "note": "81yo man, ambulance brought him in, severe difficulty breathing, started about an hour ago",
+    "note": "81yo man, ambulance brought him in. Severe difficulty breathing that started about an hour ago, worse lying flat. Hx COPD and heart failure, admitted twice last year. On salbutamol inhaler and furosemide. No known drug allergies.",
     "vitals": {
       "hr": 118,
       "sbp": 160,
@@ -59,7 +59,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Timothy Ng",
-    "note": "15yo boy walked in with his mother, fell while skateboarding, hurt his wrist",
+    "note": "15yo boy walked in with his mother. Fell while skateboarding about an hour ago and hurt his right wrist, pain 6/10. No head injury and did not black out. NKDA, no regular medication.",
     "vitals": {
       "hr": 88,
       "sbp": 108,
@@ -73,7 +73,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Ethan Koh",
-    "note": "45yo man drove himself in, chest pain that started this morning",
+    "note": "45yo man drove himself in. Central chest pain since this morning, pain 6/10, radiating to the left arm, feels clammy. Hx high cholesterol, father had a heart attack in his fifties. On atorvastatin. NKDA.",
     "vitals": {
       "hr": 102,
       "sbp": 150,
@@ -87,7 +87,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Rosa Fernandez",
-    "note": "68yo woman took the bus in, fever since yesterday",
+    "note": "68yo woman took the bus in. Fever since yesterday. Came alone, no family with her, unable to give any further history.",
     "vitals": {
       "hr": 96,
       "sbp": 128,
@@ -101,7 +101,7 @@ window.DEMO_CHARACTER_SEEDS = [
   },
   {
     "label": "Balvinder Singh",
-    "note": "58yo man came in a wheelchair, feeling dizzy since this morning",
+    "note": "58yo man brought in by his daughter in a wheelchair. Dizzy since this morning, worse on standing. Hx type 2 diabetes and hypertension. On metformin and a blood pressure tablet he cannot name. Allergic to sulfa drugs.",
     "vitals": {
       "hr": 84,
       "sbp": 136,

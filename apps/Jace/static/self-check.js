@@ -25,26 +25,52 @@ function selfCheckApp() {
     // seeds/character notes (app.js, demo_character_seeds.js) are third-person clinical
     // narration, the wrong register for someone describing their own symptoms. Each carries
     // vitals so one click fills both zones, same affordance as index.html's seed row.
+    // Six seeds, one per path through the patient guidance model, so clicking through them shows
+    // the generated advice actually CHANGING rather than six variations on the same band. Each
+    // states age and sex in the patient's own voice, since the extractor reads them from the note
+    // (span-or-silence) rather than from a form field.
+    //
+    //   stroke      -> EMERGENCY_NOW via the red-flag floor (cc_strokealert)
+    //   breathless  -> URGENT_TODAY via the physiology floor (SpO2/RR out of range)
+    //   headache    -> SEE_CLINICIAN, routine — nothing escalating recorded
+    //   tablets     -> self-care guidance SUPPRESSED (_self_care_suppressed, overdose path)
+    //   thin note   -> same band as `headache`, opposite completeness: no onset, no vitals,
+    //                  nothing else recorded. The pair is the point — the band matches and the
+    //                  guidance does not.
+    //   under 18    -> age refusal, handled gracefully
     seeds: [
-      { label: 'chest pain', note: 'I have had tight pain in my chest for 30 minutes and feel short of breath.',
-        vitals: { hr: 102, sbp: 150, dbp: 92, rr: 20, o2: 95, device: 'RA', temp: 37.0, temp_unit: 'C' } },
-      { label: 'headache', note: 'I have had a bad headache since this morning, worse behind my eyes.',
-        vitals: { hr: 78, sbp: 118, dbp: 76, rr: 16, o2: 99, device: 'RA', temp: 36.9, temp_unit: 'C' } },
-      { label: 'fall', note: 'I fell at home this morning and my hip hurts, I am on blood thinners.',
-        vitals: { hr: 90, sbp: 138, dbp: 84, rr: 18, o2: 97, device: 'RA', temp: 36.8, temp_unit: 'C' } },
-      { label: 'stomach pain', note: 'I have had stomach pain since last night, it is worse after eating.',
-        vitals: { hr: 88, sbp: 128, dbp: 80, rr: 18, o2: 98, device: 'RA', temp: 37.4, temp_unit: 'C' } },
-      { label: 'breathless', note: "I can't catch my breath since this morning and I feel dizzy.",
-        vitals: { hr: 112, sbp: 148, dbp: 90, rr: 26, o2: 91, device: 'RA', temp: 37.2, temp_unit: 'C' } },
-      { label: 'thin note', note: 'I feel unwell.', vitals: null },
+      { label: 'stroke signs',
+        note: "I am a 74 year old man. My face dropped on one side about 40 minutes ago and my "
+            + "left arm has gone weak. My speech is slurred. My wife thinks it is a stroke.",
+        vitals: { hr: 96, sbp: 178, dbp: 98, rr: 18, o2: 96, device: 'RA', temp: 36.9, temp_unit: 'C' } },
+      { label: 'breathless',
+        note: "I am a 68 year old woman. I cannot catch my breath since this morning and it is "
+            + "worse when I lie down. I have asthma and I use an inhaler.",
+        vitals: { hr: 118, sbp: 148, dbp: 90, rr: 28, o2: 89, device: 'RA', temp: 37.6, temp_unit: 'C' } },
+      { label: 'headache',
+        note: "I am a 29 year old woman. I have had a headache since this morning, mostly behind "
+            + "my eyes. It is a 4 out of 10. I am not on any medication and I have no allergies.",
+        vitals: { hr: 76, sbp: 116, dbp: 74, rr: 16, o2: 99, device: 'RA', temp: 36.8, temp_unit: 'C' } },
+      { label: 'took tablets',
+        note: "I am a 22 year old woman. I took a whole box of paracetamol about two hours ago "
+            + "because I wanted to hurt myself. I feel sick now.",
+        vitals: { hr: 98, sbp: 118, dbp: 72, rr: 18, o2: 98, device: 'RA', temp: 36.7, temp_unit: 'C' } },
+      // Deliberately NOT "I feel unwell." — that extracts only the `other` token, which
+      // /api/self-check rejects with "we could not identify a symptom", so it demonstrated a
+      // validation wall rather than how the tool handles a sparse picture. This version is
+      // thin but scorable: one real symptom, no onset, no vitals, nothing else.
+      { label: 'thin note',
+        note: "I am a 71 year old man. I have been feeling dizzy but I cannot say when it "
+            + "started. I have no way to check my blood pressure at home.",
+        vitals: null },
+      { label: 'under 18',
+        note: "I am a 16 year old boy. I fell off my skateboard an hour ago and my wrist hurts, "
+            + "about a 6 out of 10.",
+        vitals: { hr: 88, sbp: 110, dbp: 70, rr: 18, o2: 98, device: 'RA', temp: 37.0, temp_unit: 'C' } },
     ],
 
     intake: {
       ...window.VHIntake.makeIntake(),
-      describeHelp: null,        // §Describe-help (use case D) — on-demand confirm-screen panel
-      describeHelpLoading: false,
-      followUp: '',               // the answer text box under describeHelp
-      followUpOffset: null,       // where the follow-up begins in extraction.note_used
       guidance: null,             // §Patient guidance (use case C) — result-screen suggestion
       guidanceLoading: false,
     },
@@ -80,11 +106,9 @@ function selfCheckApp() {
       // Spans are validated against — and must be highlighted against — the PREPARED note
       // (ctrse_core.py's _prepare_note docstring), not the raw textarea value: redaction can
       // shift or remove text a span would otherwise match. Falls back to the raw note only
-      // before any extraction has run (e.g. while still on stage 1). followUpOffset (from the
-      // last /api/self-check/extract response) marks where a §Describe-help answer was
-      // appended, so it renders visually distinct from the original description.
+      // before any extraction has run (e.g. while still on stage 1).
       const note = this.intake.extraction?.note_used ?? this.intake.note;
-      return window.VHIntake.highlightedNote(note, this.intake.hoverSpan, this.intake.followUpOffset);
+      return window.VHIntake.highlightedNote(note, this.intake.hoverSpan);
     },
     escapeHtml(s) {
       return window.VHIntake.escapeHtml(s);
@@ -153,10 +177,9 @@ function selfCheckApp() {
       this.intake.fields = null;
       this.intake.refusal = null;
       this.intake.flagsAck = false;
-      this.intake.describeHelp = null;
-      this.intake.followUp = '';
-      this.intake.followUpOffset = null;
-      window.VitalHealthLoading?.show('Reading your description');
+      // No full-screen overlay here any more: the input card hides and an in-place skeleton
+      // shaped like the confirm screen takes its place (self-check.html, "STAGE 1 -> 2
+      // skeleton"), so the page transitions into its next state instead of being covered.
 
       try {
         const res = await fetch('api/self-check/extract', {
@@ -172,80 +195,13 @@ function selfCheckApp() {
         this.intake.refusal = data.refusal_reason || null;
         this.intake.fields = this.buildConfirmFields(data);
         this.intake.stage = 'confirm';
-        // §Describe-help is on-demand from here (a button on the confirm screen) — see
-        // loadDescribeHelp() — not fired automatically, since its answer box needs the patient
-        // to actually be looking at the confirm screen first.
       } catch (e) {
         this.intake.extractError = 'Could not read your description. Please try again.';
       } finally {
         this.intake.extracting = false;
-        window.VitalHealthLoading?.hide();
       }
     },
 
-    async loadDescribeHelp() {
-      // §Describe-help (use case D): coaching grounded in what the extractor found, before
-      // any prediction exists. Triggered on demand by a confirm-screen button. Never retried;
-      // any failure (network, non-200, guardrail-rejected) just leaves `describeHelp` null and
-      // the panel doesn't appear — same silent-degrade posture as loadGuidance() below.
-      this.intake.describeHelpLoading = true;
-      try {
-        const res = await fetch('api/self-check/describe-help', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ extraction: this.intake.extraction }),
-        });
-        if (!res.ok) {
-          this.intake.describeHelp = null;
-          return;
-        }
-        const data = await res.json();
-        this.intake.describeHelp = data.available ? data : null;
-      } catch (e) {
-        this.intake.describeHelp = null;
-      } finally {
-        this.intake.describeHelpLoading = false;
-      }
-    },
-
-    async submitFollowUp() {
-      // The answer to §Describe-help's question. Sent as its own field alongside the original
-      // note (not appended by the browser) — api.py composes them server-side and re-runs the
-      // same guarded extractor, so span-or-silence still validates against exactly what was
-      // sent, and the confirm screen refreshes with whatever the extractor now finds (e.g. an
-      // onset it previously missed).
-      const followUp = (this.intake.followUp || '').trim();
-      if (!followUp || this.intake.extracting) return;
-
-      this.intake.extracting = true;
-      this.intake.extractError = '';
-      window.VitalHealthLoading?.show('Reading your description');
-
-      try {
-        const res = await fetch('api/self-check/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: this.intake.note, follow_up: followUp }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.detail || 'extract failed');
-
-        this.intake.extraction = data;
-        this.intake.refusal = data.refusal_reason || null;
-        this.intake.fields = this.buildConfirmFields(data);
-        this.intake.followUpOffset = data.follow_up_offset ?? null;
-        this.intake.followUp = '';
-        // The question this answered no longer applies to the now-updated description — the
-        // patient can ask for fresh feedback again if they want it.
-        this.intake.describeHelp = null;
-      } catch (e) {
-        this.intake.extractError = 'Could not add that detail. Please try again.';
-      } finally {
-        this.intake.extracting = false;
-        window.VitalHealthLoading?.hide();
-      }
-    },
 
     backToInput() {
       this.intake.stage = 'input';
@@ -341,10 +297,6 @@ function selfCheckApp() {
     reset() {
       this.intake = {
         ...window.VHIntake.makeIntake(),
-        describeHelp: null,
-        describeHelpLoading: false,
-        followUp: '',
-        followUpOffset: null,
         guidance: null,
         guidanceLoading: false,
       };

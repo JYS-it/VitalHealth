@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=12">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
-  <script defer src="intake-shared.js?v=1"></script>
-  <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=9"></script>
+  <script defer src="intake-shared.js?v=2"></script>
+  <!-- Versioned like app.js/style.css: the note texts changed, and without a cache bust a
+       returning browser would seed the old ones. -->
+  <script defer src="demo_character_seeds.js?v=2"></script>
+  <script defer src="app.js?v=11"></script>
   <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -385,12 +387,6 @@
                         placeholder="Type the triage note — age, complaint, arrival, history&hellip;"
                         x-model="intake.note"></textarea>
               <div class="seed-row">
-                <span class="eyebrow">Demo seeds</span>
-                <template x-for="(s, i) in seeds" :key="s.label">
-                  <button class="arche-btn" type="button" x-text="s.label" @click="seed(i)"></button>
-                </template>
-              </div>
-              <div class="seed-row">
                 <span class="eyebrow">Demo characters</span>
                 <template x-for="(s, i) in characterSeeds" :key="s.label">
                   <button class="arche-btn" type="button" x-text="s.label" @click="seedCharacter(i)"></button>
@@ -714,7 +710,11 @@
           </template>
         </section>
 
+        <!-- Two stacks, not two panels. LEFT is everything about the MODEL — its assessment and
+             the justification that explains it, which is what the justification register is for.
+             RIGHT is the handover note, a standalone clinical document with its own audience. -->
         <div class="column">
+          <div class="col-stack">
 
             <!-- ---------------- MODEL PANEL ---------------- -->
             <section class="card panel" aria-label="Model assessment">
@@ -827,97 +827,144 @@
               </template>
             </section>
 
-            <!-- ---------------- GEN-AI PANEL ---------------- -->
-            <section class="card panel" aria-label="Gen-AI explanation">
+            <!-- ---------------- JUSTIFICATION (A) ----------------
+                 Sits under the model assessment because that is what it explains: why the model
+                 landed where it did, for a clinician deciding whether to trust it. -->
+            <section class="card panel" aria-label="Justification">
               <div class="panel__title eyebrow row-between">
-                <span>Gen-AI explanation</span>
-                <!-- prominent guardrail chip (or synthetic-test result) -->
-                <template x-if="col.guardTest">
-                  <span class="guard guard--flag" x-text="'⚑ synthetic test flagged: ' + (col.guardTest.flags || []).join(', ')"></span>
-                </template>
-                <template x-if="!col.guardTest">
-                  <span class="guard" :class="combinedGuard(col).cls" x-text="combinedGuard(col).label"></span>
-                </template>
+                <span>Justification</span>
+                <span class="source" x-show="col.gen.justify" x-cloak>
+                  <span class="dot" :class="sourceMeta(col.gen.justify?.source).dot"></span>
+                  <span x-text="sourceMeta(col.gen.justify?.source).label"></span>
+                </span>
               </div>
 
               <div class="stack">
-                <!-- toolbar -->
                 <div class="toolbar">
-                  <div class="segmented" role="group" aria-label="Register view">
-                    <button type="button" :aria-pressed="col.view==='both'" @click="setView('both')">Both</button>
-                    <button type="button" :aria-pressed="col.view==='justify'" @click="setView('justify')">Justification</button>
-                    <button type="button" :aria-pressed="col.view==='handover'" @click="setView('handover')">Handover</button>
-                  </div>
-                  <button class="btn-generate" type="button" aria-label="Generate explanation"
-                          :disabled="!(col.id || col.payload) || col.generating"
-                          @click="generate()" x-text="col.generating ? 'Generating…' : 'Generate'"></button>
+                  <span class="footnote">Why the model assigned this level.</span>
+                  <button class="btn-generate" type="button" aria-label="Generate justification"
+                          :disabled="!(col.id || col.payload) || col.generating.justify"
+                          @click="generate('justify')"
+                          x-text="col.generating.justify ? 'Generating…' : (col.gen.justify ? 'Regenerate' : 'Generate')"></button>
                 </div>
 
-                <!-- adversarial guardrail control -->
-                <div class="toolbar">
-                  <button class="btn-ghost" type="button" @click="runGuardrailTest(col.view === 'handover' ? 'handover' : 'justify')">Test guardrail</button>
-                  <button class="btn-ghost" type="button" x-show="col.guardTest" x-cloak @click="resetGuardrailTest()">Reset</button>
-                  <span class="synthetic-note" x-show="col.guardTest" x-cloak>synthetic test input — no live output altered</span>
-                </div>
-                <div class="synthetic-candidate mono" x-show="col.guardTest" x-cloak x-text="col.guardTest?.candidate"></div>
-
-                <!-- empty / ready states -->
                 <div class="empty-state" x-show="!(col.id || col.payload)" x-cloak>Select a patient, then generate the model&rsquo;s explanation.</div>
-                <div class="empty-state" x-show="(col.id || col.payload) && !col.gen.justify && !col.gen.handover && !col.generating" x-cloak>
-                  Ready &mdash; press Generate to produce both registers.
+                <div class="empty-state" x-show="(col.id || col.payload) && !col.gen.justify && !col.generating.justify" x-cloak>
+                  Ready &mdash; press Generate.
                 </div>
                 <div class="msg-warn" x-show="col.error" x-cloak x-text="col.error"></div>
 
-                <!-- JUSTIFICATION (A) -->
-                <template x-if="col.gen.justify && (col.view === 'both' || col.view === 'justify')">
-                  <div class="reg-block">
-                    <div class="reg-label">
-                      <span style="display:flex; align-items:center; gap:var(--s2);">
-                        <span class="eyebrow">Justification</span>
-                        <span class="derived-tag">Draft — requires clinician review</span>
-                      </span>
-                      <span class="source">
-                        <span class="dot" :class="sourceMeta(col.gen.justify.source).dot"></span>
-                        <span x-text="sourceMeta(col.gen.justify.source).label"></span>
-                      </span>
+                <!-- Skeleton, not a spinner: three prose lines in the shape of what replaces
+                     them, so nothing reflows when the text lands. Only on a FIRST generate —
+                     a regenerate keeps the previous prose on screen. -->
+                <div x-show="col.generating.justify && !col.gen.justify" x-cloak>
+                  <div class="skeleton-line" style="width:96%;"></div>
+                  <div class="skeleton-line" style="width:88%;"></div>
+                  <div class="skeleton-line" style="width:55%;"></div>
+                </div>
+
+                <template x-if="col.gen.justify">
+                  <p class="prose" x-text="col.gen.justify.text"></p>
+                </template>
+                <template x-if="col.gen.justify">
+                  <div class="disclaimer" x-text="col.gen.justify.disclaimer"></div>
+                </template>
+              </div>
+            </section>
+          </div>
+
+          <div class="col-stack">
+            <!-- ---------------- HANDOVER (B) ----------------
+                 The primary artefact of this screen: a standalone document for whoever takes the
+                 patient next. panel--primary carries the extra weight; the note's own masthead
+                 doubles as the card heading, so there is one title rather than two. -->
+            <section class="card panel panel--primary" aria-label="Handover note">
+              <div class="hnote__header">
+                <span class="hnote__title">CTRSE TRIAGE HANDOVER</span>
+                <span class="hnote__time mono" x-show="col.genTime && col.gen.handover" x-cloak
+                      x-text="`Generated ${col.genTime}`"></span>
+              </div>
+
+              <div class="stack">
+                <div class="toolbar">
+                  <span class="reg-actions" x-show="col.gen.handover" x-cloak>
+                    <button class="btn-ghost" type="button" aria-label="Print handover note"
+                            @click="printHandover()">Print</button>
+                    <button class="btn-ghost" type="button" aria-label="Copy handover as text"
+                            @click="copyHandover()" x-text="col.copied ? 'Copied ✓' : 'Copy'"></button>
+                    <span class="source">
+                      <span class="dot" :class="sourceMeta(col.gen.handover?.source).dot"></span>
+                      <span x-text="sourceMeta(col.gen.handover?.source).label"></span>
+                    </span>
+                  </span>
+                  <button class="btn-generate" type="button" aria-label="Generate handover note"
+                          :disabled="!(col.id || col.payload) || col.generating.handover"
+                          @click="generate('handover')"
+                          x-text="col.generating.handover ? 'Generating…' : (col.gen.handover ? 'Regenerate' : 'Generate')"></button>
+                </div>
+
+                <!-- PLACEHOLDER — what this panel is for, laid out as the note itself will be.
+                     Same .hnote__sec/.hnote__k grid as the real note, so the panel does not jump
+                     when placeholder -> skeleton -> note. -->
+                <template x-if="!col.gen.handover && !col.generating.handover">
+                  <div class="hnote hnote--placeholder">
+                    <div class="hnote__lead">
+                      <b>A structured handover note for whoever takes this patient next.</b>
+                      <span x-show="col.id || col.payload">Press Generate to draft it from the triage record.</span>
+                      <span x-show="!(col.id || col.payload)" x-cloak>Run a triage or select a patient first.</span>
                     </div>
-                    <p class="prose" x-text="col.gen.justify.text"></p>
-                    <!-- Advisory only — the draft above is always shown. Listing the flags is new:
-                         before, a reviewer saw an amber chip with no way to learn what tripped. -->
-                    <div class="gnotices" x-show="guardFlags(col.gen.justify).length" x-cloak>
-                      <div class="eyebrow mb2">Guardrail notes on this draft</div>
-                      <ul class="gnotice-list">
-                        <template x-for="f in guardFlags(col.gen.justify)" :key="f">
-                          <li x-text="f"></li>
-                        </template>
-                      </ul>
-                    </div>
+                    <div class="hnote__sec"><span class="hnote__k">S</span><div class="hnote__body">
+                      <b>Situation</b> &mdash; acuity, who the patient is, what they came in with, and what drove the level
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">B</span><div class="hnote__body">
+                      <b>Background</b> &mdash; recorded vitals, allergies, history, medications, and what was not recorded
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">A</span><div class="hnote__body">
+                      <b>Assessment</b> &mdash; how the recorded picture reads, and where the prediction is least certain
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">R</span><div class="hnote__body">
+                      <b>Recommendation</b> &mdash; the concrete next steps for the receiving clinician
+                    </div></div>
                   </div>
                 </template>
 
-                <!-- HANDOVER (B) — clinical triage handover note -->
-                <template x-if="col.gen.handover && (col.view === 'both' || col.view === 'handover')">
-                  <div class="reg-block">
-                    <div class="reg-label">
-                      <span style="display:flex; align-items:center; gap:var(--s2);">
-                        <span class="eyebrow">Handover note</span>
-                        <span class="derived-tag">Draft — requires clinician review</span>
-                      </span>
-                      <span class="reg-actions">
-                        <button class="btn-ghost" type="button" aria-label="Print handover note"
-                                @click="printHandover()">Print</button>
-                        <button class="btn-ghost" type="button" aria-label="Copy handover as text"
-                                @click="copyHandover()" x-text="col.copied ? 'Copied ✓' : 'Copy'"></button>
-                        <span class="source">
-                          <span class="dot" :class="sourceMeta(col.gen.handover.source).dot"></span>
-                          <span x-text="sourceMeta(col.gen.handover.source).label"></span>
-                        </span>
-                      </span>
-                    </div>
+                <!-- SKELETON — same silhouette as the placeholder it replaces. -->
+                <template x-if="col.generating.handover && !col.gen.handover">
+                  <div class="hnote hnote--placeholder">
+                    <div class="hnote__sec"><span class="hnote__k">S</span><div class="hnote__body">
+                      <div class="skeleton-line" style="width:60%;"></div>
+                      <div class="skeleton-line" style="width:92%;"></div>
+                      <div class="skeleton-line" style="width:74%;"></div>
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">B</span><div class="hnote__body">
+                      <div class="skeleton-line" style="width:88%;"></div>
+                      <div class="skeleton-line" style="width:52%;"></div>
+                      <div class="skeleton-line" style="width:70%;"></div>
+                      <div class="skeleton-line" style="width:64%;"></div>
+                      <div class="skeleton-line" style="width:80%;"></div>
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">A</span><div class="hnote__body">
+                      <div class="skeleton-line" style="width:96%;"></div>
+                      <div class="skeleton-line" style="width:92%;"></div>
+                      <div class="skeleton-line" style="width:88%;"></div>
+                      <div class="skeleton-line" style="width:45%;"></div>
+                    </div></div>
+                    <div class="hnote__sec"><span class="hnote__k">R</span><div class="hnote__body">
+                      <div class="skeleton-line" style="width:78%;"></div>
+                      <div class="skeleton-line" style="width:56%;"></div>
+                      <div class="skeleton-line" style="width:84%;"></div>
+                      <div class="skeleton-line" style="width:66%;"></div>
+                    </div></div>
+                  </div>
+                </template>
 
+                <template x-if="col.gen.handover">
+                  <div>
                     <div class="hnote" :class="{ 'print-target': col.printing }">
-                      <!-- header: title + generation time -->
-                      <div class="hnote__header">
+                      <!-- Print-only masthead. On screen the identical header lives on the card
+                           itself (above the toolbar) so there is one title; but .print-target IS
+                           this .hnote, so the printed document needs its own copy inside. -->
+                      <div class="hnote__header hnote__header--doc">
                         <span class="hnote__title">CTRSE TRIAGE HANDOVER</span>
                         <span class="hnote__time mono" x-show="col.genTime" x-text="`Generated ${col.genTime}`"></span>
                       </div>
@@ -1037,30 +1084,15 @@
                         </div>
                       </div>
 
-                      <div class="hnote__sec" x-show="guardFlags(col.gen.handover).length" x-cloak>
-                        <span class="hnote__k">!</span>
-                        <div class="hnote__body">
-                          <div class="eyebrow mb2">Guardrail notes on this draft</div>
-                          <ul class="gnotice-list">
-                            <template x-for="f in guardFlags(col.gen.handover)" :key="f">
-                              <li x-text="f"></li>
-                            </template>
-                          </ul>
-                        </div>
-                      </div>
-
-                      <!-- print-only disclaimer footer (screen shows the shared panel footer) -->
+                      <!-- print-only disclaimer footer (screen shows the panel footer below) -->
                       <div class="hnote__printfoot" x-text="col.gen.handover.disclaimer"></div>
                     </div>
+                    <div class="disclaimer" x-text="col.gen.handover.disclaimer"></div>
                   </div>
-                </template>
-
-                <!-- disclaimer footer (rendered ONCE) -->
-                <template x-if="col.gen.justify || col.gen.handover">
-                  <div class="disclaimer" x-text="(col.gen.justify || col.gen.handover).disclaimer"></div>
                 </template>
               </div>
             </section>
+          </div>
         </div>
       </main>
     </div>

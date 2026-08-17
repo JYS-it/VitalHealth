@@ -39,7 +39,6 @@ __all__ = [
     "SYSTEM_PROMPT_JUSTIFY",
     "SYSTEM_PROMPT_HANDOVER",
     "SYSTEM_PROMPT_PATIENT",
-    "SYSTEM_PROMPT_DESCRIBE_HELP",
     "build_user_prompt",
     "generate",
     "guardrail_check",
@@ -1001,6 +1000,16 @@ clinical language ("c/o chest pain", not "c/o chestpain").
 # depends on this patient's confirmed complaints), for overdose, protocol (suicidal/homicidal/
 # psychiatricevaluation/alcoholintoxication), and red-flag complaints — see
 # _self_care_suppressed().
+#
+# Rule 1 (ground in the RESULT/note) and the suppressed directive collide for exactly the
+# overdose case: the note itself names the substance ("took a whole box of paracetamol"), so a
+# model honouring rule 1 while explaining the urgency would name it back — which
+# _SELF_CARE_PATTERNS below then correctly catches, and the whole generation is withheld (never
+# a flagged-but-shown fallback for patient-facing content). Silence isn't a graceful failure
+# here; it's the ONE case where the guidance panel is most worth seeing, since it's the one
+# case demonstrating suppression at all. Fixed by making _WHILE_WAITING_SUPPRESSED explicitly
+# override rule 1 for medication/substance naming — the model still grounds the URGENCY in what
+# happened, just never by the substance's name.
 SYSTEM_PROMPT_PATIENT = ("You are a decision-support writing assistant embedded in an "
 "emergency-department triage self-check tool used directly by PATIENTS. No clinician reviews "
 "your output before the patient sees it. You will be given a JSON RESULT that has ALREADY been "
@@ -1051,8 +1060,13 @@ _WHILE_WAITING_ALLOWED = (
 )
 _WHILE_WAITING_SUPPRESSED = (
     "Self-care, comfort, and medication guidance is NOT permitted for this generation — do "
-    "not suggest or mention any medication, substance, or self-care action of any kind. Cover "
-    "ONLY where/how soon to seek care and the relevant watch-for signs."
+    "not suggest or mention any medication, substance, or self-care action of any kind. This "
+    "OVERRIDES rule 1's grounding permission for medications/substances specifically: even "
+    "though the RESULT or note may name what the patient took (e.g. a substance involved in an "
+    "overdose), you must NEVER repeat that name back, not even once, not even purely "
+    "descriptively while explaining the urgency. Refer to it only in generic, substance-free "
+    "terms — 'what you took', 'what happened' — never by name. Cover ONLY where/how soon to "
+    "seek care and the relevant watch-for signs."
 )
 
 
@@ -1073,42 +1087,15 @@ def _self_care_suppressed(complaint_tokens):
         return True
     return False
 
-# §Describe-help (use case D) — runs on the patient confirm screen, BEFORE any prediction exists
-# (grounded in the extraction object, not patient_view/payload). The one rule everything else here
-# depends on: it may ask for MORE DETAIL on something already mentioned, never suggest a symptom
-# the patient didn't report — doing so would lead them to report something they don't have, which
-# corrupts the very extraction that feeds the triage model. _guardrail_check_patient's
-# unreported-symptom scan (shared with C) is what makes that rule falsifiable, not just requested.
-SYSTEM_PROMPT_DESCRIBE_HELP = ("You are a decision-support writing assistant embedded in an "
-"emergency-department triage self-check tool used directly by PATIENTS, at the moment they are "
-"reviewing what the tool understood from their own description — BEFORE any triage result "
-"exists. No clinician reviews your output before the patient sees it. You will be given a JSON "
-"EXTRACTION: what a separate, guarded extractor found in the patient's note, and what it left "
-"empty.\n\n"
-"""STRICT RULES — violating any of these makes the output unusable:
-1. Ground every statement in the supplied EXTRACTION only. Name no symptom, sign, or fact that
-   is not present in it.
-2. Speak directly to the patient in plain, warm, second person ("you"). No clinical jargon, no
-   model-internal language.
-3. You may ask for MORE DETAIL about something the patient already mentioned — when it started,
-   how severe it is, whether it is changing, exactly where it is. You must NEVER suggest or ask
-   about a symptom, body part, or complaint they did not already mention.
-4. Never suggest a diagnosis, and never comment on urgency, severity, or what the result might
-   be — there is no result yet.
-5. If the extraction is already reasonably complete (at least one complaint with a span, and
-   either an onset or enough other detail), say so briefly and encouragingly instead of
-   manufacturing a request for more.
-6. One or two short sentences. No headers, no bullets, no lists, no closing disclaimer — there
-   is no prediction yet to describe.
-"""
-"Write only the sentences themselves — no label, no preamble.")
-
 # NB3 use-case tokens are "A"/"B"; the app/API vocabulary is "justify"/"handover". "C" /
-# "patient_guidance" is the §Patient guidance use case; "D" / "describe_help" is §Describe-help.
-# Both share generate()/guardrail_check() machinery, deliberately never reachable from
-# /api/explain (see api.py's dedicated /api/self-check/* routes).
+# "patient_guidance" is the §Patient guidance use case, which shares generate()/guardrail_check()
+# machinery but is deliberately never reachable from /api/explain (see api.py's dedicated
+# /api/self-check/* routes).
+#
+# A fourth use case, "D"/"describe_help" (§Describe-help — an on-demand "is your description clear
+# enough?" panel on the patient confirm screen), was removed along with its UI. Nothing about the
+# split above depended on it; C keeps the whole patient-facing guardrail branch to itself.
 _USE_CASE_MAP = {"justify": "A", "handover": "B", "A": "A", "B": "B",
-                  "describe_help": "D", "D": "D",
                   "patient_guidance": "C", "C": "C"}
 
 # Refinement §1.5 — per-request basis directives (exact strings). All {…} placeholders are
@@ -1183,14 +1170,6 @@ def _basis_directive(payload):
 
 def build_user_prompt(payload, use_case):
     uc = _USE_CASE_MAP.get(use_case, use_case)
-    if uc == "D":
-        # payload here is the extraction object itself (no prediction exists yet at confirm
-        # time) — a third shape, distinct from both the clinician payload and patient_view.
-        return ("Using ONLY the fields in this JSON EXTRACTION, write 1-2 short plain-language "
-                "sentences helping the patient improve their description for this check — ask "
-                "for more detail on something they already mentioned, or affirm it's clear "
-                "enough. Never ask about a symptom that isn't already present.\n\n"
-                "EXTRACTION:\n" + json.dumps(payload, indent=2))
     if uc == "C":
         # payload here is the WIDENED suggestion payload api.py assembles (patient_view plus
         # allergies/medications/history_mentions/onset/pain_score/note/confirmed_complaint_tokens)
@@ -1277,9 +1256,8 @@ DIAGNOSTIC_PATTERNS = [r"\bpatient (has|is suffering|suffers|is diagnosed|presen
 REASSURING_WORDS = ["reassuring", "no cause for concern", "not urgent", "nothing serious", "routine", "low risk",
                     "can safely wait", "no concern"]
 HANDOVER_LABELS = ["Assessment:", "Recommendation:"]
-# C and D are both single free-form passages, unlike B's two-label shape — nothing to require.
+# C is a single free-form passage, unlike B's two-label shape — nothing to require.
 PATIENT_GUIDANCE_LABELS = []
-DESCRIBE_HELP_LABELS = []
 # The Recommendation is information + action only — never treatment or a disposition decision.
 DISPOSITION_PATTERNS = [r"\badmit(ted|s|ting)?\b", r"\bdischarg(e|ed|es|ing)\b",
                         r"\bprescrib(e|ed|es|ing)\b", r"\badminister(ed|s|ing)?\b"]
@@ -1373,21 +1351,18 @@ def _patient_reported_text(payload):
     return " ".join(tokens + labels).lower()
 
 
-def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=True):
-    """§Patient guidance guardrail, shared by C (patient_guidance) and D (describe_help) — the
-    only two GenAI outputs that ever reach a patient directly, with no clinician review before
-    release. Kept separate from the clinician body below: these payload shapes (the widened
-    suggestion payload for C, the raw extraction for D) share no keys with the clinician payload
+def _guardrail_check_patient(payload, text, required_labels):
+    """§Patient guidance guardrail for C (patient_guidance) — the only GenAI output that reaches a
+    patient directly, with no clinician review before release. Kept separate from the clinician
+    body below: C's widened suggestion payload shares no keys with the clinician payload
     (probabilities/escalation_basis/active_chief_complaints), and stricter rules apply —
     reassurance is banned unconditionally, not just on clinician P1/P2, new content is restricted
-    to a fixed vocabulary (PATIENT_WATCH_FOR for C's escalation signs; nothing beyond what the
-    patient themselves already reported for D — see SYSTEM_PROMPT_DESCRIBE_HELP rule 3) rather
-    than the full cc_ vocabulary, and — C only — self-care/medication content is rejected
-    outright when _self_care_suppressed() says it must be withheld for this patient.
+    to a fixed vocabulary (PATIENT_WATCH_FOR for the escalation signs) rather than the full cc_
+    vocabulary, and self-care/medication content is rejected outright when
+    _self_care_suppressed() says it must be withheld for this patient.
 
-    require_disclaimer is False for D: at confirm time, before any prediction has run, DISCLAIMER
-    ("the model's prediction of a triage assignment...") would describe a prediction that
-    doesn't exist yet.
+    Was shared with D (describe_help) until that use case was removed; the require_disclaimer
+    parameter existed only for D, which ran before any prediction existed, and went with it.
     """
     flags = []
     has_disclaimer = DISCLAIMER.lower() in text.lower()
@@ -1400,7 +1375,7 @@ def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=
     for pat in DIAGNOSTIC_PATTERNS:
         if re.search(pat, t):
             flags.append(f"diagnostic language: /{pat}/")
-    if require_disclaimer and not has_disclaimer:
+    if not has_disclaimer:
         flags.append("missing mandatory closing disclaimer")
     missing = [l for l in required_labels if l.lower() not in text.lower()]
     if missing:
@@ -1443,13 +1418,11 @@ def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=
 def guardrail_check(payload, text, use_case="A"):
     """(passed, flags). Disclaimer checked on full text then stripped so its wording ('diagnosis')
     does not trip the diagnostic-language scan. B additionally requires its two labels. C (patient
-    guidance) and D (describe-help) dispatch to _guardrail_check_patient — different payload
-    shapes and rules from the clinician body below."""
+    guidance) dispatches to _guardrail_check_patient — a different payload shape and stricter
+    rules than the clinician body below."""
     uc = _USE_CASE_MAP.get(use_case, use_case)
     if uc == "C":
         return _guardrail_check_patient(payload, text, PATIENT_GUIDANCE_LABELS)
-    if uc == "D":
-        return _guardrail_check_patient(payload, text, DESCRIBE_HELP_LABELS, require_disclaimer=False)
     flags = []
     has_disclaimer = DISCLAIMER.lower() in text.lower()
     body = text.replace(DISCLAIMER, "").strip()
@@ -1570,7 +1543,6 @@ def generate(payload, use_case, prefer_live=True, pinned=None):
     uc = _USE_CASE_MAP.get(use_case, use_case)
     system_prompt = (SYSTEM_PROMPT_JUSTIFY if uc == "A"
                       else SYSTEM_PROMPT_PATIENT if uc == "C"
-                      else SYSTEM_PROMPT_DESCRIBE_HELP if uc == "D"
                       else SYSTEM_PROMPT_HANDOVER)
     user_prompt = build_user_prompt(payload, uc)
 
@@ -1593,10 +1565,10 @@ def generate(payload, use_case, prefer_live=True, pinned=None):
         offline_text = "No live or pinned explanation is available for this patient this session."
         return {"source": "offline", "assessment": offline_text, "recommendation": offline_text,
                 "guardrails": offline_flags, "disclaimer": DISCLAIMER}
-    if uc in ("C", "D"):
-        # Unlike B's clinician-facing placeholder sentence, patient guidance/describe-help stays
-        # empty on offline — api.py hides the section entirely instead of showing filler text to
-        # a patient. Nothing reaches a patient here that wasn't guardrail-checked.
+    if uc == "C":
+        # Unlike B's clinician-facing placeholder sentence, patient guidance stays empty on
+        # offline — api.py hides the section entirely instead of showing filler text to a
+        # patient. Nothing reaches a patient here that wasn't guardrail-checked.
         return {"source": "offline", "text": "",
                 "guardrails": offline_flags, "disclaimer": DISCLAIMER}
     offline_text = "No live or pinned explanation is available for this patient this session."

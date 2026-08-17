@@ -50,29 +50,19 @@
       .replaceAll("'", '&#039;');
   }
 
-  // followUpOffset (optional; self-check only — app.js never passes it, so a clinician note
-  // always takes the single-segment path unchanged): the index in `note` where the patient's
-  // §Describe-help follow-up answer begins (api.py's /api/self-check/extract
-  // `follow_up_offset`). When present, everything from that point on is wrapped in <em> so the
-  // confirm screen shows which part of the note was added afterward — hoverSpan highlighting
-  // still works independently within each segment.
-  function _markSpan(segment, hoverSpan) {
-    if (!hoverSpan) return escapeHtml(segment);
-    const idx = segment.toLowerCase().indexOf(String(hoverSpan).toLowerCase());
-    if (idx < 0) return escapeHtml(segment);
-    const before = segment.slice(0, idx);
-    const hit = segment.slice(idx, idx + String(hoverSpan).length);
-    const after = segment.slice(idx + String(hoverSpan).length);
-    return `${escapeHtml(before)}<mark>${escapeHtml(hit)}</mark>${escapeHtml(after)}`;
-  }
-
-  function highlightedNote(note, hoverSpan, followUpOffset) {
+  // Escapes the note and wraps the hovered span in <mark> so the confirm screen can show where
+  // each extracted field came from. There used to be a third `followUpOffset` argument that split
+  // the note into two segments — the §Describe-help follow-up answer was appended to the note and
+  // rendered in <em> — but that use case was removed and the note is a single block again.
+  function highlightedNote(note, hoverSpan) {
     note = note || '';
-    const hasBoundary = Number.isInteger(followUpOffset) && followUpOffset >= 0 && followUpOffset <= note.length;
-    if (!hasBoundary) return _markSpan(note, hoverSpan);
-    const head = note.slice(0, followUpOffset);
-    const tail = note.slice(followUpOffset);
-    return `${_markSpan(head, hoverSpan)}<em>${_markSpan(tail, hoverSpan)}</em>`;
+    if (!hoverSpan) return escapeHtml(note);
+    const idx = note.toLowerCase().indexOf(String(hoverSpan).toLowerCase());
+    if (idx < 0) return escapeHtml(note);
+    const before = note.slice(0, idx);
+    const hit = note.slice(idx, idx + String(hoverSpan).length);
+    const after = note.slice(idx + String(hoverSpan).length);
+    return `${escapeHtml(before)}<mark>${escapeHtml(hit)}</mark>${escapeHtml(after)}`;
   }
 
   function num(v) {

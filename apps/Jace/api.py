@@ -79,14 +79,6 @@ try:
 except FileNotFoundError:
     _PINNED_PATIENT_GUIDANCE = []
 
-# §Describe-help (use case D, /api/self-check/describe-help) — same flat, payload-equality
-# convention as _PINNED_PATIENT_GUIDANCE above; payload here is the extraction object itself.
-try:
-    with open(os.path.join(SAMPLE_DIR, "pinned_describe_help.json"), encoding="utf-8") as f:
-        _PINNED_DESCRIBE_HELP = json.load(f)
-except FileNotFoundError:
-    _PINNED_DESCRIBE_HELP = []
-
 _BY_ID = {p["id"]: p for p in _PATIENTS}
 
 app = FastAPI(title="CTRSE — triage acuity")
@@ -99,7 +91,7 @@ app = FastAPI(title="CTRSE — triage acuity")
 # point of this surface is that a patient uses it directly.
 #
 # PREFIX, not an enumerated set: every route a patient page needs — extract,
-# describe-help, options, self-check, explain — lives under this one prefix
+# options, self-check, explain — lives under this one prefix
 # by construction, so a new patient route is reachable the moment it's named,
 # with no second place to remember to register it. (A prior enumerated-set
 # version of this constant silently 403'd /api/self-check/explain for every
@@ -445,63 +437,16 @@ def _extraction_response(note):
     return result
 
 
-# §Describe-help (use case D) answer loop. The patient's follow-up answer is sent as its own
-# request field, not appended by the browser — kept a separate, plain, human-readable marker
-# (not PII-shaped, not injection-pattern-shaped — see _PII_PATTERNS/_INJECTION_PATTERNS in
-# ctrse_core.py) so it can be located again in the RETURNED note_used to render the two parts
-# distinctly, without ctrse_core.py's extractor itself needing to know there are two sources.
-_FOLLOW_UP_SEPARATOR = "\n\nAdditional detail from the patient: "
-
-
+# The `follow_up` field and its separator/offset plumbing lived here to support §Describe-help
+# (use case D), whose confirm-screen panel let a patient append an answer to their own note. That
+# use case was removed; the extractor only ever sees one note now.
 class SelfCheckExtractRequest(BaseModel):
     note: str
-    follow_up: Optional[str] = None
 
 
 @app.post("/api/self-check/extract")
 def post_self_check_extract(req: SelfCheckExtractRequest):
-    follow_up = (req.follow_up or "").strip()
-    composed = req.note + (_FOLLOW_UP_SEPARATOR + follow_up if follow_up else "")
-    result = _extraction_response(composed)
-    if isinstance(result, JSONResponse) or not follow_up:
-        return result
-    # note_used is the prepared/redacted/truncated COMPOSED text — locate the boundary in that,
-    # not in the raw request, since redaction can shift character positions. None means the
-    # follow-up didn't survive truncation (note_used.truncated will also be true); the UI then
-    # just shows the whole thing as one block rather than guessing a boundary.
-    note_used = result.get("note_used") or ""
-    idx = note_used.find(_FOLLOW_UP_SEPARATOR)
-    return {**result, "follow_up_offset": idx if idx >= 0 else None}
-
-
-class SelfCheckDescribeHelpRequest(BaseModel):
-    # The confirm screen's current extraction (POST /api/self-check/extract's response,
-    # unedited) — this coaches on what the guarded extractor found in the patient's OWN words,
-    # not on anything the patient may have since edited into the confirm-screen fields.
-    extraction: dict
-
-
-@app.post("/api/self-check/describe-help")
-def post_self_check_describe_help(req: SelfCheckDescribeHelpRequest):
-    # §Describe-help (use case D) — runs on the confirm screen, before any prediction exists.
-    # Same honest-degrade posture as /explain below: a guardrail failure or an empty/offline
-    # generation just means the panel doesn't appear, never that flagged text reaches the
-    # patient (there is no clinician here to review it first).
-    extraction = dict(req.extraction or {})
-    if not extraction:
-        return JSONResponse(status_code=400, content={"error": "extraction required"})
-
-    result = core.generate(extraction, "describe_help", pinned=_PINNED_DESCRIBE_HELP)
-    passed = result.get("guardrails", {}).get("passed")
-    text = (result.get("text") or "").strip()
-
-    if passed is False or not text:
-        return JSONResponse(status_code=503, content={
-            "available": False,
-            "detail": "No additional guidance is available right now.",
-        })
-
-    return {"available": True, "text": text, "source": result.get("source")}
+    return _extraction_response(req.note)
 
 
 @app.get("/api/self-check/options")

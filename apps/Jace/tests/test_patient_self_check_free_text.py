@@ -96,68 +96,6 @@ def test_self_check_extract_rejects_an_empty_note():
 
 
 # ---------------------------------------------------------------------------
-# §Describe-help (use case D) answer loop — the follow-up travels as its own request
-# field, api.py composes it into one string before the guarded extractor ever sees it
-# (so span-or-silence validates against exactly what was sent), and the response carries
-# where the boundary landed so the confirm screen can render the two parts distinctly.
-# ---------------------------------------------------------------------------
-
-def test_self_check_extract_composes_and_locates_the_follow_up(monkeypatch):
-    seen = {}
-
-    def fake_extract(note, pinned):
-        seen["note"] = note
-        # Echo the composed text back as note_used, same as the real (redaction-passthrough)
-        # case when nothing in the composed text matches a PII pattern.
-        return {**_extraction(complaints=[{"token": "chestpain", "span": "chest pressure"}]),
-                "note_used": note}
-
-    monkeypatch.setattr(core, "extract_from_note", fake_extract)
-
-    response = client.post("/api/self-check/extract", json={
-        "note": "I have chest pressure",
-        "follow_up": "it started 2 hours ago",
-    })
-
-    assert response.status_code == 200
-    composed = "I have chest pressure" + api._FOLLOW_UP_SEPARATOR + "it started 2 hours ago"
-    assert seen["note"] == composed
-    body = response.json()
-    assert body["note_used"] == composed
-    assert body["follow_up_offset"] == composed.find(api._FOLLOW_UP_SEPARATOR)
-    assert body["note_used"][body["follow_up_offset"]:].endswith("it started 2 hours ago")
-
-
-def test_self_check_extract_without_follow_up_has_no_offset_key(monkeypatch):
-    monkeypatch.setattr(core, "extract_from_note", lambda note, pinned: _extraction(
-        complaints=[{"token": "chestpain", "span": "chest pressure"}]))
-
-    response = client.post("/api/self-check/extract", json={"note": "I have chest pressure"})
-
-    assert response.status_code == 200
-    assert "follow_up_offset" not in response.json()
-
-
-def test_self_check_extract_follow_up_offset_is_none_when_truncated_away(monkeypatch):
-    """If the composed text got truncated before the separator (NOTE_MAX_CHARS), the
-    separator marker never survives into note_used — the boundary must degrade to None,
-    not a stale or wrong index."""
-    monkeypatch.setattr(core, "extract_from_note", lambda note, pinned: {
-        **_extraction(complaints=[{"token": "chestpain", "span": "chest pressure"}]),
-        "note_used": "I have chest pressure",  # separator+follow-up never reached this
-        "truncated": True,
-    })
-
-    response = client.post("/api/self-check/extract", json={
-        "note": "I have chest pressure",
-        "follow_up": "it started 2 hours ago",
-    })
-
-    assert response.status_code == 200
-    assert response.json()["follow_up_offset"] is None
-
-
-# ---------------------------------------------------------------------------
 # POST /api/self-check — confirmed fields + the extraction they were built from
 # ---------------------------------------------------------------------------
 
