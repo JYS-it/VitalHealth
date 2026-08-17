@@ -428,10 +428,45 @@ document.addEventListener('alpine:init', () => {
       return rows;
     },
 
+    // utilisation_history in words rather than the raw "edvisits: 3" key dump this used to
+    // emit. It only ever carries n_edvisits / n_admissions / n_surgeries, and only when the
+    // count is non-zero, so a fixed noun map covers it; an unexpected key keeps its own name
+    // rather than being dropped.
     edLine(detail) {
-      const util = detail?.utilisation_history || {};
-      const parts = Object.entries(util).map(([k, v]) => `${k.replace('n_', '')}: ${v}`);
-      return parts.join(' · ');
+      const NOUN = { n_edvisits: 'prior ED visit', n_admissions: 'prior admission', n_surgeries: 'prior surgery' };
+      const PLURAL = { n_surgeries: 'prior surgeries' };
+      return Object.entries(detail?.utilisation_history || {})
+        .filter(([, v]) => Number(v) > 0)
+        .map(([k, v]) => {
+          const n = Number(v);
+          const noun = NOUN[k] || k.replace('n_', '');
+          return `${n} ${n === 1 ? noun : (PLURAL[k] || `${noun}s`)}`;
+        })
+        .join(' · ');
+    },
+
+    // high_importance_features_present as plain clinical phrases. Prefix-mapped, never invented:
+    // an unrecognised token keeps its own name rather than acquiring a label nobody verified.
+    //
+    // cc_ drivers are dropped rather than rendered. The frontend holds no complaint-label map
+    // (PATIENT_COMPLAINT_LABELS lives in core and is not exposed over the API), so a cc_ driver
+    // could only be printed as the raw unspaced token — and it would say nothing the Situation
+    // block's complaint line and "Acuity driven by" line do not already say.
+    driverWords(detail) {
+      const VITAL = { hr: 'HR', sbp: 'SBP', dbp: 'DBP', rr: 'RR', o2: 'SpO₂', temp: 'temp', o2_device: 'O₂ device' };
+      const spaced = (s) => String(s).replace(/_/g, ' ').trim();
+      return (detail?.high_importance_features_present || []).filter((f) => !String(f).startsWith('cc_')).map((f) => {
+        const t = String(f);
+        if (t.startsWith('hx_')) return `hx of ${spaced(t.slice(3))}`;
+        if (t.startsWith('med_')) return `${spaced(t.slice(4))} meds at home`;
+        if (t.startsWith('triage_vital_')) {
+          const v = t.slice('triage_vital_'.length);
+          return `recorded ${VITAL[v] || spaced(v)}`;
+        }
+        if (t === 'arrivalmode') return 'arrival mode';
+        if (t === 'dep_name') return 'department';
+        return spaced(t);
+      });
     },
 
     _displayExtras(col) {
@@ -492,6 +527,39 @@ document.addEventListener('alpine:init', () => {
       const items = this._displayExtras(col).medications || [];
       return items.map((m) => String(m?.text ?? '').trim()).filter(Boolean).join(' · ');
     },
+    // The clinician's free text, verbatim. Rendered with x-text, so it is inert markup-wise,
+    // and it is display-only — see the comment where it is put on display_extras.
+    noteText(col) {
+      return this._displayExtras(col).note || '';
+    },
+    // Missingness stated once, in one place, as a finding. "Never recorded" and "asked and
+    // answered none" are different facts, and a handover that blurs them is worse than one
+    // that stays silent — so each clause only fires where the distinction is actually known.
+    gapsLine(col) {
+      const d = col?.detail || {};
+      const extras = this._displayExtras(col);
+      const gaps = [];
+      const missing = d.vitals_not_recorded || [];
+      if (missing.length) gaps.push(`${missing.length} of 6 vitals not recorded (${missing.join(', ')})`);
+      const noOnset = (d.active_chief_complaints || []).filter((c) => !this.onsetFor(col, c));
+      if (noOnset.length) gaps.push(`onset not documented for ${noOnset.join(', ')}`);
+      // Both of these keys exist on the intake path even when empty. The 245 browsed sample
+      // rows carry no display_extras at all, so the keys are absent there and these stay
+      // quiet — never collected is not the same claim as never stated.
+      if (extras.allergies && !extras.allergies.length) gaps.push('allergy status not stated');
+      if ('pain_score' in extras && !extras.pain_score) gaps.push('no pain score recorded');
+      return gaps.join(' · ');
+    },
+    // The Recommendation is now asked for as one item per line. Returns [] for a single
+    // unbroken line so the template falls back to a paragraph instead of rendering a one-item
+    // list — the stale pinned records and any model that ignores the shape still read fine.
+    recLines(col) {
+      const lines = String(col?.gen?.handover?.recommendation || '')
+        .split('\n')
+        .map((l) => l.replace(/^\s*[-•*]\s*/, '').trim())
+        .filter(Boolean);
+      return lines.length > 1 ? lines : [];
+    },
 
     printHandover() {
       const col = this.col;
@@ -520,6 +588,10 @@ document.addEventListener('alpine:init', () => {
       const basis = this.basisLine(d);
       const notRecorded = (d.vitals_not_recorded || []).join(', ');
       const ed = this.edLine(d);
+      const note = this.noteText(col);
+      const drivers = this.driverWords(d).join(' · ');
+      const gaps = this.gapsLine(col);
+      const rec = this.recLines(col);
       // Built section by section so an unfilled conditional line can be dropped without also
       // dropping the blank separators between sections. Mirrors the on-screen note, so a pasted
       // handover and a printed one carry the same facts.
@@ -533,6 +605,8 @@ document.addEventListener('alpine:init', () => {
           `  Complaint: ${this.complaintLine(col) || 'none recorded'}`,
           `  Arrival: ${d.arrival_mode || 'not stated'}`,
           basis ? `  Acuity driven by: ${basis}` : '',
+          // Indented as a block so a multi-line note stays visibly part of S when pasted.
+          note ? `  Triage note (verbatim):\n${note.split('\n').map((l) => `    ${l}`).join('\n')}` : '',
         ]),
         section([
           'B:',
@@ -542,10 +616,14 @@ document.addEventListener('alpine:init', () => {
           pain ? `  Pain score: ${pain}` : '',
           history ? `  Hx: ${history}` : '',
           medications ? `  Meds: ${medications}` : '',
-          ed ? `  ED: ${ed}` : '',
+          ed ? `  ED history: ${ed}` : '',
+          drivers ? `  Model drivers: ${drivers}` : '',
+          gaps ? `  Information gaps: ${gaps}` : '',
         ]),
         `A: ${h.assessment || h.text || ''}`,
-        `R: ${h.recommendation || ''}`,
+        rec.length
+          ? section(['R:', ...rec.map((r) => `  - ${r}`)])
+          : `R: ${h.recommendation || ''}`,
         h.disclaimer || '',
       ].filter(Boolean).join('\n\n');
     },
@@ -740,6 +818,12 @@ document.addEventListener('alpine:init', () => {
           // simply absent for the 245 browsed sample patients, which carry no display_extras.
           sex: f.sex?.value || null,
           pain_score: this.intake.extraction?.pain_score || null,
+          // The clinician's own free text, rendered verbatim under S. DISPLAY ONLY — it must
+          // never reach the handover prompt. The note already goes to the extraction model
+          // under span-or-silence, where every value it yields must quote a literal substring;
+          // feeding it to the clinician register instead would let text inside the note steer
+          // prose a clinician reads as fact, with no such check on the way out.
+          note: this.intake.note || '',
         },
       };
     },

@@ -907,54 +907,75 @@ SYSTEM_PROMPT_HANDOVER = ("You are a decision-support writing assistant embedded
 "triage tool.\n\nYou will be given a JSON payload describing the output of a STATISTICAL MODEL that predicts "
 "the triage nurse's ESI acuity assignment (mapped to P1=critical ... P4=non-urgent). The model does NOT "
 "measure physiological deterioration and does NOT diagnose.\n\n" + COMMON_RULES + """
-You are writing two fields of a clinical triage HANDOVER note. The note header, Situation and
-Background (acuity, the vitals row, history, meds, ED utilisation) are rendered separately by code —
-do NOT restate them. Write in telegraphic clinical-handover register (c/o, hx, pt, WNL, RA);
-fragments over full sentences. Refer to any vital by its recorded value (e.g. HR 121, SpO₂ 94% RA,
-T 37.1), NEVER by a diagnostic label (do not write "tachycardia", "hypoxia", "febrile",
+You are writing two fields of a clinical triage HANDOVER note.
+
+WHAT IS ALREADY ON THE PAGE — the note header and the WHOLE of Situation and Background are
+rendered by CODE and printed directly above your text: acuity and confidence, age, sex, every coded
+complaint with its onset, arrival mode, department, what drove the acuity, the verbatim triage note,
+the full vitals row with out-of-range values emphasised, which vitals were not recorded, allergies,
+pain score, history, medications, ED utilisation, the model's driver features, and the information
+gaps. Do NOT restate any of it. A fact already printed above costs the reader attention and adds
+nothing to the handover.
+
+WRITE NO DIGITS. Name a vital where it matters to the reasoning (SpO₂, HR, RR) but NEVER write its
+value — the Background row carries every number. The same goes for age, counts and dates.
+
+Write in telegraphic clinical-handover register (c/o, hx, pt, WNL, RA); fragments over full
+sentences. NEVER label a vital diagnostically (do not write "tachycardia", "hypoxia", "febrile",
 "hypertensive" — those are findings not present in the payload). Produce EXACTLY these two labelled
 outputs and nothing else before the closing sentence:
 
-  Assessment: <a full, substantive handover paragraph — this is the A of an SBAR and a receiving
-              clinician should be able to pick up the patient from it. Cover, in this order and in
-              telegraphic register: the recorded triage picture (complaint(s) as coded, arrival,
-              recorded vital VALUES, and what the note recorded as history / medications /
-              allergies where present); then, critically, WHAT DROVE THE ACUITY — name the
+  Assessment: <3-4 telegraphic sentences. Not a summary of the page above — the READING of it.
+              Cover, in this order: (1) which recorded vitals sit OUT OF RANGE, named not valued,
+              and whether they drove the acuity or not; (2) WHAT DROVE THE ACUITY — name the
               escalation_basis explicitly in plain clinical terms, e.g. "acuity driven by chief
               complaint and arrival mode, not vital derangement" or "acuity is protocol-based, not
-              physiological instability"; then how COMPLETE the picture is (which vitals were not
-              recorded, whether onset is documented) and where the prediction is least certain.
+              physiological instability"; (3) what the completeness of the picture does to the
+              prediction, stated as a CONSEQUENCE — "acuity rests on the coded complaint alone,
+              nothing recorded to corroborate it" — rather than as a re-list of what is missing.
               Do not assert a diagnosis and do not infer anything the payload does not record.>
-  Recommendation: <several concrete next steps, not one clipped line — the R of an SBAR is what
-              the receiving clinician acts on. Work through each that applies: the protocol-standard
-              investigation(s) tied to the coded complaint; what is missing and should be obtained;
-              the monitoring / observation implication; and the pathway implication for
-              protocol-basis cases. INFORMATION and ACTION only. Permitted: an obvious protocol-standard
-              next investigation tied to the coded complaint (e.g. ECG/troponin for chest pain,
-              glucose for altered mental state); what is missing and should be obtained (obtain
-              vitals when none are recorded — see vitals_not_recorded; onset time not recorded);
-              and, for protocol-basis cases, the pathway implication (mental-health risk
-              assessment; do not route to medical resuscitation; ensure continuous observation).
+  Recommendation: <the section the receiving clinician acts on, and the substantial half of this
+              note. Write it as SEPARATE LINES, one item per line, each prefixed "- " and led by
+              one of these heads, in this order:
+                - Immediate: priority of review and level of observation required.
+                - Obtain: the protocol-standard investigation(s) tied to the coded complaint
+                  (e.g. ECG/troponin for chest pain, glucose for altered mental state).
+                - Complete: the triage data still missing and worth capturing (obtain vitals when
+                  none are recorded — see vitals_not_recorded; onset not documented; allergy
+                  status not stated).
+                - Monitor: what to watch, and the trigger that should prompt escalation.
+                - Pathway: routing implication — protocol-basis and red-flag cases ONLY
+                  (mental-health risk assessment; do not route to medical resuscitation; ensure
+                  continuous observation).
+              Emit every head that applies and DROP any head you would have to pad. Escalation
+              triggers must be QUALITATIVE ("escalate if SpO₂ falls further or work of breathing
+              increases"), never numeric — a threshold figure is not in the payload.
               This system has NO triage clock: never state or imply how old any vital or observation
-              is, and never reference elapsed time (no "N min old", no "recorded at HH:MM", no
-              staleness claim). Recommending that recorded vitals be repeated is fine; attaching an
-              age or elapsed time to them is not. FORBIDDEN: any diagnosis, any treatment or drug,
-              any disposition decision (admit / discharge / refer to a ward). Recommend information
-              and next steps, never a management or disposition decision.>
+              is, never reference elapsed time (no "N min old", no "recorded at HH:MM", no staleness
+              claim), and never attach a time target to a review ("within N minutes" is forbidden).
+              Recommending that recorded vitals be repeated is fine; attaching an age or elapsed
+              time to them is not. FORBIDDEN: any diagnosis, any treatment or drug, any disposition
+              decision (admit / discharge / refer to a ward). Recommend information and next steps,
+              never a management or disposition decision.>
+
+Line breaks inside the Recommendation are REQUIRED, not a violation. The "no bullet lists" rule
+belongs to the justification register (SYSTEM_PROMPT_JUSTIFY), not to COMMON_RULES, and does not
+apply here — do not re-add it.
 
 REGISTER — this is a handover, not an explanation of the model. The justification register (written
 separately, for a clinician deciding whether to trust the prediction) carries the statistics and the
-calibration; this one must not repeat them. The ONLY numerals permitted here are recorded vital
-values and the patient's age. Do NOT write historical base rates, emergency rates, cohort counts,
-probabilities, percentages, or threshold arithmetic, and do NOT restate where the prediction sits
-relative to the alert threshold — say "acuity driven by the coded complaint" and stop, without
-quantifying it.
+calibration; this one must not repeat them. Do NOT write historical base rates, emergency rates,
+cohort counts, probabilities, percentages, or threshold arithmetic, and do NOT restate where the
+prediction sits relative to the alert threshold — say "acuity driven by the coded complaint" and
+stop, without quantifying it.
 
 DENSITY, not brevity — there is no word limit, and a thin handover is a failed handover. Be
 substantive and complete, but write it the way a handover is written rather than the way an essay
-is: drop articles and copulas, use standard abbreviations ("68 y/o, c/o chest pain, arrived by car"
-— not "the patient is a 68-year-old who complained of chest pain and arrived by car"). Every
-sentence should carry a fact the receiving clinician needs.
+is: drop articles and copulas, use standard abbreviations ("c/o chest pain, arrived by car" — not
+"the patient complained of chest pain and arrived by car"). Where you must name a complaint in
+order to say what drove the acuity, write it as "c/o <complaint>", never as "the chief complaint
+of <complaint>". Every line must carry something the receiving clinician needs and CANNOT read off
+the page above it.
 
 NEVER write a raw feature identifier, vocabulary token, or internal field value — no "cc_chestpain",
 "o2_device", "arrivalmode", "escalation_basis", "red_flag", "model_level", and never the word
@@ -1199,9 +1220,15 @@ def build_user_prompt(payload, use_case):
                    "base rates, threshold context, and the high-importance features present")
     else:
         task = "write the two labelled outputs (Assessment / Recommendation)"
-        factors = ("the coded chief complaint(s), arrival mode, age, red flags, recorded vital "
-                   "VALUES, and what drove the acuity — NOT base rates, probabilities, cohort "
-                   "counts or threshold arithmetic, which belong to the justification register")
+        # No "recorded vital VALUES" here. Situation and Background are rendered by code from
+        # this same payload and printed directly above the model's text, so asking for the
+        # values printed them twice — once as fact, once as prose. B now gets the reading of
+        # the picture; the numbers stay in the code-rendered block that owns them.
+        factors = ("the coded chief complaint(s), the red flags, and what drove the acuity — "
+                   "NOT the recorded facts already printed above your text (vital values, age, "
+                   "arrival mode, allergies, history, medications), and NOT base rates, "
+                   "probabilities, cohort counts or threshold arithmetic, which belong to the "
+                   "justification register")
     prompt = (f"Using only the fields in this JSON payload, {task}. Refer to the factors the model "
               f"weighted ({factors}), written in ordinary clinical language — never by their raw "
               "payload identifiers.\n\n"
@@ -1217,8 +1244,21 @@ def build_user_prompt(payload, use_case):
         prompt += ("\n\nREADABLE LABELS (write the complaint this way, never as the raw token):\n" +
                    "\n".join(f'- {t} -> "{label.lower()}"' for t, label in readable))
     if uc == "B":
+        # Restated in the user prompt as well as the system instruction: the shape is the whole
+        # point of the Recommendation now, and a model that skims the system block still sees it
+        # here, immediately beside the payload it has to apply it to.
+        # "FORMAT", not "SHAPE": test_neither_prompt_solicits_shap_any_more scans the prompt for
+        # the substring "SHAP", and "SHAPE" would match it.
+        prompt += ("\n\nRECOMMENDATION FORMAT (one item per line, each prefixed \"- \", in this "
+                   "order; drop any head you would have to pad):\n"
+                   "- Immediate: <priority of review and level of observation>\n"
+                   "- Obtain: <protocol-standard investigation(s) for the coded complaint>\n"
+                   "- Complete: <triage data still missing and worth capturing>\n"
+                   "- Monitor: <what to watch, and the qualitative trigger for escalation>\n"
+                   "- Pathway: <routing implication — protocol-basis and red-flag cases only>")
         prompt += ("\n\nCONTEXT: this system has no triage clock — the payload carries no timestamp and "
-                   "no elapsed time. Do NOT state or imply how old any vital or observation is. If "
+                   "no elapsed time. Do NOT state or imply how old any vital or observation is, and do "
+                   "not attach a time target to a review. If "
                    "vitals_not_recorded is non-empty, the Recommendation should note that those vitals "
                    "be obtained; recorded vitals may be flagged for repeat, but without attaching any age "
                    "or elapsed time to them.")

@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
   <script defer src="intake-shared.js?v=1"></script>
   <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=8"></script>
+  <script defer src="app.js?v=9"></script>
   <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -946,6 +946,17 @@
                             <span class="hnote__lbl">Acuity driven by:</span>
                             <span x-text="basisLine(col.detail)"></span>
                           </div>
+                          <!-- The presenting story in the clinician's own words — the richest
+                               single artefact we hold, and what a real handover leads with.
+                               Rendered with x-text (inert) and never sent to the handover
+                               prompt. Intake path only: the 245 browsed sample rows carry no
+                               display_extras, exactly as sex and allergies behave. -->
+                          <template x-if="noteText(col)">
+                            <div>
+                              <div class="hnote__line"><span class="hnote__lbl">Triage note (verbatim):</span></div>
+                              <blockquote class="hnote__quote" x-text="noteText(col)"></blockquote>
+                            </div>
+                          </template>
                         </div>
                       </div>
 
@@ -966,10 +977,11 @@
                                and "none" are different facts and a handover that blurs them is
                                worse than one that says nothing. Hence this line and the
                                always-rendered Allergies line below. -->
+                          <!-- The "N of 6" count used to be appended here; it now lives once, on
+                               the Information gaps line below, with the rest of the missingness. -->
                           <div class="hnote__line hnote__missing" x-show="col.detail?.vitals_not_recorded?.length" x-cloak>
                             <span class="hnote__lbl">Not recorded:</span>
                             <span class="mono" x-text="col.detail?.vitals_not_recorded?.join(', ')"></span>
-                            <span x-text="` — ${(col.detail?.vitals_not_recorded || []).length} of 6 vitals missing at triage`"></span>
                           </div>
                           <div class="hnote__line">
                             <span class="hnote__lbl">Allergies:</span>
@@ -985,7 +997,15 @@
                             <span class="hnote__lbl">Meds:</span> <span x-text="medicationsLine(col)"></span>
                           </div>
                           <div class="hnote__line" x-show="edLine(col.detail)" x-cloak>
-                            <span class="hnote__lbl">ED:</span> <span class="mono" x-text="edLine(col.detail)"></span>
+                            <span class="hnote__lbl">ED history:</span> <span x-text="edLine(col.detail)"></span>
+                          </div>
+                          <div class="hnote__line" x-show="driverWords(col.detail).length" x-cloak>
+                            <span class="hnote__lbl">Model drivers:</span>
+                            <span x-text="driverWords(col.detail).join(' · ')"></span>
+                          </div>
+                          <div class="hnote__line hnote__missing" x-show="gapsLine(col)" x-cloak>
+                            <span class="hnote__lbl">Information gaps:</span>
+                            <span x-text="gapsLine(col)"></span>
                           </div>
                         </div>
                       </div>
@@ -999,10 +1019,22 @@
                         <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.assessment"></div>
                       </div>
 
-                      <!-- R -->
+                      <!-- R — asked for as one item per line (Immediate / Obtain / Complete /
+                           Monitor / Pathway). recLines() returns [] for a single unbroken line,
+                           so a stale pinned record or a model that ignored the shape still
+                           renders as the plain paragraph it always did. -->
                       <div class="hnote__sec">
                         <span class="hnote__k">R</span>
-                        <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.recommendation"></div>
+                        <div class="hnote__body sbar__body--llm">
+                          <template x-if="recLines(col).length">
+                            <ul class="hnote__rlist">
+                              <template x-for="r in recLines(col)" :key="r"><li x-text="r"></li></template>
+                            </ul>
+                          </template>
+                          <template x-if="!recLines(col).length">
+                            <div x-text="col.gen.handover.recommendation"></div>
+                          </template>
+                        </div>
                       </div>
 
                       <div class="hnote__sec" x-show="guardFlags(col.gen.handover).length" x-cloak>

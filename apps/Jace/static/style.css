@@ -572,6 +572,18 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .hnote__line{font-size:var(--fs-sm); line-height:var(--lh-body);}
 .hnote__lbl{color:var(--text-muted); margin-right:var(--s1);}
 .hnote__missing{color:var(--warn);}
+/* Verbatim triage note under S — quoted source text, so it keeps the clinician's own line
+   breaks rather than being reflowed into the note's own prose. */
+.hnote__quote{
+  margin:var(--s2) 0 0; padding:var(--s2) var(--s3);
+  background:var(--surface-2); border-left:2px solid var(--accent); border-radius:var(--r-sm);
+  font-size:var(--fs-sm); line-height:var(--lh-body); white-space:pre-wrap;
+}
+/* R renders as one item per line (Immediate / Obtain / Complete / Monitor / Pathway). */
+.hnote__rlist{list-style:none; margin:0; padding:0;}
+.hnote__rlist li{padding-left:var(--s4); text-indent:calc(-1 * var(--s4));}
+.hnote__rlist li::before{content:"– "; color:var(--text-muted);}
+.hnote__rlist li + li{margin-top:var(--s2);}
 .vitseg{white-space:nowrap;}
 .vitseg__lbl{color:var(--text-muted);}
 .vitseg--abn{color:var(--p1); font-weight:600;}
@@ -762,6 +774,10 @@ select.finput{font-family:var(--font-mono);}
   }
   .print-target .hnote__lbl, .print-target .vitseg__lbl, .print-target .hnote__time{color:#444 !important;}
   .print-target .vitseg--abn{font-weight:700;}
+  /* The rule above forces every descendant to a white background, so the quote and the R list
+     need their own ink to survive printing. */
+  .print-target .hnote__quote{border-left:2px solid #888;}
+  .print-target .hnote__rlist li::before{color:#000 !important;}
   .print-target .hnote__printfoot{
     display:block; padding:var(--s2) var(--s3); border-top:1px solid #000;
     font-size:var(--fs-xs); color:#444 !important;

@@ -19,6 +19,15 @@ TWO DELIBERATE DEPARTURES FROM THE SPEC'S WORDING, both recorded so they read as
   2. Guardrail-enforced register separation was removed. The prompts still forbid raw identifiers
      and cross-register statistics, but no scan checks it, so drift will not be caught here. What
      remains testable without a model is that the two prompts ASK for different content.
+  3. "More abbreviated" is measured as ARTICLE RATE, not as a count of telegraphic markers
+     (c/o, hx, pt, y/o). The marker count worked while B opened with the presenting picture —
+     "68 y/o, c/o chest pain, arrived by car" is where those markers live. That picture is now
+     rendered by code in Situation and Background and B is explicitly forbidden from restating
+     it, so B lost the markers along with the content they attached to and the gate started
+     failing on a change it was never meant to catch. Articles survive the move: the handover is
+     told to "drop articles and copulas" and the justification to write "clean, readable clinical
+     prose", so the ratio still separates the two registers. The marker count is still computed
+     and reported in the failure message, just not asserted.
 
 Run:  python -m pytest tests/test_register.py -v
 """
@@ -119,9 +128,53 @@ def test_handover_prompt_asks_for_full_sbar_content_not_a_word_budget():
     system = re.sub(r"\s+", " ", core.SYSTEM_PROMPT_HANDOVER)
     assert "at most" not in system.lower()
     assert "DENSITY, not brevity" in system
-    for obligation in ("WHAT DROVE THE ACUITY", "how COMPLETE the picture is", "monitoring"):
-        assert obligation in system, obligation
+    assert "WHAT DROVE THE ACUITY" in system
     assert head  # the B branch still builds
+
+
+def test_recommendation_asks_for_the_five_heads_one_per_line():
+    """R is the section a receiving clinician acts on, and the free-form ask produced one clipped
+    line. The named heads are what made it substantial, so they are asserted in BOTH prompts —
+    the system instruction and, beside the payload, the user prompt."""
+    _ensure_model()
+    system = re.sub(r"\s+", " ", core.SYSTEM_PROMPT_HANDOVER)
+    user = core.build_user_prompt(_payload(), "B")
+    for head in ("Immediate:", "Obtain:", "Complete:", "Monitor:", "Pathway:"):
+        assert head in system, f"{head} missing from SYSTEM_PROMPT_HANDOVER"
+        assert head in user, f"{head} missing from the B user prompt"
+    # Line breaks in R are load-bearing now; the justification's no-bullets rule must not creep in.
+    assert "Line breaks inside the Recommendation are REQUIRED" in system
+
+
+def test_handover_is_told_not_to_restate_the_code_rendered_blocks():
+    """The echo this change exists to remove: S and B are rendered from the same payload and
+    printed directly above the model's text, so asking B for the values printed them twice."""
+    _ensure_model()
+    system = re.sub(r"\s+", " ", core.SYSTEM_PROMPT_HANDOVER)
+    user_head = core.build_user_prompt(_payload(), "B").split("PAYLOAD:")[0]
+
+    assert "WRITE NO DIGITS" in system
+    assert "Do NOT restate any of it" in system
+    assert "named not valued" in system
+    # The exact wording that licensed the echo, in either prompt.
+    assert "vital VALUES" not in system
+    assert "vital VALUES" not in user_head
+    assert "already printed above your text" in user_head
+
+
+def test_multi_line_recommendation_survives_parsing():
+    """recLines() in the frontend splits R on newlines. That only works if the parser keeps
+    them — a strip() that collapsed the block would silently flatten every handover."""
+    text = ("Assessment: c/o chest pain, acuity driven by the coded complaint.\n"
+            "Recommendation:\n"
+            "- Immediate: for prompt senior review, continuous observation.\n"
+            "- Obtain: ECG and troponin.\n"
+            "- Monitor: escalate if HR climbs further.\n" + core.DISCLAIMER)
+    _asmt, rec = core._parse_handover_lines(text)
+    lines = [l for l in rec.split("\n") if l.strip()]
+    assert len(lines) == 3, rec
+    assert lines[0].startswith("- Immediate:")
+    assert core.DISCLAIMER not in rec
 
 
 # ---------------------------------------------------------------------------
@@ -185,18 +238,31 @@ def test_statistics_in_the_handover_are_no_longer_flagged():
 live = pytest.mark.skipif(not core.GEMINI_AVAILABLE,
                           reason="GEMINI_API_KEY not set — live register gate skipped")
 
-# Telegraphic markers a real handover uses and an explanation does not.
+# Telegraphic markers a real handover uses and an explanation does not. Kept as a reported
+# signal, no longer the assertion — see _article_rate below for why.
 _ABBREVIATIONS = (r"\bc/o\b", r"\bhx\b", r"\bpt\b", r"\by/o\b", r"\bwnl\b", r"\bra\b", r"\byo\b")
+
+_ARTICLES = re.compile(r"\b(?:the|a|an)\b", re.IGNORECASE)
+_WORD = re.compile(r"[A-Za-z][A-Za-z/'-]*")
 
 
 def _density(text):
     return sum(1 for pat in _ABBREVIATIONS if re.search(pat, text, re.IGNORECASE))
 
 
+def _article_rate(text):
+    """Articles per word. The prompts' own definition of the register difference: the handover is
+    told to "drop articles and copulas", the justification is told to write "clean, readable
+    clinical prose". Prose cannot avoid articles; telegraphic fragments barely use them."""
+    words = _WORD.findall(text)
+    return len(_ARTICLES.findall(text)) / len(words) if words else 0.0
+
+
 @live
-def test_handover_register_is_more_abbreviated_than_justification():
-    """CTRSE_GenAI_Refinement_Spec.md:135's register gate, as density rather than brevity — see
-    the module docstring for why the "shorter" half was dropped."""
+def test_handover_register_is_more_telegraphic_than_justification():
+    """CTRSE_GenAI_Refinement_Spec.md:135's register gate, as tone rather than brevity — see the
+    module docstring for why the "shorter" half was dropped, and departure 3 for why this counts
+    articles rather than abbreviations."""
     _ensure_model()
     payload = _payload()
     a = core.generate(payload, "justify", prefer_live=True)
@@ -207,15 +273,18 @@ def test_handover_register_is_more_abbreviated_than_justification():
     a_body = (a.get("text") or "").replace(core.DISCLAIMER, "")
     b_body = f"{b.get('assessment') or ''} {b.get('recommendation') or ''}"
 
-    assert _density(b_body) > _density(a_body), (
-        f"register failed: handover density {_density(b_body)} is not above justification "
-        f"{_density(a_body)}\nA: {a_body}\nB: {b_body}")
+    assert _article_rate(b_body) < _article_rate(a_body), (
+        f"register failed: handover article rate {_article_rate(b_body):.3f} is not below "
+        f"justification {_article_rate(a_body):.3f} (abbreviation counts "
+        f"B={_density(b_body)} A={_density(a_body)})\nA: {a_body}\nB: {b_body}")
 
 
 @live
 def test_handover_is_substantive_enough_to_hand_over_from():
     """The complaint that prompted dropping the word budget: a one-line Recommendation and a
-    thin Assessment do not serve an SBAR."""
+    thin Assessment do not serve an SBAR. The floors are deliberately asymmetric now — R is the
+    section the receiving clinician acts on and carries the weight; A is the reading of a page
+    that is already printed above it, so it is meant to be tight."""
     _ensure_model()
     b = core.generate(_payload(), "handover", prefer_live=True)
     if b.get("source") != "live":
@@ -223,6 +292,28 @@ def test_handover_is_substantive_enough_to_hand_over_from():
 
     assessment = (b.get("assessment") or "").split()
     recommendation = (b.get("recommendation") or "").split()
-    assert len(assessment) >= 30, f"assessment too thin ({len(assessment)}w): {b.get('assessment')}"
-    assert len(recommendation) >= 12, (
+    assert len(assessment) >= 25, f"assessment too thin ({len(assessment)}w): {b.get('assessment')}"
+    assert len(recommendation) >= 25, (
         f"recommendation too thin ({len(recommendation)}w): {b.get('recommendation')}")
+    # The shape the frontend renders as a list.
+    lines = [l for l in (b.get("recommendation") or "").split("\n") if l.strip()]
+    assert len(lines) >= 2, f"recommendation is not one item per line: {b.get('recommendation')}"
+
+
+@live
+def test_assessment_does_not_echo_the_code_rendered_vitals():
+    """The reported defect. S and B print every number; A restating them was pure duplication.
+    Asserted as "no digits at all", because that is the rule the prompt actually states and it
+    is the only version of this check that cannot be satisfied by rounding or rephrasing."""
+    _ensure_model()
+    payload = _payload()
+    b = core.generate(payload, "handover", prefer_live=True)
+    if b.get("source") != "live":
+        pytest.skip("live generation unavailable this run")
+
+    assessment = b.get("assessment") or ""
+    # P1/P2/P3/P4 are level labels, not measurements — they are the one permitted digit.
+    stripped = re.sub(r"\bP[1-4]\b", "", assessment)
+    assert not re.search(r"\d", stripped), f"assessment restates a number: {assessment}"
+    for name, entry in payload["triage_vitals"].items():
+        assert str(entry["value"]) not in assessment, f"{name} value echoed in A: {assessment}"
