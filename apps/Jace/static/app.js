@@ -7,7 +7,11 @@
  * width, and the supplied threshold -> a tick position. Colour/label/opacity/basis
  * text are *selected* or *formatted* from supplied facts, never derived.
  *
- * Compare view holds up to two independent "columns", each a full Model + Gen-AI panel.
+ * Flow: "Clinical Triage" opens the INTAKE (note -> confirm -> result); the result renders in
+ * place, in the intake column, so nothing else on screen can overwrite it. The sample-patient
+ * browser is a separate inspection surface over 245 precomputed fixtures, not a worklist.
+ * There is one result unit (`col`) — the two-column compare view was removed along with its
+ * columns array, activeSlot and compareMode.
  */
 
 function makeColumn() {
@@ -20,35 +24,27 @@ function makeColumn() {
     gen: { justify: null, handover: null },  // both registers
     genTime: null,                           // wall-clock HH:MM when generation completed
     extras: null,                            // note-derived display facts for the SBAR
-                                             // ({allergies, onset}) — never model input
+                                             // ({allergies, onset, history_mentions,
+                                             // medications}) — never model input
     view: 'both',                            // 'both' | 'justify' | 'handover'
     guardTest: null,                         // synthetic adversarial result, or null
-    printing: false,                         // marks this column's hnote as the print target
+    printing: false,                         // marks the hnote as the print target
     copied: false,                           // transient "Copied ✓" feedback
     error: '',
-    viewerName: 'guest',
   };
 }
 
-// Fresh intake state (§5 two-zone intake -> confirm -> result)
+// Fresh intake state (§5 two-zone intake -> confirm -> result). Base shape (stage through
+// result) now lives in intake-shared.js's makeIntake() — shared with self-check.js's confirm
+// screen — extended here with the two fields only the clinician flow uses.
 function makeIntake() {
   return {
-    stage: 'input',            // 'input' | 'confirm' | 'result'
-    note: '',
-    vitals: { hr: '', sbp: '', dbp: '', rr: '', o2: '', device: '', temp: '', temp_unit: 'C' },
-    noVitals: false,
-    extracting: false,
-    extractError: '',
-    extraction: null,          // raw /api/extract response
-    fields: null,              // editable confirm-screen copies (see buildConfirmFields)
-    flagsAck: false,           // one acknowledgement for the guardrail-notice list
+    ...window.VHIntake.makeIntake(),
     backstop: null,            // /api/extract-guardrail-test result (injection demo)
-    hoverSpan: null,
-    predicting: false,
-    predictError: '',
-    refusal: null,             // refusal_reason when the model refused
-    result: null,              // /api/predict response (banner + panels)
     logCount: null,
+    resultExtras: null,        // display_extras for `result` — carried so re-seating the
+                               // finished intake restores the SBAR Background, not just the
+                               // model panel
   };
 }
 
@@ -86,10 +82,14 @@ document.addEventListener('alpine:init', () => {
     // are unaffected. Unpinned: extraction runs live for these.
     characterSeeds: window.DEMO_CHARACTER_SEEDS || [],
 
-    // ---- compare / columns ----
-    compareMode: false,
-    columns: [makeColumn()],
-    activeSlot: 0,
+    // The single Model + Gen-AI result unit. Named `col` so the markup's existing `col.*`
+    // bindings resolve straight off the component scope now that the compare-mode x-for
+    // wrapper (and its second column) are gone.
+    col: makeColumn(),
+    // Results from this browser session, newest first — /api/predict already persists every
+    // assessment to the shared store, so this is for stepping back to something from a minute
+    // ago, not an archive.
+    sessionAssessments: [],
 
     // ---- lifecycle ----
     async init() {
@@ -121,7 +121,7 @@ document.addEventListener('alpine:init', () => {
       }
 
       window.addEventListener('afterprint', () => {
-        this.columns.forEach((c) => { c.printing = false; });
+        this.col.printing = false;
       });
       try {
         const [metaRes, patRes] = await Promise.all([
@@ -171,14 +171,11 @@ document.addEventListener('alpine:init', () => {
       if (this.isPatient) return;
       if (m === this.mode) return;
       this.mode = m;
-      if (m !== 'browse') {
-        this.compareMode = false;
-        this.activeSlot = 0;
-      }
-      // returning to a finished intake: re-seat its result in column 0
+      // Returning to a finished intake re-seats its result. This must carry `extras` as well as
+      // detail/payload: extras is where allergies, onset, Hx, Meds, sex and pain score live, so
+      // restoring without it silently empties the SBAR Background.
       if (m === 'intake' && this.intake.stage === 'result' && this.intake.result) {
-        this.columns[0].detail = this.intake.result;
-        this.columns[0].payload = this.intake.result.payload || null;
+        this.seatResult(this.intake.result, this.intake.resultExtras);
       }
     },
 
@@ -188,10 +185,10 @@ document.addEventListener('alpine:init', () => {
       this.syncSharedSection('dashboard');
     },
 
+    // "Clinical Triage" opens the intake — the tool's actual job. It used to open the sample
+    // browser, leaving the extractor two clicks deep behind a second nav bar.
     openTriage() {
-      this.activeNav = 'triage';
-      this.setMode('browse');
-      this.syncSharedSection('clinical triage');
+      this.openIntake();
     },
 
     openIntake() {
@@ -200,10 +197,12 @@ document.addEventListener('alpine:init', () => {
       this.syncSharedSection('clinical triage intake');
     },
 
-    openResults() {
-      this.activeNav = 'results';
+    // The 245 precomputed sample patients — an inspection surface for model behaviour across a
+    // cohort, not a live worklist.
+    openCohort() {
+      this.activeNav = 'triage';
       this.setMode('browse');
-      this.syncSharedSection('results');
+      this.syncSharedSection('clinical triage sample cohort');
     },
 
     welcomeName() {
@@ -232,24 +231,27 @@ document.addEventListener('alpine:init', () => {
     },
 
     isSelectedAnywhere(id) {
-      return this.columns.some((c) => c.id === id);
+      return this.col.id === id;
     },
 
-    // ---- compare mode ----
-    toggleCompare() {
-      this.compareMode = !this.compareMode;
-      if (this.compareMode) {
-        if (this.columns.length < 2) this.columns.push(makeColumn());
-        this.activeSlot = 0;
-      } else {
-        this.columns = [this.columns[0]];
-        this.activeSlot = 0;
-      }
+    // Seat a finished assessment into the result unit. One place, so every caller (a fresh
+    // prediction, returning to the intake, picking from the session strip) restores the SAME
+    // set of fields — extras included, which is what the old two-line re-seat dropped.
+    seatResult(detail, extras = null, gen = null, genTime = null) {
+      const col = this.col;
+      col.id = null;
+      col.detail = detail;
+      col.payload = detail?.payload || null;
+      col.extras = extras;
+      col.gen = gen || { justify: null, handover: null };
+      col.genTime = genTime || null;
+      col.guardTest = null;
+      col.error = '';
+      col.loadingDetail = false;
     },
 
     async selectPatient(id) {
-      const ci = this.compareMode ? this.activeSlot : 0;
-      const col = this.columns[ci];
+      const col = this.col;
       col.id = id;
       col.payload = null;
       col.detail = null;
@@ -268,15 +270,14 @@ document.addEventListener('alpine:init', () => {
       } finally {
         col.loadingDetail = false;
       }
-      if (this.compareMode) this.activeSlot = (this.activeSlot + 1) % 2;
     },
 
-    setView(ci, view) {
-      this.columns[ci].view = view;
+    setView(view) {
+      this.col.view = view;
     },
 
-    async generate(ci) {
-      const col = this.columns[ci];
+    async generate() {
+      const col = this.col;
       if (!(col.id || col.payload) || col.generating) return;
 
       col.generating = true;
@@ -327,6 +328,13 @@ document.addEventListener('alpine:init', () => {
         };
 
         col.genTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Write back to the session record this result came from, matched by object identity,
+        // so stepping away and returning keeps the registers instead of re-billing for them.
+        const rec = this.sessionAssessments.find((r) => r.detail === col.detail);
+        if (rec) {
+          rec.gen = col.gen;
+          rec.genTime = col.genTime;
+        }
       } catch (e) {
         col.error = 'Could not generate explanation. Check the API logs and Gen-AI configuration.';
       } finally {
@@ -335,8 +343,8 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async runGuardrailTest(ci, register) {
-      const col = this.columns[ci];
+    async runGuardrailTest(register) {
+      const col = this.col;
       col.guardTest = null;
       col.error = '';
       window.VitalHealthLoading?.show('Running safety checks');
@@ -355,8 +363,8 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    resetGuardrailTest(ci) {
-      this.columns[ci].guardTest = null;
+    resetGuardrailTest() {
+      this.col.guardTest = null;
     },
 
     barWidth(p) {
@@ -383,39 +391,43 @@ document.addEventListener('alpine:init', () => {
       return 'conf--mid';
     },
     sourceMeta(source) {
-      const s = String(source || '').toLowerCase();
-      if (s.includes('live')) return { label: 'LIVE_GENAI', dot: 'dot--live' };
-      if (s.includes('fallback')) return { label: 'FALLBACK', dot: 'dot--fallback' };
-      if (s.includes('guard')) return { label: 'GUARDRAIL', dot: 'dot--guard' };
-      return { label: source || 'source unknown', dot: '' };
+      return window.VHIntake.sourceMeta(source);
     },
 
+    // Reads `triage_vitals` — the ONLY shape either data path produces. This previously read
+    // detail.hr / .sbp / .rr / .o2 / .temp, which neither GET /api/patients/{id} (api.py) nor
+    // predict_from_fields has ever returned, so it produced [] for every patient and the SBAR
+    // Background, Copy and Print all reported "none recorded" regardless of what was measured.
+    // Abnormality comes from each entry's own `status`, not from string-matching
+    // `abnormal_vitals` — those entries are lowercase ("hr=121") and the old check tested
+    // startsWith('HR='), so the emphasis never fired either.
     vitalsRow(detail) {
-      if (!detail) return [];
+      const tv = detail?.triage_vitals || {};
       const rows = [];
-      const abn = new Set(detail.abnormal_vitals || []);
-      const push = (label, value, key) => {
-        if (value === null || value === undefined || value === '') return;
-        rows.push({ label, text: String(value), abn: [...abn].some((v) => v.startsWith(`${key}=`)) });
+      const seg = (key, label, text) => {
+        const v = tv[key];
+        if (!v || v.value === null || v.value === undefined) return;
+        rows.push({ label, text: text ?? String(v.value), abn: v.status && v.status !== 'normal' });
       };
-      push('HR', detail.hr, 'HR');
-      if (detail.sbp || detail.dbp) push('BP', `${detail.sbp ?? '—'}/${detail.dbp ?? '—'}`, 'BP');
-      push('RR', detail.rr, 'RR');
-      push('SpO₂', detail.o2, 'SpO2');
-      push('Temp', detail.temp, 'Temp');
+      seg('hr', 'HR');
+      // BP is one clinical reading; render it as a pair and treat either half being out of
+      // range as abnormal.
+      if (tv.sbp || tv.dbp) {
+        rows.push({
+          label: 'BP',
+          text: `${tv.sbp?.value ?? '—'}/${tv.dbp?.value ?? '—'}`,
+          abn: (tv.sbp?.status && tv.sbp.status !== 'normal') ||
+               (tv.dbp?.status && tv.dbp.status !== 'normal'),
+        });
+      }
+      seg('rr', 'RR');
+      // triage_vitals.o2 carries its own decoded `device` (RA / O2) — a saturation without the
+      // device it was measured on is not a complete handover fact.
+      seg('o2', 'SpO₂', tv.o2 ? `${tv.o2.value}%${tv.o2.device ? ` ${tv.o2.device}` : ''}` : null);
+      seg('temp', 'Temp', tv.temp ? `${tv.temp.value}°C` : null);
       return rows;
     },
 
-    _driverFeatures(detail, prefix) {
-      return (detail?.high_importance_features_present || [])
-        .filter((f) => String(f).toLowerCase().startsWith(prefix));
-    },
-    medsFlags(detail) {
-      return this._driverFeatures(detail, 'med_');
-    },
-    hxFlags(detail) {
-      return this._driverFeatures(detail, 'hx_');
-    },
     edLine(detail) {
       const util = detail?.utilisation_history || {};
       const parts = Object.entries(util).map(([k, v]) => `${k.replace('n_', '')}: ${v}`);
@@ -440,14 +452,54 @@ document.addEventListener('alpine:init', () => {
       const item = onset.find((o) => o.complaint === complaint);
       return item?.value || '';
     },
+    historyLine(col) {
+      const items = this._displayExtras(col).history_mentions || [];
+      return items.map((h) => String(h?.text ?? '').trim()).filter(Boolean).join(' · ');
+    },
+    sexLine(col) {
+      return this._displayExtras(col).sex || '';
+    },
+    painLine(col) {
+      const p = this._displayExtras(col).pain_score;
+      return p && p.value !== null && p.value !== undefined ? `${p.value}/10` : '';
+    },
+    // Onset for every coded complaint, not only the first — a handover that drops the timing of
+    // a second complaint has dropped a fact the receiving clinician needs.
+    complaintLine(col) {
+      const cc = col?.detail?.active_chief_complaints || [];
+      return cc.map((c) => {
+        const onset = this.onsetFor(col, c);
+        return onset ? `${c} (${onset})` : c;
+      }).join(' · ');
+    },
+    // Why this acuity, in words, straight from the code-owned escalation_basis — so the
+    // Situation block answers it without the reader parsing the LLM Assessment.
+    basisLine(detail) {
+      if (!detail) return '';
+      if (detail.red_flag_triggered) {
+        return `red-flag override on ${detail.red_flag_complaint || 'a red-flag complaint'} — floored to P1`;
+      }
+      return {
+        protocol: 'protocol-based triage priority, not physiological instability',
+        physiology: 'out-of-range recorded vitals',
+        complaint: 'the coded chief complaint and its historical acuity',
+        mixed: 'several recorded factors together',
+        routine: 'routine — no escalating factor recorded',
+        model_level: 'the model level, with no rule-based escalation',
+      }[detail.escalation_basis] || '';
+    },
+    medicationsLine(col) {
+      const items = this._displayExtras(col).medications || [];
+      return items.map((m) => String(m?.text ?? '').trim()).filter(Boolean).join(' · ');
+    },
 
-    printHandover(ci) {
-      const col = this.columns[ci];
+    printHandover() {
+      const col = this.col;
       col.printing = true;
       this.$nextTick(() => window.print());
     },
-    async copyHandover(ci) {
-      const col = this.columns[ci];
+    async copyHandover() {
+      const col = this.col;
       const text = this.handoverText(col);
       try {
         await navigator.clipboard.writeText(text);
@@ -461,36 +513,63 @@ document.addEventListener('alpine:init', () => {
       const d = col.detail || {};
       const h = col.gen.handover || {};
       const vitals = this.vitalsRow(d).map((v) => `${v.label} ${v.text}`).join('; ') || 'none recorded';
-      const lines = [
+      const history = this.historyLine(col);
+      const medications = this.medicationsLine(col);
+      const sex = this.sexLine(col);
+      const pain = this.painLine(col);
+      const basis = this.basisLine(d);
+      const notRecorded = (d.vitals_not_recorded || []).join(', ');
+      const ed = this.edLine(d);
+      // Built section by section so an unfilled conditional line can be dropped without also
+      // dropping the blank separators between sections. Mirrors the on-screen note, so a pasted
+      // handover and a printed one carry the same facts.
+      const section = (lines) => lines.filter(Boolean).join('\n');
+      return [
         'CTRSE TRIAGE HANDOVER',
-        `Priority: ${d.predicted_level || ''} · ${d.level_label || ''}`,
-        `Confidence: ${d.confidence_word || ''}`,
-        `Age: ${d.age ?? 'not stated'}`,
-        `Complaint: ${(d.active_chief_complaints || []).join(', ') || 'none recorded'}`,
-        `Arrival: ${d.arrival_mode || 'not stated'}`,
-        `Vitals: ${vitals}`,
-        `Allergies: ${this.allergyLine(col)}`,
-        `Assessment: ${h.assessment || h.text || ''}`,
-        `Recommendation: ${h.recommendation || ''}`,
+        section([
+          'S:',
+          `  Priority: ${d.predicted_level || ''} · ${d.level_label || ''} (confidence: ${d.confidence_word || 'not stated'})`,
+          `  Age: ${d.age ?? 'not stated'}${sex ? ` · Sex: ${sex}` : ''}`,
+          `  Complaint: ${this.complaintLine(col) || 'none recorded'}`,
+          `  Arrival: ${d.arrival_mode || 'not stated'}`,
+          basis ? `  Acuity driven by: ${basis}` : '',
+        ]),
+        section([
+          'B:',
+          `  Triage vitals: ${vitals}`,
+          notRecorded ? `  Not recorded: ${notRecorded}` : '',
+          `  Allergies: ${this.allergyLine(col)}`,
+          pain ? `  Pain score: ${pain}` : '',
+          history ? `  Hx: ${history}` : '',
+          medications ? `  Meds: ${medications}` : '',
+          ed ? `  ED: ${ed}` : '',
+        ]),
+        `A: ${h.assessment || h.text || ''}`,
+        `R: ${h.recommendation || ''}`,
         h.disclaimer || '',
-      ];
-      return lines.filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n\n');
     },
 
+    // Advisory only — a flagged draft is still rendered in full, so this reports what the scan
+    // found rather than gating anything. Offline (passed === null) means no model ran this
+    // session; nothing was judged, so it gets its own label instead of the amber chip that made
+    // a missing API key look identical to a real rejection.
     combinedGuard(col) {
-      const vals = [col.gen.justify?.guardrail, col.gen.handover?.guardrail]
-        .filter(Boolean)
-        .map((x) => {
-          if (typeof x === 'object') {
-            return x.passed === true ? 'pass' : `flag ${(x.flags || []).join(' ')}`.toLowerCase();
-          }
-          return String(x).toLowerCase();
-        });
-      if (vals.some((x) => x.includes('fail') || x.includes('flag'))) {
+      const guards = [col.gen.justify?.guardrail, col.gen.handover?.guardrail].filter(Boolean);
+      if (!guards.length) return { label: 'Guardrail: ready', cls: '' };
+      if (guards.some((g) => g.passed === false)) {
         return { label: 'Guardrail: review', cls: 'guard--flag' };
       }
-      if (vals.length) return { label: 'Guardrail: pass', cls: 'guard--pass' };
-      return { label: 'Guardrail: ready', cls: '' };
+      if (guards.every((g) => g.passed === null || g.passed === undefined)) {
+        return { label: 'Guardrail: not run (offline)', cls: 'guard--offline' };
+      }
+      return { label: 'Guardrail: pass', cls: 'guard--pass' };
+    },
+
+    // The flag strings the guardrail actually produced — never surfaced on the result view
+    // before, which meant a reviewer saw "review" with no way to learn what tripped.
+    guardFlags(reg) {
+      return (reg?.guardrail?.flags) || [];
     },
 
     backgroundDrivers(detail) {
@@ -562,68 +641,31 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // ---- intake-shared.js delegates (window.VHIntake) ----
+    // These keep their original method names so every existing index.html
+    // binding (x-text="highlightedNote()", @click, etc.) is untouched; the
+    // logic itself now lives in intake-shared.js so self-check.js can call
+    // the identical functions instead of maintaining its own copies.
     buildConfirmFields(extraction) {
-      // extraction is the flat /api/extract response — {age, sex, arrival_mode,
-      // complaints, allergies, ...} at the top level (see api.py/ctrse_core.py).
-      // There is no `.fields` sub-object; reading through one here silently
-      // blanks age/sex/arrival_mode regardless of what was actually extracted.
-      const arrivalMode = extraction?.arrival_mode || {};
-      const complaints = extraction?.complaints || [];
-      const allergies = extraction?.allergies || [];
-
-      return {
-        age: { value: extraction?.age?.value ?? '', span: extraction?.age?.span ?? null },
-        sex: { value: extraction?.sex?.value ?? '', span: extraction?.sex?.span ?? null },
-        arrival: {
-          value: arrivalMode.value ?? '',
-          span: arrivalMode.span ?? null,
-          flagged: Boolean(arrivalMode.ambiguous),
-          reason: arrivalMode.reason || '',
-          alternates: arrivalMode.alternates || [],
-          ack: !arrivalMode.ambiguous,
-        },
-        complaints: complaints.map((c) => ({
-          token: c.token || c.value || '',
-          span: c.span || null,
-          evidence: c.evidence || null,
-          fallback: Boolean(c.fallback),
-          flagged: Boolean(c.ambiguous),
-          alternates: c.alternates || [],
-          ack: !c.ambiguous,
-        })),
-        allergies: allergies.length
-          ? allergies.map((a) => ({ value: a.value || a.text || '', span: a.span || null }))
-          : [{ value: '', span: null }],
-      };
+      return window.VHIntake.buildConfirmFields(extraction);
     },
 
     highlightedNote() {
-      const note = this.intake.note || '';
-      const span = this.intake.hoverSpan;
-      if (!span) return this.escapeHtml(note);
-      const idx = note.toLowerCase().indexOf(String(span).toLowerCase());
-      if (idx < 0) return this.escapeHtml(note);
-      const before = note.slice(0, idx);
-      const hit = note.slice(idx, idx + String(span).length);
-      const after = note.slice(idx + String(span).length);
-      return `${this.escapeHtml(before)}<mark>${this.escapeHtml(hit)}</mark>${this.escapeHtml(after)}`;
+      // Spans are validated against — and must be highlighted against — the PREPARED note
+      // (core.py's _prepare_note docstring: "Spans are validated against — and the UI
+      // highlights — this prepared text"), not the raw textarea value: redaction can shift or
+      // remove text a span would otherwise match. Falls back to the raw note only before any
+      // extraction has run (e.g. while still on stage 1).
+      const note = this.intake.extraction?.note_used ?? this.intake.note;
+      return window.VHIntake.highlightedNote(note, this.intake.hoverSpan);
     },
 
     escapeHtml(s) {
-      return String(s || '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
+      return window.VHIntake.escapeHtml(s);
     },
 
     friendlyFlag(f) {
-      const s = String(f || '');
-      if (s.startsWith('injection')) return 'Possible prompt-injection wording was detected and ignored.';
-      if (s.startsWith('multiple')) return 'Multiple-patient wording may be present; review before continuing.';
-      if (s.startsWith('paediatric')) return 'Paediatric presentation detected; this adult workflow should not continue.';
-      return s.replaceAll('_', ' ');
+      return window.VHIntake.friendlyFlag(f, 'clinician');
     },
 
     async runExtractBackstop() {
@@ -651,17 +693,11 @@ document.addEventListener('alpine:init', () => {
     },
 
     get allAcked() {
-      if (!this.intake.fields) return false;
-      if ((this.intake.extraction?.guardrail_flags || []).length && !this.intake.flagsAck) return false;
-      const arr = this.intake.fields.arrival;
-      if (arr?.flagged && !arr.ack) return false;
-      return (this.intake.fields.complaints || []).every((c) => !c.flagged || c.ack);
+      return window.VHIntake.allAcked(this.intake.fields, this.intake.extraction, this.intake.flagsAck);
     },
 
     _num(v) {
-      if (v === '' || v === null || v === undefined) return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
+      return window.VHIntake.num(v);
     },
 
     _confirmedRequest() {
@@ -696,6 +732,14 @@ document.addEventListener('alpine:init', () => {
         display_extras: {
           allergies: f.allergies || [],
           onset: this.intake.extraction?.onset || [],
+          history_mentions: this.intake.extraction?.history_mentions || [],
+          medications: this.intake.extraction?.medications || [],
+          // Handover identifier only. Deliberately NOT added to explain()'s payload — `sex` is
+          // genuinely absent from it, and widening that dict would break test_parity.py's
+          // shipped-payload equality. Consequence: sex shows for note-derived patients and is
+          // simply absent for the 245 browsed sample patients, which carry no display_extras.
+          sex: f.sex?.value || null,
+          pain_score: this.intake.extraction?.pain_score || null,
         },
       };
     },
@@ -731,20 +775,18 @@ document.addEventListener('alpine:init', () => {
         const data = await res.json();
         if (!res.ok) throw new Error(data?.detail || 'predict failed');
 
+        const extras = data.display_extras || this._confirmedRequest().display_extras;
         this.intake.result = data;
+        this.intake.resultExtras = extras;
         this.intake.logCount = data.log_count ?? null;
         this.intake.stage = 'result';
 
-        const col = this.columns[0];
-        col.id = null;
-        col.detail = data;
-        col.payload = data.payload || null;
-        col.extras = data.display_extras || this._confirmedRequest().display_extras;
-        col.gen = { justify: null, handover: null };
-        col.genTime = null;
-        col.guardTest = null;
-        col.error = '';
-        this.openResults();
+        this.seatResult(data, extras);
+        this.recordAssessment(data, extras);
+        // Deliberately NOT switching mode. This used to call openResults(), which put the
+        // finished assessment beside the sample-patient sidebar — where the next click ran
+        // selectPatient() and overwrote it. Staying in intake mode keeps the result in the
+        // intake column with its own "New triage" toolbar visible.
       } catch (e) {
         this.intake.predictError = 'Could not run triage prediction. Check the API logs.';
       } finally {
@@ -753,15 +795,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     vitalsSummary() {
-      if (this.intake.noVitals) return 'No vitals recorded at triage';
-      const v = this.intake.vitals;
-      const parts = [];
-      if (v.hr) parts.push(`HR ${v.hr}`);
-      if (v.sbp || v.dbp) parts.push(`BP ${v.sbp || '—'}/${v.dbp || '—'}`);
-      if (v.o2) parts.push(`SpO₂ ${v.o2}${v.device ? ` ${v.device}` : ''}`);
-      if (v.rr) parts.push(`RR ${v.rr}`);
-      if (v.temp) parts.push(`Temp ${v.temp}°${v.temp_unit || 'C'}`);
-      return parts.join(' · ') || 'No vitals entered';
+      return window.VHIntake.vitalsSummary(this.intake.vitals, this.intake.noVitals);
     },
 
     backToInput() {
@@ -770,9 +804,35 @@ document.addEventListener('alpine:init', () => {
 
     resetIntake() {
       this.intake = makeIntake();
-      this.columns = [makeColumn()];
-      this.activeSlot = 0;
-      this.compareMode = false;
+      this.col = makeColumn();
+      this.openIntake();
+    },
+
+    // ---- session assessments ----
+    recordAssessment(detail, extras) {
+      this.sessionAssessments.unshift({
+        key: `${Date.now()}-${this.sessionAssessments.length}`,
+        at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        level: detail?.predicted_level || '',
+        colour: detail?.level_colour || 'var(--accent)',
+        summary: (detail?.active_chief_complaints || []).join(', ') || 'no complaint coded',
+        detail,
+        extras,
+        // Filled in by generate() when the registers are produced for this assessment, so
+        // returning to it does not silently drop Gen-AI output already paid for.
+        gen: null,
+        genTime: null,
+      });
+      this.sessionAssessments = this.sessionAssessments.slice(0, 8);
+    },
+
+    openAssessment(key) {
+      const rec = this.sessionAssessments.find((r) => r.key === key);
+      if (!rec) return;
+      this.seatResult(rec.detail, rec.extras, rec.gen, rec.genTime);
+      this.intake.result = rec.detail;
+      this.intake.resultExtras = rec.extras;
+      this.intake.stage = 'result';
       this.openIntake();
     },
   }));

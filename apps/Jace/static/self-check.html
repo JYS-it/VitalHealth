@@ -5,22 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Triage self-check — VitalHealth</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=9">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
-  <script defer src="self-check.js?v=2"></script>
+  <script defer src="intake-shared.js?v=1"></script>
+  <script defer src="self-check.js?v=5"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <!--
   Own Alpine root, own file — deliberately not a section of index.html's SPA.
   A patient who opens this page never loads app.js, so they never fire the
-  three clinician-only calls app.js's init() makes on load (which would each
-  403 for a patient and render nothing, per the plan this page implements:
-  see apps/Jace/CLAUDE.md and the triage patient/clinician split plan).
-  No note field anywhere on this page, and no call to /api/explain — the
-  patient surface never touches the extractor or either GenAI use case
-  (both are written "for a CLINICIAN"; see ctrse_core.py's §Patient
-  self-check section for the full reasoning).
+  clinician-only calls app.js's init() makes on load (which would each 403
+  for a patient), but this page IS the same three-stage interface app.js
+  drives (input -> confirm extracted fields -> result), built on the shared,
+  clinical-fact-free helpers in intake-shared.js. The confirm screen is fully
+  editable against the same controlled vocabulary a clinician sees — GET
+  /api/self-check/options mirrors GET /api/vocab (which stays clinician-
+  gated); there is no separate patient-safe picker. What differs from the
+  clinician page is downstream of the model, not the interface: the model
+  assessment / justification / handover blocks are gone, replaced by
+  §Describe-help (use case D, confirm screen) and §Patient guidance (use
+  case C, result screen) — the two GenAI surfaces written for a PATIENT
+  register, never the clinician one. See ctrse_core.py's SYSTEM_PROMPT_
+  DESCRIBE_HELP / SYSTEM_PROMPT_PATIENT and api.py's /api/self-check/*
+  routes.
 -->
 <body x-data="selfCheckApp()" x-init="init()" data-vitalhealth-section="triage self-check">
 
@@ -31,7 +39,7 @@
           <a class="brand brand-logo" href="/triage/" aria-label="VitalHealth Home">
             <img src="/vh-assets/brand/vitalhealth-logo-full.png" alt="VitalHealth">
           </a>
-          <span class="scope-badge">Triage self-check — plain-language and educational only</span>
+          <span class="scope-badge">Before you reach care — plain-language and educational only</span>
         </div>
         <div class="auth-status">
           <a class="auth-status__logout" href="/triage/">Back to your dashboard</a>
@@ -50,11 +58,10 @@
   <div class="app" style="max-width:760px;">
 
     <!-- ===================== PERSISTENT EMERGENCY BANNER =====================
-         Non-dismissible on purpose (safety constraint 3 in the plan: nothing
-         reviews a self-check, so the escape hatch must always be visible,
-         not just shown once at the top). Numbers come from the API, not
-         hardcoded here, so this can never drift from what a released
-         result's action_line says. -->
+         Non-dismissible on purpose: nothing reviews a self-check, so the
+         escape hatch must always be visible, not just shown once at the
+         top. Numbers come from the API, not hardcoded here, so this can
+         never drift from what a released result's action_line says. -->
     <div class="redflag" style="margin-bottom:var(--s5);">
       <span>
         This tool is <strong>not for emergencies</strong>. If this could be a medical emergency, call
@@ -69,182 +76,334 @@
 
     <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
 
-    <!-- ===================== GUIDANCE ===================== -->
-    <template x-if="stage === 'intro'">
-      <article class="card stack">
-        <div>
-          <h1>Triage self-check</h1>
-          <p class="prose">This tool asks a few questions about how you are feeling and gives you plain-language
-            guidance on what to do next — for example, whether to see a clinician today or go to the emergency
-            department. It is educational information only. It is <strong>not a diagnosis</strong>, it does not
-            replace being seen by a clinician, and no clinician reviews your answers before you see the result.</p>
-        </div>
+    <!-- ---------------- STAGE 1: input ---------------- -->
+    <section class="card panel" x-show="intake.stage === 'input'" aria-label="Triage self-check">
+      <div class="panel__title eyebrow"><span>Tell us how you're feeling</span></div>
+      <div class="stack">
 
+        <!-- NOTE zone — the only thing the LLM ever sees -->
         <div class="izone">
-          <p class="eyebrow">What to bring if you go in for care</p>
-          <ul class="prose">
-            <li>A list of your current medicines, or the medicines themselves</li>
-            <li>Your ID and any insurance or Medisave card</li>
-            <li>A short note of when your symptoms started, and what makes them better or worse</li>
-            <li>Any relevant medical history — allergies, recent surgeries, ongoing conditions</li>
-          </ul>
-        </div>
-
-        <div class="izone">
-          <p class="eyebrow">How to describe your symptoms</p>
-          <p class="prose">Be specific and concrete: where it hurts, how long it has lasted, how bad it feels
-            right now, and whether it is getting better, worse, or staying the same. There is no need to guess
-            a diagnosis — just describe what you are feeling in your own words on the next screen.</p>
-        </div>
-
-        <p class="scope-note" x-show="scopeNote" x-text="scopeNote"></p>
-
-        <button type="button" class="btn-generate" @click="stage = 'form'">Start the self-check</button>
-      </article>
-    </template>
-
-    <!-- ===================== INTAKE FORM ===================== -->
-    <template x-if="stage === 'form'">
-      <form class="card stack" @submit.prevent="submit()">
-        <h1>Tell us how you're feeling</h1>
-
-        <div class="frows">
-          <label class="frow">
-            <span class="frow__label">Age</span>
-            <span class="frow__control">
-              <input class="finput finput--num" type="number" min="0" max="120" x-model.number="age" required>
-            </span>
-          </label>
-          <label class="frow">
-            <span class="frow__label">Sex</span>
-            <span class="frow__control">
-              <select class="finput" x-model="sex">
-                <option value="">Prefer not to say</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </span>
-          </label>
-          <label class="frow">
-            <span class="frow__label">Getting here</span>
-            <span class="frow__control">
-              <select class="finput" x-model="arrivalMode" required>
-                <option value="">Select…</option>
-                <option value="ambulance">By ambulance</option>
-                <option value="car">By car</option>
-                <option value="walk_in">Walking in</option>
-                <option value="public_transport">Public transport</option>
-                <option value="wheelchair">Wheelchair</option>
-                <option value="other">Other</option>
-              </select>
-            </span>
-          </label>
-        </div>
-
-        <div>
-          <p class="eyebrow">What are you experiencing? (select all that apply)</p>
-          <div class="chips">
-            <template x-for="opt in symptomOptions" :key="opt.token">
-              <label class="ack" style="background:var(--surface-2); border-radius:var(--r-pill); padding:var(--s1) var(--s3);">
-                <input type="checkbox" @change="toggleSymptom(opt.token, $event.target.checked)">
-                <span x-text="opt.label"></span>
-              </label>
+          <div class="eyebrow mb2 row-between">
+            <span>Describe what is happening</span>
+            <span class="count mono" x-text="intake.note.length + ' / 5000'"></span>
+          </div>
+          <p class="prose">Use your own words. For example: where you feel it, when it started, and whether it is
+            changing. Do not include names or identification numbers.</p>
+          <textarea class="note-input" rows="6" maxlength="5000" aria-label="Describe what is happening"
+            placeholder="Example: I have had tight pain in my chest for 30 minutes and feel short of breath."
+            x-model="intake.note"></textarea>
+          <!-- Demo seeds, same affordance as the clinician intake's seed row (index.html) —
+               but a separate first-person list (self-check.js `seeds`), because the clinician
+               seeds and demo_character_seeds.js are written in third person about a patient,
+               which is not the register this page's extractor is being shown off in. Each seed
+               carries its own vitals, so one click populates BOTH zones. -->
+          <div class="seed-row">
+            <span class="eyebrow">Demo seeds</span>
+            <template x-for="(s, i) in seeds" :key="s.label">
+              <button class="arche-btn" type="button" x-text="s.label" @click="seed(i)"></button>
             </template>
           </div>
-          <p class="empty-inline" x-show="symptomOptions.length === 0">Loading options…</p>
         </div>
 
-        <div>
-          <p class="eyebrow">Vital signs (optional — skip anything you don't have)</p>
-          <label class="ack">
-            <input type="checkbox" x-model="noVitals">
-            <span>I don't have any vital signs to enter</span>
-          </label>
-          <div class="vit-grid" x-show="!noVitals">
-            <span class="vfield"><span class="vfield__lbl">Heart rate</span>
-              <input class="finput finput--num" type="number" x-model.number="vitals.hr"></span>
-            <span class="vfield"><span class="vfield__lbl">Systolic BP</span>
-              <input class="finput finput--num" type="number" x-model.number="vitals.sbp"></span>
-            <span class="vfield"><span class="vfield__lbl">Diastolic BP</span>
-              <input class="finput finput--num" type="number" x-model.number="vitals.dbp"></span>
-            <span class="vfield"><span class="vfield__lbl">Resp. rate</span>
-              <input class="finput finput--num" type="number" x-model.number="vitals.rr"></span>
-            <span class="vfield"><span class="vfield__lbl">O2 sat</span>
-              <input class="finput finput--num" type="number" x-model.number="vitals.o2"></span>
-            <span class="vfield"><span class="vfield__lbl">Temp</span>
+        <!-- VITALS zone — typed directly; never extracted from the note -->
+        <div class="izone">
+          <div class="eyebrow mb2">Vital signs (optional — skip anything you don't have)</div>
+          <label class="ack"><input type="checkbox" x-model="intake.noVitals"> I don't have any vital signs to enter</label>
+          <div class="vit-grid" x-show="!intake.noVitals">
+            <label class="vfield"><span class="vfield__lbl">Heart rate</span>
+              <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.hr" aria-label="Heart rate"></label>
+            <label class="vfield"><span class="vfield__lbl">BP</span>
               <span class="vfield__pair">
-                <input class="finput finput--num" type="number" step="0.1" x-model.number="vitals.temp">
-                <select class="finput" x-model="vitals.temp_unit" style="width:4.5rem;">
-                  <option value="C">&deg;C</option>
-                  <option value="F">&deg;F</option>
+                <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.sbp" aria-label="Systolic blood pressure">
+                <span class="vfield__sep">/</span>
+                <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.dbp" aria-label="Diastolic blood pressure">
+              </span></label>
+            <label class="vfield"><span class="vfield__lbl">O2 sat</span>
+              <span class="vfield__pair">
+                <input class="finput finput--num" type="number" min="0" max="100" x-model="intake.vitals.o2" aria-label="Oxygen saturation">
+                <select class="finput" x-model="intake.vitals.device" aria-label="Oxygen device">
+                  <option value="">device&hellip;</option><option value="RA">Room air</option><option value="O2">On oxygen</option>
                 </select>
-              </span>
-            </span>
+              </span></label>
+            <label class="vfield"><span class="vfield__lbl">Resp. rate</span>
+              <input class="finput finput--num" type="number" min="0" x-model="intake.vitals.rr" aria-label="Respiratory rate"></label>
+            <label class="vfield"><span class="vfield__lbl">Temp</span>
+              <span class="vfield__pair">
+                <input class="finput finput--num" type="number" step="0.1" x-model="intake.vitals.temp" aria-label="Temperature">
+                <select class="finput" x-model="intake.vitals.temp_unit" aria-label="Temperature unit">
+                  <option value="C">&deg;C</option><option value="F">&deg;F</option>
+                </select>
+              </span></label>
           </div>
         </div>
 
-        <div class="form-actions" style="display:flex; gap:var(--s3); align-items:center;">
-          <button type="submit" class="btn-generate" :disabled="submitting">
-            <span x-show="!submitting">Check my symptoms</span>
-            <span x-show="submitting">Checking…</span>
-          </button>
-          <button type="button" class="btn-ghost" @click="stage = 'intro'">Back</button>
+        <div class="msg-warn" x-show="intake.extractError" x-cloak x-text="intake.extractError"></div>
+        <div>
+          <button class="btn-generate" type="button" aria-label="Continue"
+                  :disabled="!intake.note.trim() || intake.extracting"
+                  @click="extract()" x-text="intake.extracting ? 'Reading your description…' : 'Continue →'"></button>
         </div>
-      </form>
-    </template>
+      </div>
+    </section>
 
-    <!-- ===================== RESULT =====================
-         Band headline + action line + reasons + safety netting come first,
-         per the plan; the model's own P-code is disclosed but demoted to a
-         collapsed "What the triage model predicted" block below it, never
-         the headline (safety constraint 1: "P1 — CRITICAL" reads to a
-         patient as "you are critically ill", which the model's own
-         DISCLAIMER explicitly says it is not). -->
-    <template x-if="stage === 'result' && result">
-      <div class="card stack">
-        <div class="badge" :style="{ background: bandColour(result.urgency.band_tone) }"
-             x-text="result.urgency.band_label"></div>
+    <!-- ---------------- STAGE 2: confirm ---------------- -->
+    <section class="card panel" x-show="intake.stage === 'confirm'" x-cloak aria-label="Confirm what we understood">
+      <div class="panel__title eyebrow row-between">
+        <span>Confirm what we understood</span>
+        <button class="btn-ghost" type="button" @click="backToInput()">&larr; Edit description</button>
+      </div>
+      <template x-if="intake.fields">
+      <div class="stack">
 
-        <p class="prose" style="font-weight:600;" x-text="result.urgency.action_line"></p>
+        <!-- the description stays visible; hover a field to light up its source phrase -->
+        <div class="note-view" aria-label="Your description" x-html="highlightedNote()"></div>
+        <p class="footnote">Every field below quotes a phrase from what you wrote &mdash; hover a field to see its source. A field with no quotation cannot exist.</p>
 
-        <div class="frows" x-show="(result.urgency.reasons || []).length">
-          <template x-for="reason in (result.urgency.reasons || [])" :key="reason.code">
-            <div class="frow" style="grid-template-columns:1fr;">
-              <span class="prose" x-text="reason.text"></span>
+        <!-- §Describe-help (use case D) — on-demand: the patient asks for feedback before this
+             is scored. This is the ONLY place this tool asks for more detail, and only about
+             something already mentioned — it never suggests a symptom (see
+             ctrse_core.py's SYSTEM_PROMPT_DESCRIBE_HELP rule 3). The answer travels as its own
+             field (not appended by the browser) and is composed server-side, so
+             span-or-silence still validates against exactly what was sent. -->
+        <div class="izone">
+          <div class="row-between">
+            <p class="eyebrow">Is your description clear enough?</p>
+            <button class="btn-ghost" type="button" @click="loadDescribeHelp()"
+                    :disabled="intake.describeHelpLoading"
+                    x-text="intake.describeHelpLoading ? 'Checking…' : 'Get feedback on my description'"></button>
+          </div>
+          <template x-if="intake.describeHelp">
+            <div class="stack--tight">
+              <p class="prose" x-text="intake.describeHelp?.text"></p>
+              <label class="frow" style="grid-template-columns:1fr;">
+                <span class="frow__label">Add more detail</span>
+                <textarea class="note-input" rows="3" x-model="intake.followUp"
+                  placeholder="Add anything you'd like to clarify or add..."></textarea>
+              </label>
+              <button class="btn-generate" type="button" @click="submitFollowUp()"
+                      :disabled="!intake.followUp.trim() || intake.extracting"
+                      x-text="intake.extracting ? 'Adding…' : 'Add this detail'"></button>
             </div>
           </template>
         </div>
 
-        <p class="scope-note" x-text="result.urgency.safety_netting"></p>
+        <!-- refusal (paediatric / OOD / multi-patient): no confirm action offered -->
+        <div class="refusal" x-show="intake.refusal" x-cloak>
+          <span>&#9888;</span>
+          <span><b>We can't complete this check.</b> <span x-text="intake.refusal"></span></span>
+        </div>
 
-        <template x-if="!result.model_refused">
-          <details class="footer">
-            <summary>What the triage model predicted</summary>
-            <div class="stack--tight" style="margin-top:var(--s3);">
-              <p class="mono" x-text="`${result.predicted_level} — ${result.level_label}`"></p>
-              <p class="mono" x-show="result.confidence_word">Confidence: <span x-text="result.confidence_word"></span></p>
-              <p class="prose" x-show="result.confidence_note" x-text="result.confidence_note"></p>
-              <p class="prose" x-text="result.disclaimer"></p>
-            </div>
-          </details>
-        </template>
-
-        <div class="izone">
-          <p class="eyebrow">Limitations</p>
-          <ul class="prose">
-            <template x-for="lim in (result.limitations || [])" :key="lim">
-              <li x-text="lim"></li>
+        <!-- guardrail notices — forced_ambiguity is filtered out of this list (see
+             visibleGuardrailFlags()): it has no patient-register wording in friendlyFlag() and
+             would otherwise show the raw internal flag name, but the same information is
+             already readable on the affected symptom's own "we weren't sure" row below. -->
+        <div class="gnotices" x-show="visibleGuardrailFlags().length" x-cloak>
+          <div class="eyebrow mb2">A few notes about your description</div>
+          <ul class="gnotice-list">
+            <template x-for="f in visibleGuardrailFlags()" :key="f">
+              <li x-text="friendlyFlag(f)"></li>
             </template>
           </ul>
-          <p class="prose" x-text="result.scope_note"></p>
+          <label class="ack ack--gate"><input type="checkbox" x-model="intake.flagsAck"> I have reviewed these notes</label>
         </div>
 
-        <div class="form-actions" style="display:flex; gap:var(--s3);">
-          <button type="button" class="btn-ghost" @click="reset()">Do another check</button>
-          <a class="btn-generate" href="/triage/" style="text-decoration:none;">Back to dashboard</a>
+        <!-- field rows -->
+        <div class="frows">
+          <!-- AGE -->
+          <div class="frow"
+               @mouseenter="intake.hoverSpan = intake.fields?.age.span" @mouseleave="intake.hoverSpan = null">
+            <div class="frow__label eyebrow">Age</div>
+            <div class="frow__control">
+              <input class="finput finput--num" type="number" min="0" max="130"
+                     x-model="intake.fields.age.value" aria-label="Age">
+              <span class="not-stated" x-show="intake.fields?.age.value === null || intake.fields?.age.value === ''">not stated</span>
+            </div>
+            <div class="frow__src mono" x-show="intake.fields?.age.span" x-text="'&ldquo;' + intake.fields?.age.span + '&rdquo;'"></div>
+          </div>
+
+          <!-- SEX -->
+          <div class="frow"
+               @mouseenter="intake.hoverSpan = intake.fields?.sex.span" @mouseleave="intake.hoverSpan = null">
+            <div class="frow__label eyebrow">Sex</div>
+            <div class="frow__control">
+              <select class="finput" x-model="intake.fields.sex.value" aria-label="Sex">
+                <option value="">&mdash; prefer not to say &mdash;</option>
+                <option value="Male">Male</option><option value="Female">Female</option>
+              </select>
+              <span class="not-stated" x-show="!intake.fields?.sex.value">not stated</span>
+            </div>
+            <div class="frow__src mono" x-show="intake.fields?.sex.span" x-text="'&ldquo;' + intake.fields?.sex.span + '&rdquo;'"></div>
+          </div>
+
+          <!-- ARRIVAL MODE -->
+          <div class="frow"
+               @mouseenter="intake.hoverSpan = intake.fields?.arrival.span" @mouseleave="intake.hoverSpan = null">
+            <div class="frow__label eyebrow">Getting there</div>
+            <div class="frow__control">
+              <select class="finput" x-model="intake.fields.arrival.value" aria-label="How you're getting there"
+                      x-init="$nextTick(() => $el.value = intake.fields?.arrival.value ?? '')"
+                      @change="intake.fields.arrival.ack = true">
+                <option value="">&mdash; not stated &mdash;</option>
+                <template x-for="m in (vocab?.arrival_modes || [])" :key="m">
+                  <option :value="m" x-text="m"></option>
+                </template>
+              </select>
+              <span class="not-stated" x-show="!intake.fields?.arrival.value">not stated</span>
+            </div>
+            <div class="frow__src mono" x-show="intake.fields?.arrival.span" x-text="'&ldquo;' + intake.fields?.arrival.span + '&rdquo;'"></div>
+            <div class="flag" x-show="intake.fields?.arrival.flagged" x-cloak>
+              <span class="flag__mark">&#9873; we weren't sure</span>
+              <span x-show="intake.fields?.arrival.reason" x-text="intake.fields?.arrival.reason"></span>
+              <label class="ack"><input type="checkbox" x-model="intake.fields.arrival.ack"> acknowledge</label>
+            </div>
+          </div>
+
+          <!-- COMPLAINTS (max 2) -->
+          <template x-for="(c, i) in (intake.fields?.complaints || [])" :key="i">
+            <div class="frow"
+                 @mouseenter="intake.hoverSpan = c.span" @mouseleave="intake.hoverSpan = null">
+              <div class="frow__label eyebrow" x-text="'Symptom ' + (i + 1)"></div>
+              <div class="frow__control">
+                <select class="finput" x-model="c.token" :aria-label="'Symptom ' + (i + 1)"
+                        x-init="$nextTick(() => $el.value = c.token || '')"
+                        @change="c.ack = true; c.evidence = null; c.span = null; c.fallback = false">
+                  <option value="">&mdash; not stated &mdash;</option>
+                  <template x-for="t in (vocab?.complaints || [])" :key="t">
+                    <option :value="t" x-text="t"></option>
+                  </template>
+                </select>
+                <span class="not-stated" x-show="!c.token">not stated</span>
+              </div>
+              <div class="frow__src mono" x-show="c.span" x-text="'&ldquo;' + c.span + '&rdquo;'"></div>
+              <div class="frow__src" x-show="c.fallback" x-cloak><span class="not-stated">not directly quoted from your description</span></div>
+              <div class="flag" x-show="c.flagged" x-cloak>
+                <span class="flag__mark">&#9873; we weren't sure</span>
+                <label class="ack"><input type="checkbox" x-model="c.ack"> acknowledge</label>
+              </div>
+            </div>
+          </template>
+
+          <!-- ONSET (display only) -->
+          <div class="frow" x-show="intake.extraction?.onset?.length" x-cloak>
+            <div class="frow__label eyebrow">Onset</div>
+            <div class="frow__control frow__control--ro">
+              <template x-for="o in (intake.extraction?.onset || [])" :key="o.complaint + o.span">
+                <span class="chip" @mouseenter="intake.hoverSpan = o.span" @mouseleave="intake.hoverSpan = null">
+                  <span class="mono" x-text="o.complaint"></span>&nbsp;<span x-text="o.value"></span>
+                </span>
+              </template>
+            </div>
+          </div>
+
+          <!-- HISTORY + MEDICATIONS -->
+          <div class="frow" x-show="intake.extraction?.history_mentions?.length" x-cloak>
+            <div class="frow__label eyebrow">History</div>
+            <div class="frow__control frow__control--ro">
+              <template x-for="h in (intake.extraction?.history_mentions || [])" :key="h.span">
+                <span class="chip" @mouseenter="intake.hoverSpan = h.span" @mouseleave="intake.hoverSpan = null">
+                  <span x-text="h.text"></span>
+                </span>
+              </template>
+            </div>
+          </div>
+          <div class="frow" x-show="intake.extraction?.medications?.length" x-cloak>
+            <div class="frow__label eyebrow">Medications</div>
+            <div class="frow__control frow__control--ro">
+              <template x-for="m in (intake.extraction?.medications || [])" :key="m.span">
+                <span class="chip" @mouseenter="intake.hoverSpan = m.span" @mouseleave="intake.hoverSpan = null">
+                  <span x-text="m.text"></span>
+                </span>
+              </template>
+            </div>
+          </div>
+
+          <!-- ALLERGIES -->
+          <div class="frow">
+            <div class="frow__label eyebrow">Allergies</div>
+            <div class="frow__control">
+              <template x-for="(a, i) in (intake.fields?.allergies || [])" :key="i">
+                <input class="finput" type="text" :aria-label="'Allergy ' + (i + 1)"
+                       placeholder="add&hellip;" x-model="a.value"
+                       @mouseenter="intake.hoverSpan = a.span" @mouseleave="intake.hoverSpan = null">
+              </template>
+              <span class="not-stated"
+                    x-show="!(intake.fields?.allergies || []).some(a => a.value && String(a.value).trim())">not stated</span>
+            </div>
+          </div>
+
+          <!-- VITALS summary -->
+          <div class="frow">
+            <div class="frow__label eyebrow">Vitals</div>
+            <div class="frow__control frow__control--ro">
+              <span class="mono" x-text="vitalsSummary()"></span>
+              <button class="btn-ghost" type="button" @click="backToInput()">edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg-warn" x-show="intake.predictError" x-cloak x-text="intake.predictError"></div>
+
+        <!-- gated confirm — absent entirely when we can't complete the check -->
+        <div x-show="!intake.refusal" x-cloak>
+          <button class="btn-generate" type="button" aria-label="Confirm and check my symptoms"
+                  :disabled="!allAcked || intake.predicting"
+                  @click="confirmRun()"
+                  x-text="intake.predicting ? 'Checking…' : 'Confirm & check my symptoms →'"></button>
+          <span class="footnote ml2" x-show="!allAcked">acknowledge every &#9873; note to enable</span>
         </div>
       </div>
-    </template>
+      </template>
+    </section>
+
+    <!-- ---------------- STAGE 3: result =====================
+         Band headline + action line come first: the deterministic
+         instruction ("call 995 now") stays the first thing read regardless
+         of whether GenAI guidance below loads or fails. -->
+    <section class="card stack" x-show="intake.stage === 'result' && intake.result" x-cloak>
+      <div class="badge" :style="{ background: bandColour(intake.result?.urgency.band_tone) }"
+           x-text="intake.result?.urgency.band_label"></div>
+
+      <p class="prose" style="font-weight:600;" x-text="intake.result?.urgency.action_line"></p>
+
+      <!-- §Patient guidance (use case C) — loads in quietly; absent until it arrives. This is
+           the main body of the result: ONE suggestion covering where/how soon to seek care,
+           what to do while waiting, and escalation signs, written as two flowing-prose
+           paragraphs (SYSTEM_PROMPT_PATIENT rule 9) and rendered as two <p> so the break
+           actually shows — x-text on a single element would collapse it. Skeleton shares the
+           same band-aware title (guidanceTitle()) so it reads as one place transitioning from
+           placeholder to real content, not two different blocks. No templated fallback if
+           generation fails or is withheld — the action line and safety-netting line above/
+           below are already the deterministic, always-present instruction; a second hardcoded
+           restatement here would be exactly the scattered static prose this page is trying not
+           to have. -->
+      <div class="izone" x-show="intake.guidanceLoading && !intake.guidance" x-cloak>
+        <p class="eyebrow" x-text="guidanceTitle()"></p>
+        <div class="skeleton-line" style="width:95%;"></div>
+        <div class="skeleton-line" style="width:88%;"></div>
+        <div class="skeleton-line" style="width:40%;"></div>
+        <div class="skeleton-line" style="width:90%;margin-top:var(--s3);"></div>
+        <div class="skeleton-line" style="width:70%;"></div>
+      </div>
+      <div class="izone" x-show="intake.guidance" x-cloak>
+        <p class="eyebrow" x-text="guidanceTitle()"></p>
+        <template x-for="(para, i) in guidanceParagraphs()" :key="i">
+          <p class="prose" x-text="para"></p>
+        </template>
+      </div>
+
+      <p class="scope-note" x-text="intake.result?.urgency.safety_netting"></p>
+      <!-- The one fact from the old "Limitations" block with no other home on this page —
+           scope_note and the vitals-not-recorded entry both restate copy already shown
+           elsewhere (the emergency banner/footer, and the reasons list above), so only this
+           one line survives, bound rather than duplicated in the template. -->
+      <p class="footnote" x-show="(intake.result?.limitations || [])[0]"
+         x-text="(intake.result?.limitations || [])[0]"></p>
+
+      <div class="form-actions" style="display:flex; gap:var(--s3);">
+        <button type="button" class="btn-ghost" @click="reset()">Do another check</button>
+        <a class="btn-generate" href="/triage/" style="text-decoration:none;">Back to dashboard</a>
+      </div>
+    </section>
 
   </div>
 

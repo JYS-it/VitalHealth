@@ -553,10 +553,15 @@ def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
 
     Triage's clinical *workspace* stays clinician-only and instant — out of
     scope for the review workflow. A patient may instead reach the
-    self-check surface: its own static page plus its two explicit API
-    routes (`api/self-check`, `api/self-check/options`), which run the same
-    model but return only a patient-safe projection (see
-    ctrse_core.patient_view) and persist as a distinct, non-queued status.
+    self-check surface: its own static page plus every API route under the
+    `api/self-check` PREFIX (not an enumerated set — see Jace's own
+    api.py:PATIENT_API_PREFIX, which this mirrors and must stay in sync
+    with), which run the same model but return only a patient-safe
+    projection (see ctrse_core.patient_view) and persist as a distinct,
+    non-queued status. A prior enumerated-set version of this allowlist
+    silently 403'd a real patient-facing route (`api/self-check/explain`)
+    the moment it was added here without also updating Jace's own list —
+    the prefix removes that second place to remember.
     Stroke and EMC allow exactly three patient-facing routes each:
     self-submission, its waiting page, and the `status/` poll target that
     waiting page reads to reveal a result once a clinician approves it. Each
@@ -571,9 +576,7 @@ def _patient_may_use_proxy_path(prefix: str, path: str) -> bool:
     if prefix == "triage":
         if not normalized.startswith("api/"):
             return True
-        return normalized.startswith("api/dashboard/") or normalized in (
-            "api/self-check", "api/self-check/options",
-        )
+        return normalized.startswith("api/dashboard/") or normalized.startswith("api/self-check")
     if prefix in ("stroke", "emc"):
         first_segment = normalized.split("/", 1)[0] if normalized else ""
         return first_segment in _PATIENT_SUBMIT_FIRST_SEGMENTS

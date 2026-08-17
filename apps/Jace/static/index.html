@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VitalHealth — integrated healthcare dashboard</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
+  <script defer src="intake-shared.js?v=1"></script>
   <script defer src="demo_character_seeds.js"></script>
-  <script defer src="app.js?v=6"></script>
+  <script defer src="app.js?v=8"></script>
   <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -378,26 +379,25 @@
     <template x-if="!isPatient">
     <div class="layout" :class="{ 'layout--intake': mode === 'intake' }" x-show="mode !== 'dashboard'" x-cloak>
 
+      <!-- Two destinations, because there are two. The third button here used to be "Results",
+           which set the same mode as "Patient Browser" and so only ever moved a highlight. -->
       <section class="workspace-switch card" aria-label="Clinical triage workspace controls">
         <div class="segmented" role="group" aria-label="Clinical triage view">
-          <button type="button" :aria-pressed="mode==='browse'" @click="openTriage()">Patient Browser</button>
-          <button type="button" :aria-pressed="mode==='intake'" @click="openIntake()">Triage Intake</button>
-          <button type="button" :aria-pressed="activeNav==='results'" @click="openResults()">Results</button>
+          <button type="button" :aria-pressed="mode==='intake'" @click="openIntake()">New triage</button>
+          <button type="button" :aria-pressed="mode==='browse'" @click="openCohort()">Sample cohort</button>
         </div>
       </section>
 
       <!-- ============================ SIDEBAR ============================ -->
-      <aside class="sidebar card" aria-label="Patient selector" x-show="mode === 'browse'">
-        <!-- compare controls -->
+      <aside class="sidebar card" aria-label="Sample cohort" x-show="mode === 'browse'">
+        <!-- These are precomputed fixtures from sample/patients.json, not patients waiting to be
+             seen. Saying so is the difference between an inspection surface and a misleading
+             one — the list looks exactly like a worklist otherwise. -->
         <div class="sidebar__group">
-          <div class="compare-controls">
-            <button class="filter-btn" type="button" aria-label="Toggle compare mode"
-                    :aria-pressed="compareMode" @click="toggleCompare()">
-              <span x-text="compareMode ? 'Compare · on' : 'Compare'"></span>
-            </button>
-          </div>
-          <div class="slot-hint" x-show="compareMode" x-cloak
-               x-text="`Next pick fills column ${activeSlot + 1}`"></div>
+          <div class="eyebrow mb2">Sample cohort</div>
+          <p class="footnote">245 previously scored example patients, for inspecting how the
+            model behaves across a cohort. Not a live queue &mdash; to assess someone, use
+            <button class="btn-link" type="button" @click="openIntake()">New triage</button>.</p>
         </div>
 
         <div class="sidebar__group">
@@ -711,24 +711,80 @@
         <!-- ---------------- STAGE 3: result toolbar ---------------- -->
         <div x-show="intake.stage === 'result'" x-cloak>
           <div class="toolbar intake-result-bar">
-            <button class="btn-ghost" type="button" @click="resetIntake()">New intake</button>
+            <button class="btn-generate" type="button" @click="resetIntake()">New triage</button>
             <span class="footnote" x-show="intake.logCount" x-cloak
                   x-text="'field overrides logged this session: ' + intake.logCount"></span>
           </div>
         </div>
       </div>
 
-      <!-- ============================ MAIN (1 or 2 columns) ============================ -->
-      <main class="main" :class="{ compare: compareMode }"
-            x-show="mode === 'browse' || intake.stage === 'result'">
-        <template x-for="(col, ci) in columns" :key="ci">
-          <div class="column">
+      <!-- ============================ MAIN (result) ============================
+           One result unit. The compare-mode x-for over `columns` is gone; `col` is now a
+           single object on the component scope, so every col.* binding below resolves
+           unchanged. -->
+      <main class="main" x-show="mode === 'browse' || intake.stage === 'result'">
+
+        <!-- Results produced this session. In memory only — /api/predict already persists each
+             one to the shared store; this exists so stepping back to the previous patient does
+             not mean re-running them. Hidden until there is actually something to step back to. -->
+        <section class="card result-sessions" x-show="sessionAssessments.length > 1" x-cloak
+                 aria-label="Assessments this session">
+          <div class="eyebrow mb2">This session</div>
+          <div class="sess-row">
+            <template x-for="a in sessionAssessments" :key="a.key">
+              <button class="sess-chip" type="button" @click="openAssessment(a.key)"
+                      :aria-current="col.detail === a.detail">
+                <span class="sess-chip__lvl" :style="`background:${a.colour}`" x-text="a.level"></span>
+                <span class="sess-chip__sum" x-text="a.summary"></span>
+                <span class="sess-chip__at mono" x-text="a.at"></span>
+              </button>
+            </template>
+          </div>
+        </section>
+
+        <!-- ---------------- VERDICT (full width) ----------------
+             "The badge is the answer, the bar is the doubt" (CTRSE_App_Build_Spec.md §4.3).
+             Lifted out of the left half of a split panel so it finally reads as the headline. -->
+        <section class="card result-verdict" x-show="col.detail" x-cloak aria-label="Triage verdict">
+          <div class="verdict__head">
+            <span class="badge" x-text="`${col.detail?.predicted_level} · ${col.detail?.level_label}`"
+                  :style="`background:${col.detail?.level_colour}`"></span>
+            <div class="basis-row">
+              <span class="basis-pill" x-text="basisText(col.detail)"></span>
+              <span class="basis-pill__ts" x-show="col.detail?.threshold_sensitive" x-cloak>threshold-sensitive</span>
+            </div>
+            <div class="verdict__conf">
+              <span class="eyebrow">Model confidence</span>
+              <span class="conf__val" :class="confCueClass(col.detail?.confidence_word)" x-text="col.detail?.confidence_word"></span>
+            </div>
+          </div>
+
+          <template x-if="col.detail?.probabilities">
+            <div class="dist">
+              <div class="dist__bar">
+                <template x-for="lvl in levels" :key="lvl">
+                  <div class="dist__seg"
+                       :class="{ 'dist__seg--pred': isPredicted(col.detail, lvl) }"
+                       :style="`width:${barWidth(col.detail.probabilities[lvl])}; background:${levelColour(lvl)}`"></div>
+                </template>
+                <div class="dist__tick" :style="`left:${tickPos()}`" title="P1 alert threshold"></div>
+              </div>
+              <div class="dist__read mono">
+                <template x-for="lvl in levels" :key="lvl">
+                  <span><b x-text="lvl"></b> <span x-text="col.detail.probabilities[lvl].toFixed(3)"></span></span>
+                </template>
+              </div>
+              <div class="dist__note" x-text="col.detail?.threshold_context"></div>
+            </div>
+          </template>
+        </section>
+
+        <div class="column">
 
             <!-- ---------------- MODEL PANEL ---------------- -->
             <section class="card panel" aria-label="Model assessment">
               <div class="panel__title eyebrow">
                 <span>Model assessment</span>
-                <span class="col-tag" x-show="compareMode" x-text="`col ${ci + 1}`"></span>
               </div>
 
               <div class="empty-state" x-show="!col.detail && !col.loadingDetail" x-cloak>
@@ -738,40 +794,6 @@
 
               <template x-if="col.detail">
               <div class="stack">
-                <!-- SIGNATURE: badge + basis pill + distribution bar (§4.3 / §3.1) -->
-                <div>
-                  <span class="badge" x-text="`${col.detail?.predicted_level} · ${col.detail?.level_label}`"
-                        :style="`background:${col.detail?.level_colour}`"></span>
-
-                  <div class="basis-row">
-                    <span class="basis-pill" x-text="basisText(col.detail)"></span>
-                    <span class="basis-pill__ts" x-show="col.detail?.threshold_sensitive" x-cloak>threshold-sensitive</span>
-                  </div>
-
-                  <div class="dist">
-                    <div class="dist__bar">
-                      <template x-for="lvl in levels" :key="lvl">
-                        <div class="dist__seg"
-                             :class="{ 'dist__seg--pred': isPredicted(col.detail, lvl) }"
-                             :style="`width:${barWidth(col.detail.probabilities[lvl])}; background:${levelColour(lvl)}`"></div>
-                      </template>
-                      <div class="dist__tick" :style="`left:${tickPos()}`" title="P1 alert threshold"></div>
-                    </div>
-                    <div class="dist__read mono">
-                      <template x-for="lvl in levels" :key="lvl">
-                        <span><b x-text="lvl"></b> <span x-text="col.detail.probabilities[lvl].toFixed(3)"></span></span>
-                      </template>
-                    </div>
-                    <div class="dist__note" x-text="col.detail?.threshold_context"></div>
-                  </div>
-                </div>
-
-                <!-- Confidence -->
-                <div>
-                  <div class="eyebrow">Model confidence</div>
-                  <div class="conf__val" :class="confCueClass(col.detail?.confidence_word)" x-text="col.detail?.confidence_word"></div>
-                </div>
-
                 <!-- Red-flag banner -->
                 <div class="redflag" x-show="col.detail?.red_flag_triggered" x-cloak>
                   <span>&#9888;</span>
@@ -887,19 +909,19 @@
                 <!-- toolbar -->
                 <div class="toolbar">
                   <div class="segmented" role="group" aria-label="Register view">
-                    <button type="button" :aria-pressed="col.view==='both'" @click="setView(ci,'both')">Both</button>
-                    <button type="button" :aria-pressed="col.view==='justify'" @click="setView(ci,'justify')">Justification</button>
-                    <button type="button" :aria-pressed="col.view==='handover'" @click="setView(ci,'handover')">Handover</button>
+                    <button type="button" :aria-pressed="col.view==='both'" @click="setView('both')">Both</button>
+                    <button type="button" :aria-pressed="col.view==='justify'" @click="setView('justify')">Justification</button>
+                    <button type="button" :aria-pressed="col.view==='handover'" @click="setView('handover')">Handover</button>
                   </div>
                   <button class="btn-generate" type="button" aria-label="Generate explanation"
                           :disabled="!(col.id || col.payload) || col.generating"
-                          @click="generate(ci)" x-text="col.generating ? 'Generating…' : 'Generate'"></button>
+                          @click="generate()" x-text="col.generating ? 'Generating…' : 'Generate'"></button>
                 </div>
 
                 <!-- adversarial guardrail control -->
                 <div class="toolbar">
-                  <button class="btn-ghost" type="button" @click="runGuardrailTest(ci, col.view === 'handover' ? 'handover' : 'justify')">Test guardrail</button>
-                  <button class="btn-ghost" type="button" x-show="col.guardTest" x-cloak @click="resetGuardrailTest(ci)">Reset</button>
+                  <button class="btn-ghost" type="button" @click="runGuardrailTest(col.view === 'handover' ? 'handover' : 'justify')">Test guardrail</button>
+                  <button class="btn-ghost" type="button" x-show="col.guardTest" x-cloak @click="resetGuardrailTest()">Reset</button>
                   <span class="synthetic-note" x-show="col.guardTest" x-cloak>synthetic test input — no live output altered</span>
                 </div>
                 <div class="synthetic-candidate mono" x-show="col.guardTest" x-cloak x-text="col.guardTest?.candidate"></div>
@@ -925,6 +947,16 @@
                       </span>
                     </div>
                     <p class="prose" x-text="col.gen.justify.text"></p>
+                    <!-- Advisory only — the draft above is always shown. Listing the flags is new:
+                         before, a reviewer saw an amber chip with no way to learn what tripped. -->
+                    <div class="gnotices" x-show="guardFlags(col.gen.justify).length" x-cloak>
+                      <div class="eyebrow mb2">Guardrail notes on this draft</div>
+                      <ul class="gnotice-list">
+                        <template x-for="f in guardFlags(col.gen.justify)" :key="f">
+                          <li x-text="f"></li>
+                        </template>
+                      </ul>
+                    </div>
                   </div>
                 </template>
 
@@ -938,9 +970,9 @@
                       </span>
                       <span class="reg-actions">
                         <button class="btn-ghost" type="button" aria-label="Print handover note"
-                                @click="printHandover(ci)">Print</button>
+                                @click="printHandover()">Print</button>
                         <button class="btn-ghost" type="button" aria-label="Copy handover as text"
-                                @click="copyHandover(ci)" x-text="col.copied ? 'Copied ✓' : 'Copy'"></button>
+                                @click="copyHandover()" x-text="col.copied ? 'Copied ✓' : 'Copy'"></button>
                         <span class="source">
                           <span class="dot" :class="sourceMeta(col.gen.handover.source).dot"></span>
                           <span x-text="sourceMeta(col.gen.handover.source).label"></span>
@@ -965,10 +997,19 @@
                           </div>
                           <div class="hnote__line">
                             <span x-show="col.detail?.age !== null"><span class="mono" x-text="col.detail?.age?.toFixed(0)"></span>y</span>
-                            <span x-show="col.detail?.active_chief_complaints?.length"> · c/o <span class="mono" x-text="col.detail?.active_chief_complaints[0]"></span><span
-                                  x-show="onsetFor(col, col.detail?.active_chief_complaints?.[0])"
-                                  x-text="' (' + onsetFor(col, col.detail?.active_chief_complaints?.[0]) + ')'"></span></span>
+                            <!-- sex rides on display_extras (intake path only) — it is genuinely
+                                 absent from explain()'s payload, so browsed patients omit it -->
+                            <span x-show="sexLine(col)"> · <span x-text="sexLine(col)"></span></span>
+                            <!-- every coded complaint with its own onset, not just the first -->
+                            <span x-show="complaintLine(col)"> · c/o <span class="mono" x-text="complaintLine(col)"></span></span>
                             <span x-show="col.detail?.arrival_mode"> · arrived by <span x-text="col.detail?.arrival_mode"></span></span>
+                            <span x-show="col.detail?.department"> · <span x-text="col.detail?.department"></span></span>
+                          </div>
+                          <!-- Why this acuity, in words, from the code-owned escalation_basis —
+                               so S answers it without the reader parsing the LLM Assessment. -->
+                          <div class="hnote__line" x-show="basisLine(col.detail)" x-cloak>
+                            <span class="hnote__lbl">Acuity driven by:</span>
+                            <span x-text="basisLine(col.detail)"></span>
                           </div>
                         </div>
                       </div>
@@ -986,20 +1027,27 @@
                             </template>
                             <span class="empty-inline" x-show="vitalsRow(col.detail).length === 0">none recorded</span>
                           </div>
+                          <!-- Missingness is itself a finding (NB3 §S/B provenance): "not asked"
+                               and "none" are different facts and a handover that blurs them is
+                               worse than one that says nothing. Hence this line and the
+                               always-rendered Allergies line below. -->
                           <div class="hnote__line hnote__missing" x-show="col.detail?.vitals_not_recorded?.length" x-cloak>
                             <span class="hnote__lbl">Not recorded:</span>
                             <span class="mono" x-text="col.detail?.vitals_not_recorded?.join(', ')"></span>
+                            <span x-text="` — ${(col.detail?.vitals_not_recorded || []).length} of 6 vitals missing at triage`"></span>
                           </div>
-                          <!-- absence is a finding in a handover: the Allergies line always renders -->
                           <div class="hnote__line">
                             <span class="hnote__lbl">Allergies:</span>
                             <span x-text="allergyLine(col)"></span>
                           </div>
-                          <div class="hnote__line" x-show="hxFlags(col.detail).length" x-cloak>
-                            <span class="hnote__lbl">Hx:</span> <span class="mono" x-text="hxFlags(col.detail).join(' · ')"></span>
+                          <div class="hnote__line" x-show="painLine(col)" x-cloak>
+                            <span class="hnote__lbl">Pain score:</span> <span class="mono" x-text="painLine(col)"></span>
                           </div>
-                          <div class="hnote__line" x-show="medsFlags(col.detail).length" x-cloak>
-                            <span class="hnote__lbl">Meds:</span> <span class="mono" x-text="medsFlags(col.detail).join(' · ')"></span>
+                          <div class="hnote__line" x-show="historyLine(col)" x-cloak>
+                            <span class="hnote__lbl">Hx:</span> <span x-text="historyLine(col)"></span>
+                          </div>
+                          <div class="hnote__line" x-show="medicationsLine(col)" x-cloak>
+                            <span class="hnote__lbl">Meds:</span> <span x-text="medicationsLine(col)"></span>
                           </div>
                           <div class="hnote__line" x-show="edLine(col.detail)" x-cloak>
                             <span class="hnote__lbl">ED:</span> <span class="mono" x-text="edLine(col.detail)"></span>
@@ -1007,6 +1055,9 @@
                         </div>
                       </div>
 
+                      <!-- A and R are the only LLM-written fields in this note; S and B above are
+                           code-rendered facts. Both always render — a flagged draft is shown in
+                           full with its flags listed underneath, never suppressed. -->
                       <!-- A -->
                       <div class="hnote__sec">
                         <span class="hnote__k">A</span>
@@ -1017,6 +1068,18 @@
                       <div class="hnote__sec">
                         <span class="hnote__k">R</span>
                         <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.recommendation"></div>
+                      </div>
+
+                      <div class="hnote__sec" x-show="guardFlags(col.gen.handover).length" x-cloak>
+                        <span class="hnote__k">!</span>
+                        <div class="hnote__body">
+                          <div class="eyebrow mb2">Guardrail notes on this draft</div>
+                          <ul class="gnotice-list">
+                            <template x-for="f in guardFlags(col.gen.handover)" :key="f">
+                              <li x-text="f"></li>
+                            </template>
+                          </ul>
+                        </div>
                       </div>
 
                       <!-- print-only disclaimer footer (screen shows the shared panel footer) -->
@@ -1031,8 +1094,7 @@
                 </template>
               </div>
             </section>
-          </div>
-        </template>
+        </div>
       </main>
     </div>
     </template>

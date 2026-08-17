@@ -69,6 +69,24 @@ except FileNotFoundError:
 _PINNED_GEN = [rec for entry in _PINNED_EXTRACTIONS.values()
                for rec in entry.get("gen_records", [])]
 
+# §Patient guidance (use case C, /api/self-check/explain) offline demo resilience. Same flat,
+# payload-equality-matched shape as _PINNED_GEN — patient_view has no note to fingerprint by, so
+# this follows generate()'s own pinned convention (match on payload dict equality) rather than
+# _PINNED_EXTRACTIONS's note_fingerprint keying.
+try:
+    with open(os.path.join(SAMPLE_DIR, "pinned_patient_guidance.json"), encoding="utf-8") as f:
+        _PINNED_PATIENT_GUIDANCE = json.load(f)
+except FileNotFoundError:
+    _PINNED_PATIENT_GUIDANCE = []
+
+# §Describe-help (use case D, /api/self-check/describe-help) — same flat, payload-equality
+# convention as _PINNED_PATIENT_GUIDANCE above; payload here is the extraction object itself.
+try:
+    with open(os.path.join(SAMPLE_DIR, "pinned_describe_help.json"), encoding="utf-8") as f:
+        _PINNED_DESCRIBE_HELP = json.load(f)
+except FileNotFoundError:
+    _PINNED_DESCRIBE_HELP = []
+
 _BY_ID = {p["id"]: p for p in _PATIENTS}
 
 app = FastAPI(title="CTRSE — triage acuity")
@@ -79,7 +97,15 @@ app = FastAPI(title="CTRSE — triage acuity")
 # named explicitly here and given its own authz below: either role may call
 # it, never neither role and neither role is *rejected*, because the whole
 # point of this surface is that a patient uses it directly.
-PATIENT_API_PATHS = {"/api/self-check", "/api/self-check/options"}
+#
+# PREFIX, not an enumerated set: every route a patient page needs — extract,
+# describe-help, options, self-check, explain — lives under this one prefix
+# by construction, so a new patient route is reachable the moment it's named,
+# with no second place to remember to register it. (A prior enumerated-set
+# version of this constant silently 403'd /api/self-check/explain for every
+# real patient session for exactly this reason — the mirrored gateway
+# allowlist in apps/gateway/main.py must be kept prefix-based too.)
+PATIENT_API_PREFIX = "/api/self-check"
 
 
 @app.middleware("http")
@@ -96,7 +122,7 @@ async def require_clinician_for_clinical_api(request: Request, call_next):
     """
     path = request.url.path
     if (path.startswith("/api/") and not path.startswith("/api/dashboard/")
-            and path not in PATIENT_API_PATHS):
+            and not path.startswith(PATIENT_API_PREFIX)):
         token = request.cookies.get(identity.COOKIE_NAME)
         if token:
             actor = identity.actor_from_cookies(request.cookies)
@@ -240,6 +266,12 @@ def get_patient(patient_id: str):
 
 @app.post("/api/explain")
 def post_explain(req: ExplainRequest):
+    # Clinician registers are ALWAYS returned in full, including when the guardrail flagged them:
+    # the flags travel in result["guardrails"] and the UI shows them as an advisory note beside
+    # the text. A clinician is the reviewer this whole surface is built around, so suppressing the
+    # draft removes the thing they were meant to review. /api/self-check/explain takes the
+    # opposite line for the patient path, where no reviewer exists — that asymmetry is deliberate.
+    #
     # Inline-payload path (note-derived patient, no id). Pinned seed-flow gen records
     # are matched by payload equality — the same mechanism as sample patients.
     if req.payload is not None:
@@ -387,43 +419,157 @@ def post_predict(req: PredictRequest, request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Patient self-check (§Patient self-check) — reuses predict_from_fields
-# verbatim (CTRSE_Pipeline_Build_Spec.md §3: one model, one scoring path).
-# No `note` field on the request, same as PredictRequest above: the patient
-# surface never touches the extractor, redact_pii, or the LLM, so
-# span-or-silence is untouched by this feature entirely.
+# Patient self-check (§Patient self-check) — the SAME three-stage interface as
+# the clinician intake (note -> confirm extracted fields -> result), reusing
+# the clinical extractor and predict_from_fields verbatim
+# (CTRSE_Pipeline_Build_Spec.md §3: one extractor, one model, one scoring
+# path). The confirm screen is fully editable against the same controlled
+# vocabulary a clinician sees — no separate patient-safe picker. What differs
+# from the clinician path is downstream of the model: patient_view() strips
+# every clinician-only key, and the GenAI content is §Patient guidance / §
+# Describe-help (use cases C/D) instead of justification/handover.
 # ---------------------------------------------------------------------------
+
+def _extraction_response(note):
+    """Shared transport body for /api/extract and /api/self-check/extract — core owns
+    redaction, the LLM call, and every §8 guardrail; this only maps its result onto HTTP status
+    codes. Never 500 on a bad note. Both routes are the same guarded front door reused verbatim,
+    not two implementations of extraction."""
+    if not note or not note.strip():
+        return JSONResponse(status_code=400, content={"error": "empty_note"})
+    result = core.extract_from_note(note, pinned=_PINNED_EXTRACTIONS)
+    if result.get("error") == "extraction_unavailable":
+        return JSONResponse(status_code=503, content=result)
+    if result.get("error"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+# §Describe-help (use case D) answer loop. The patient's follow-up answer is sent as its own
+# request field, not appended by the browser — kept a separate, plain, human-readable marker
+# (not PII-shaped, not injection-pattern-shaped — see _PII_PATTERNS/_INJECTION_PATTERNS in
+# ctrse_core.py) so it can be located again in the RETURNED note_used to render the two parts
+# distinctly, without ctrse_core.py's extractor itself needing to know there are two sources.
+_FOLLOW_UP_SEPARATOR = "\n\nAdditional detail from the patient: "
+
+
+class SelfCheckExtractRequest(BaseModel):
+    note: str
+    follow_up: Optional[str] = None
+
+
+@app.post("/api/self-check/extract")
+def post_self_check_extract(req: SelfCheckExtractRequest):
+    follow_up = (req.follow_up or "").strip()
+    composed = req.note + (_FOLLOW_UP_SEPARATOR + follow_up if follow_up else "")
+    result = _extraction_response(composed)
+    if isinstance(result, JSONResponse) or not follow_up:
+        return result
+    # note_used is the prepared/redacted/truncated COMPOSED text — locate the boundary in that,
+    # not in the raw request, since redaction can shift character positions. None means the
+    # follow-up didn't survive truncation (note_used.truncated will also be true); the UI then
+    # just shows the whole thing as one block rather than guessing a boundary.
+    note_used = result.get("note_used") or ""
+    idx = note_used.find(_FOLLOW_UP_SEPARATOR)
+    return {**result, "follow_up_offset": idx if idx >= 0 else None}
+
+
+class SelfCheckDescribeHelpRequest(BaseModel):
+    # The confirm screen's current extraction (POST /api/self-check/extract's response,
+    # unedited) — this coaches on what the guarded extractor found in the patient's OWN words,
+    # not on anything the patient may have since edited into the confirm-screen fields.
+    extraction: dict
+
+
+@app.post("/api/self-check/describe-help")
+def post_self_check_describe_help(req: SelfCheckDescribeHelpRequest):
+    # §Describe-help (use case D) — runs on the confirm screen, before any prediction exists.
+    # Same honest-degrade posture as /explain below: a guardrail failure or an empty/offline
+    # generation just means the panel doesn't appear, never that flagged text reaches the
+    # patient (there is no clinician here to review it first).
+    extraction = dict(req.extraction or {})
+    if not extraction:
+        return JSONResponse(status_code=400, content={"error": "extraction required"})
+
+    result = core.generate(extraction, "describe_help", pinned=_PINNED_DESCRIBE_HELP)
+    passed = result.get("guardrails", {}).get("passed")
+    text = (result.get("text") or "").strip()
+
+    if passed is False or not text:
+        return JSONResponse(status_code=503, content={
+            "available": False,
+            "detail": "No additional guidance is available right now.",
+        })
+
+    return {"available": True, "text": text, "source": result.get("source")}
+
 
 @app.get("/api/self-check/options")
 def get_self_check_options():
-    # The full clinical vocabulary (/api/vocab) stays clinician-only — a picker
-    # where a patient could self-select e.g. cardiacarrest is a footgun. This
-    # serves only the pre-validated, plain-language patient subset. Emergency
-    # contact numbers come from here too (not hardcoded in the page) so the
-    # persistent banner can never drift from what ctrse_core actually uses in
-    # a released result's action_line.
+    # This carries code-owned contact/scope copy, plus the SAME controlled vocabulary
+    # GET /api/vocab serves the clinician confirm screen — /api/vocab itself stays
+    # clinician-gated (outside PATIENT_API_PREFIX), so the patient confirm screen's dropdowns
+    # are served here instead rather than by widening that route's authz.
+    tokens = sorted(core._ALLOWED_EMIT, key=lambda t: -core._EMIT_PREVALENCE.get(t, 0))
     return {
-        "complaints": core.PATIENT_SYMPTOM_OPTIONS or [],
         "emergency_contacts": core.EMERGENCY_CONTACTS,
         "scope_note": core.PATIENT_SCOPE_NOTE,
+        "complaints": tokens,
+        "arrival_modes": list(core._ARRIVAL_ENUM),
     }
 
 
+class SelfCheckPredictRequest(PredictRequest):
+    # Everything PredictRequest already has (age/sex/arrival_mode/complaints/vitals) plus the
+    # extraction the confirm screen was built from — carried through so it can (a) be persisted
+    # verbatim for audit, same as before, and (b) enforce the one constraint full editability
+    # doesn't get to override: see the red-flag union below. Defaults to {} so a
+    # missing/malformed extraction degrades to "nothing to union", never a validation error —
+    # the predict step must never hard-fail on this field.
+    extraction: dict = {}
+
+
 @app.post("/api/self-check")
-def post_self_check(req: PredictRequest, request: Request):
-    # Same authz shape as the middleware's own philosophy (see
-    # PATIENT_API_PATHS above): no cookie is the documented standalone-dev
-    # path and is allowed; a cookie that fails to resolve to an actor is not.
+def post_self_check(req: SelfCheckPredictRequest, request: Request):
+    # Same authz shape as the middleware's own philosophy (see PATIENT_API_PREFIX above): no
+    # cookie is the documented standalone-dev path and is allowed; a cookie that fails to
+    # resolve to an actor is not.
     token = request.cookies.get(identity.COOKIE_NAME)
     actor, subject_ref, subject_name = _actor_and_subject(request)
     if token and actor is None:
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
 
+    # §Design decision (full editability + red-flag retention): the confirm screen is the same
+    # interface the clinician uses — every field, including complaints, is directly editable
+    # against the full controlled vocabulary, not a patient-safe subset. That opens one path
+    # that must stay closed: editing away an extracted red flag to get a calmer answer. Re-derive
+    # red flags from the extraction the confirm screen was built from (computed server-side by
+    # extraction_guardrails when /api/self-check/extract ran) and union any missing ones back
+    # into the confirmed complaints — never dropped, only added. Adding a token only ever
+    # over-triages, which patient_urgency_band's max-lattice already tolerates by design. (Same
+    # residual trust boundary as everywhere else in this API: this defends the UI's own edit
+    # controls, not a client rewriting the raw request body — /api/predict makes an identical
+    # trust assumption about a clinician's request today.)
+    confirmed = [{"token": c.token, "evidence": c.evidence} for c in req.complaints][:2]
+    confirmed_tokens = {c["token"] for c in confirmed}
+    red_flag_tokens = set((req.extraction or {}).get("red_flags") or [])
+    for rf_token in sorted(red_flag_tokens - confirmed_tokens):
+        confirmed.append({"token": rf_token, "evidence": None})
+
+    # `other` is the extraction guardrail's honest fallback, not a recognised symptom. Scoring a
+    # submission that resolves to nothing but `other` would turn "we did not understand" into a
+    # potentially reassuring P-code — carried over from the single-call design this replaces.
+    # Runs AFTER the union above so a red flag can still rescue an otherwise-empty submission.
+    if not [c for c in confirmed if c["token"] != "other"]:
+        return JSONResponse(status_code=422, content={
+            "detail": "We could not identify a symptom from what's confirmed. Please add or edit a symptom, or go back and reword your description.",
+        })
+
     fields = {
         "age": req.age,
         "sex": req.sex,
         "arrival_mode": req.arrival_mode,
-        "complaints": [{"token": c.token, "evidence": c.evidence} for c in req.complaints],
+        "complaints": confirmed,
         "vitals": req.vitals.model_dump() if req.vitals is not None else {},
     }
     result = core.predict_from_fields(fields)
@@ -438,11 +584,13 @@ def post_self_check(req: PredictRequest, request: Request):
         source_app="triage",
         record_type="triage_self_check",
         status=status,
-        input_payload=fields,
+        # Keep the prepared/redacted note for a future clinician audit, never
+        # the raw browser text. The model itself still receives only fields.
+        input_payload={**fields, "note": (req.extraction or {}).get("note_used")},
         # The full result is kept for any future clinician-side audit view;
         # patient_view is what the API response and dashboard tile actually
         # read, so the two can never quietly drift from what was released.
-        output_payload={**result, "patient_view": view},
+        output_payload={**result, "patient_view": view, "extraction": req.extraction},
         model_version="ctrse_p1p4",
         patient_external_id=subject_ref,
         patient_name=subject_name,
@@ -453,26 +601,94 @@ def post_self_check(req: PredictRequest, request: Request):
         event_type="triage_self_check_released",
         record_id=record_id,
         actor_reference=actor.email if actor else None,
-        payload={"band": view["urgency"]["band"]},
+        payload={"band": view["urgency"]["band"],
+                 "extraction_source": (req.extraction or {}).get("source")},
     )
-    # The response body is patient_view + record_id and nothing else — result
-    # itself (and its 24-key payload/probabilities/etc.) never reaches here.
-    return {**view, "record_id": record_id}
+    # The response body is patient_view + record_id + confirmed_complaint_tokens and nothing
+    # else — result itself (and its 24-key payload/probabilities/etc.) never reaches here.
+    # confirmed_complaint_tokens sits alongside view rather than inside it — patient_view()
+    # itself stays raw-token-free (its own established "labels, not tokens" boundary) — but
+    # /api/self-check/explain needs the EXACT tokens that were actually scored, including any
+    # red-flag union above, to compute self-care suppression correctly; the frontend has no
+    # other way to know a token the server added.
+    return {**view, "record_id": record_id,
+            "confirmed_complaint_tokens": [c["token"] for c in confirmed]}
+
+
+class SelfCheckExplainRequest(BaseModel):
+    # The client already has this — it's exactly what POST /api/self-check returned (patient_view
+    # + confirmed_complaint_tokens). NOT a patient_id or clinician payload. `extraction` is the
+    # separate POST /api/self-check/extract response the confirm screen was built from — its
+    # own guarded/redacted fields (note_used, allergies, medications, history_mentions, onset,
+    # pain_score) are display/handover-only and never reached the model, but §Patient guidance
+    # is explicitly grounded in "everything the patient supplied" (see ctrse_core.py's
+    # SYSTEM_PROMPT_PATIENT), so they're folded into the suggestion payload here.
+    patient_view: dict
+    extraction: dict = {}
+
+
+@app.post("/api/self-check/explain")
+def post_self_check_explain(req: SelfCheckExplainRequest):
+    # §Patient guidance (use case C) — deliberately a SEPARATE route from /api/explain, not an
+    # extra use_case value on it. /api/explain is clinician-only (patient_id or clinician
+    # payload; use_case restricted to justify/handover) — keeping the patient/clinician boundary
+    # in the routing table, not just in a string, means a future edit to /api/explain can't
+    # accidentally start accepting patient traffic. This call is purely supplementary: the
+    # primary /api/self-check result is already fully rendered before the client ever calls this,
+    # and nothing here can change or delay it.
+    patient_view = dict(req.patient_view or {})
+    # record_id and confirmed_complaint_tokens are appended by post_self_check's response merge,
+    # not part of what core.patient_view() returns. Strip record_id so core.generate()'s
+    # payload-equality pinned matching isn't broken by a per-submission id that will never match
+    # a fixture; pull confirmed_complaint_tokens out to fold into the widened payload below
+    # rather than leaving it mixed into the patient_view fields.
+    patient_view.pop("record_id", None)
+    confirmed_complaint_tokens = patient_view.pop("confirmed_complaint_tokens", None)
+    if not patient_view:
+        return JSONResponse(status_code=400, content={"error": "patient_view required"})
+
+    extraction = req.extraction or {}
+    # The widened suggestion payload: patient_view plus the confirm-screen extras patient_view()
+    # itself never carries (display/handover-only, never model input — see
+    # extraction_guardrails' own comment on this) and the prepared note the prompt is allowed to
+    # read. note_used, never raw browser text: it's already redacted and is exactly what the
+    # confirm screen itself shows.
+    suggestion_payload = {
+        **patient_view,
+        "confirmed_complaint_tokens": confirmed_complaint_tokens or [],
+        "history_mentions": extraction.get("history_mentions") or [],
+        "medications": extraction.get("medications") or [],
+        "allergies": extraction.get("allergies") or [],
+        "onset": extraction.get("onset") or [],
+        "pain_score": extraction.get("pain_score"),
+        "note": extraction.get("note_used") or "",
+    }
+
+    result = core.generate(suggestion_payload, "patient_guidance", pinned=_PINNED_PATIENT_GUIDANCE)
+    passed = result.get("guardrails", {}).get("passed")
+    text = (result.get("text") or "").strip()
+
+    # Only ever surface guardrail-passed content to a patient. Unlike the clinician confirm
+    # screen, there is no human here to review a flagged generation before it's acted on — a
+    # guardrail failure (or an empty/offline/unparsed result) degrades to "unavailable", never to
+    # showing the flagged text with a warning.
+    if passed is False or not text:
+        return JSONResponse(status_code=503, content={
+            "available": False,
+            "detail": "Additional guidance isn't available for this check right now.",
+        })
+
+    return {
+        "available": True,
+        "text": text,
+        "disclaimer": result.get("disclaimer", core.DISCLAIMER),
+        "source": result.get("source"),
+    }
 
 
 @app.post("/api/extract")
 def post_extract(req: ExtractRequest):
-    # Transport only: core owns redaction, the LLM call, and every §8 guardrail.
-    # Never 500 on a bad note — structured errors with appropriate status codes.
-    if not req.note or not req.note.strip():
-        return JSONResponse(status_code=400, content={"error": "empty_note"})
-    # live -> pinned -> honest unavailable (core owns the resolution, §14 fallback)
-    result = core.extract_from_note(req.note, pinned=_PINNED_EXTRACTIONS)
-    if result.get("error") == "extraction_unavailable":
-        return JSONResponse(status_code=503, content=result)
-    if result.get("error"):
-        return JSONResponse(status_code=400, content=result)
-    return result
+    return _extraction_response(req.note)
 
 
 app.include_router(dashboard_router)

@@ -28,9 +28,17 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _ensure_model():
     """PROTOCOL_COMPLAINTS (needed by patient_urgency_band) is only populated
     by core.init() — the same precomputed-stats fast path api.py itself uses
-    at startup, not the heavy X_*.npy arrays path."""
+    at startup, not the heavy X_*.npy arrays path.
+
+    The two initialisers are guarded SEPARATELY on the globals each one actually sets. Gating
+    both behind `core.model is None` made this order-dependent: any earlier test file that
+    called core.init() (test_parity, test_register) left core.model set but _ORD_ENC None, so
+    this short-circuited and assemble_vector then raised "init_extraction() must run before
+    assemble_vector()" — 9 failures that appear only when the whole suite runs.
+    """
     if core.model is None:
         core.init(APP_DIR)
+    if core.feature_cols is None or core._ORD_ENC is None:
         core.init_extraction(APP_DIR)
 
 
@@ -217,6 +225,7 @@ def test_no_patient_copy_table_contains_a_reassuring_phrase():
         {"safety_netting": core.SAFETY_NETTING},
         core.PATIENT_LEVEL_HEADLINES,
         {"scope_note": core.PATIENT_SCOPE_NOTE},
+        dict(enumerate(core.PATIENT_WATCH_FOR)),
     ]
     hits = []
     for table in tables:
@@ -251,3 +260,264 @@ def test_red_flags_and_protocol_complaints_have_patient_labels():
         assert token in core.PATIENT_COMPLAINT_LABELS, f"no patient label for red flag {token!r}"
     for token in core.PROTOCOL_COMPLAINTS:
         assert token in core.PATIENT_COMPLAINT_LABELS, f"no patient label for protocol complaint {token!r}"
+
+
+# ===========================================================================
+# §Patient guidance (use case C) — guardrail_check()'s patient-only branch.
+# Grounded in a hand-built patient_view()-shaped dict, the same style as
+# _synthetic_result() above: exercising the guardrail doesn't require a live
+# LLM call or the real model.
+# ===========================================================================
+
+def _synthetic_suggestion_payload(complaint_tokens=None, reported_concerns=None,
+                                   history_mentions=None, medications=None, allergies=None):
+    """The WIDENED payload api.py assembles for use case C (§Patient guidance): patient_view
+    plus the confirm-screen extras (history/medications/allergies/onset/note) and the raw
+    confirmed complaint tokens — see ctrse_core.py's build_user_prompt "C" branch and
+    _patient_reported_text. `confirmed_complaint_tokens` (not `reported_concerns` alone) is
+    what distinguishes this shape from bare patient_view for guardrail_check."""
+    return {
+        "predicted_level": "P3",
+        "level_label": "URGENT",
+        "age": 40,
+        "arrival_mode": "Car",
+        "reported_concerns": reported_concerns or ["Chest pain or tightness"],
+        "confirmed_complaint_tokens": complaint_tokens if complaint_tokens is not None else ["chestpain"],
+        "recorded_vitals": {},
+        "vitals_not_recorded": [],
+        "red_flag_triggered": False,
+        "urgency": {"band": "URGENT_TODAY", "band_label": "See a clinician urgently today",
+                    "action_line": "Please see a clinician today.", "reasons": []},
+        "confidence_word": "Moderate",
+        "history_mentions": history_mentions or [],
+        "medications": medications or [],
+        "allergies": allergies or [],
+        "onset": [],
+        "pain_score": None,
+        "note": "chest hurts a bit",
+        "disclaimer": core.DISCLAIMER,
+    }
+
+
+@pytest.mark.model
+def test_patient_guardrail_passes_a_clean_response():
+    _ensure_model()
+    payload = _synthetic_suggestion_payload()
+    text = ("You told us about chest pain or tightness, so this check is asking you to see a "
+            "clinician today. While you wait, try to rest somewhere calm. If the pain gets "
+            "worse or spreads, or you develop new or worsening shortness of breath, that "
+            "means acting sooner.\n" + core.DISCLAIMER)
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert passed, flags
+
+
+@pytest.mark.model
+def test_patient_guardrail_rejects_reassuring_language():
+    _ensure_model()
+    payload = _synthetic_suggestion_payload()
+    text = (f"This is {core.PATIENT_REASSURING_WORDS[0]} and you'll likely be seen quickly. "
+            + core.PATIENT_WATCH_FOR[0] + " is a sign to watch for.\n" + core.DISCLAIMER)
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert not passed
+    assert any("reassuring" in f for f in flags)
+
+
+@pytest.mark.model
+def test_patient_guardrail_rejects_an_invented_watch_for_symptom():
+    """The one genuinely new-content risk the escalation-signs half of this feature carries:
+    they may only draw from PATIENT_WATCH_FOR, never invent a complaint-specific red flag not
+    on that list. (While-waiting/self-care content is deliberately NOT list-constrained — see
+    _self_care_suppressed — this test is about the escalation signs specifically.)"""
+    _ensure_model()
+    payload = _synthetic_suggestion_payload()
+    watch_for_text = " ".join(core.PATIENT_WATCH_FOR).lower()
+    candidate = next(
+        cc[3:] for cc in core.cc_cols
+        if len(cc) - 3 >= 6
+        and cc[3:].lower() not in watch_for_text
+        and cc[3:].lower() != "chestpain"
+    )
+    text = ("You told us about chest pain, so this check asks you to see a clinician today. "
+            f"Watch for {candidate}, which can be serious.\n" + core.DISCLAIMER)
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert not passed
+    assert any("unreported symptom" in f for f in flags)
+
+
+@pytest.mark.model
+def test_patient_guardrail_does_not_flag_grounded_history_or_medications():
+    """The widened payload's own history_mentions/medications/allergies are legitimately
+    grounded (SYSTEM_PROMPT_PATIENT rule 1) — mentioning them must not trip the
+    unreported-symptom scan the way an invented symptom would."""
+    _ensure_model()
+    payload = _synthetic_suggestion_payload(
+        history_mentions=[{"text": "history of migraines", "span": "history of migraines"}],
+        medications=[{"text": "ibuprofen", "span": "ibuprofen"}],
+    )
+    text = ("You told us about chest pain, and mentioned a history of migraines and taking "
+            "ibuprofen, so this check asks you to see a clinician today.\n" + core.DISCLAIMER)
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert passed, flags
+
+
+@pytest.mark.model
+def test_patient_guardrail_requires_the_disclaimer():
+    _ensure_model()
+    payload = _synthetic_suggestion_payload()
+    text = "You told us about chest pain. " + core.PATIENT_WATCH_FOR[0]
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert not passed
+    assert any("disclaimer" in f for f in flags)
+
+
+# ===========================================================================
+# §Patient guidance (C) — self-care/while-waiting suppression. While-waiting content
+# (including medication suggestions) is deliberately free-generated with no drug-specific
+# list — an accepted trade for usefulness — EXCEPT for overdose, protocol
+# (suicidal/homicidal/psychiatricevaluation/alcoholintoxication), and red-flag complaints,
+# where it is withheld entirely: both by omitting the instruction from the prompt AND by a
+# guardrail scan rejecting it if it appears anyway.
+# ===========================================================================
+
+@pytest.mark.model
+@pytest.mark.parametrize("token", [
+    "overdose", "overdose-intentional", "overdose-accidental",   # prefix match
+    "suicidal", "homicidal", "psychiatricevaluation", "alcoholintoxication",  # PROTOCOL_COMPLAINTS
+    "cardiacarrest", "unresponsive", "strokealert", "fulltrauma",  # RED_FLAGS
+])
+def test_self_care_suppressed_for_overdose_protocol_and_red_flag_tokens(token):
+    _ensure_model()
+    assert core._self_care_suppressed([token]) is True
+
+
+@pytest.mark.model
+def test_self_care_not_suppressed_for_an_ordinary_complaint():
+    _ensure_model()
+    assert core._self_care_suppressed(["sorethroat"]) is False
+    assert core._self_care_suppressed([]) is False
+    assert core._self_care_suppressed(None) is False
+
+
+@pytest.mark.model
+def test_build_user_prompt_c_includes_while_waiting_directive_when_allowed():
+    _ensure_model()
+    payload = _synthetic_suggestion_payload(complaint_tokens=["sorethroat"])
+    prompt = core.build_user_prompt(payload, "patient_guidance")
+    assert core._WHILE_WAITING_ALLOWED in prompt
+    assert core._WHILE_WAITING_SUPPRESSED not in prompt
+
+
+@pytest.mark.model
+@pytest.mark.parametrize("token", ["overdose", "suicidal", "cardiacarrest"])
+def test_build_user_prompt_c_suppresses_while_waiting_directive(token):
+    _ensure_model()
+    payload = _synthetic_suggestion_payload(complaint_tokens=[token])
+    prompt = core.build_user_prompt(payload, "patient_guidance")
+    assert core._WHILE_WAITING_SUPPRESSED in prompt
+    assert core._WHILE_WAITING_ALLOWED not in prompt
+
+
+@pytest.mark.model
+@pytest.mark.parametrize("token", ["overdose", "suicidal", "homicidal", "alcoholintoxication",
+                                    "cardiacarrest", "unresponsive"])
+def test_patient_guardrail_rejects_medication_content_when_suppressed(token):
+    _ensure_model()
+    payload = _synthetic_suggestion_payload(complaint_tokens=[token], reported_concerns=["symptom"])
+    text = "You should take paracetamol while you wait to be seen.\n" + core.DISCLAIMER
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert not passed
+    assert any("suppressed" in f for f in flags)
+
+
+@pytest.mark.model
+def test_patient_guardrail_allows_medication_content_when_not_suppressed():
+    """Proves suppression is targeted, not blanket: the same medication-shaped text passes
+    for an ordinary complaint, where self-care guidance is intentionally unconstrained."""
+    _ensure_model()
+    payload = _synthetic_suggestion_payload(complaint_tokens=["sorethroat"],
+                                             reported_concerns=["Sore throat"])
+    text = ("You told us about your sore throat, so this check is asking you to see a "
+            "clinician today. While you wait, you may take paracetamol for the discomfort.\n"
+            + core.DISCLAIMER)
+    passed, flags = core.guardrail_check(payload, text, "patient_guidance")
+    assert passed, flags
+
+
+# ===========================================================================
+# §Describe-help (use case D) — guardrail_check()'s other patient-only branch.
+# Shares _guardrail_check_patient with C, but payload is the raw extraction
+# object (before any prediction exists), and D does NOT require the closing
+# DISCLAIMER — see SYSTEM_PROMPT_DESCRIBE_HELP's own comment on why.
+# ===========================================================================
+
+def _synthetic_extraction(complaints=None):
+    return {
+        "age": None, "sex": None, "arrival_mode": None,
+        "complaints": complaints if complaints is not None else [
+            {"token": "chestpain", "span": "chest hurts", "ambiguous": False,
+             "alternates": [], "evidence": None},
+        ],
+        "onset": [], "history_mentions": [], "medications": [], "allergies": [], "pain_score": None,
+        "red_flags": [], "unmapped": [], "guardrail_flags": [], "model_refused": False,
+        "note_used": "my chest hurts", "truncated": False, "redactions": 0,
+        "extracted_nothing": False, "source": "live",
+    }
+
+
+@pytest.mark.model
+def test_describe_help_guardrail_passes_a_clean_response():
+    _ensure_model()
+    payload = _synthetic_extraction()
+    text = "Could you tell us a bit more about when your chest pain started and how severe it feels?"
+    passed, flags = core.guardrail_check(payload, text, "describe_help")
+    assert passed, flags
+
+
+@pytest.mark.model
+def test_describe_help_guardrail_does_not_require_a_disclaimer():
+    """At confirm time there is no prediction yet, so the closing DISCLAIMER sentence
+    ('the model's prediction of a triage assignment') would describe something that
+    doesn't exist. This is the one deliberate divergence from A/B/C."""
+    _ensure_model()
+    payload = _synthetic_extraction()
+    text = "Thanks — we've clearly captured your chest pain and when it started."
+    passed, flags = core.guardrail_check(payload, text, "describe_help")
+    assert passed, flags
+    assert not any("disclaimer" in f for f in flags)
+
+
+@pytest.mark.model
+def test_describe_help_guardrail_rejects_reassuring_language():
+    _ensure_model()
+    payload = _synthetic_extraction()
+    text = f"This is {core.PATIENT_REASSURING_WORDS[0]}, nothing to worry about."
+    passed, flags = core.guardrail_check(payload, text, "describe_help")
+    assert not passed
+    assert any("reassuring" in f for f in flags)
+
+
+@pytest.mark.model
+def test_describe_help_guardrail_rejects_a_suggested_symptom_not_mentioned():
+    """The one rule this whole use case exists to make falsifiable: it may ask for more
+    detail on something already reported, never suggest a symptom the patient didn't
+    mention — that would corrupt the very extraction that feeds the triage model."""
+    _ensure_model()
+    payload = _synthetic_extraction()
+    candidate = next(
+        cc[3:] for cc in core.cc_cols
+        if len(cc) - 3 >= 6 and cc[3:].lower() != "chestpain"
+    )
+    text = f"Do you also have {candidate}? Please tell us if that's happening too."
+    passed, flags = core.guardrail_check(payload, text, "describe_help")
+    assert not passed
+    assert any("unreported symptom" in f for f in flags)
+
+
+@pytest.mark.model
+def test_describe_help_guardrail_rejects_diagnostic_language():
+    _ensure_model()
+    payload = _synthetic_extraction()
+    text = "The patient is diagnosed with a mild condition, no further detail needed."
+    passed, flags = core.guardrail_check(payload, text, "describe_help")
+    assert not passed
+    assert any("diagnostic" in f for f in flags)

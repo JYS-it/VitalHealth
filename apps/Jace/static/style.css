@@ -331,10 +331,33 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 
 .layout{display:grid; grid-template-columns:300px 1fr; gap:var(--s5); padding-top:var(--s5);}
 .main{display:grid; grid-template-columns:1fr; gap:var(--s5); align-content:start;}
-.main.compare{grid-template-columns:1fr 1fr;}
 .column{display:grid; grid-template-columns:1fr 1fr; gap:var(--s5); align-content:start; min-width:0;}
-.main.compare .column{grid-template-columns:1fr;}
-.col-tag{margin-left:auto; font-size:var(--fs-xs); color:var(--text-faint); text-transform:none; letter-spacing:0;}
+
+/* §Verdict — the result headline, full width above the two panels. The badge and the
+   distribution bar used to sit in the left half of a split panel, which is the wrong weight
+   for "the badge is the answer, the bar is the doubt". */
+.result-verdict{padding:var(--s4) var(--s5);}
+.verdict__head{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s3); margin-bottom:var(--s3);}
+.verdict__head .basis-row{margin:0;}
+.verdict__conf{margin-left:auto; display:flex; align-items:baseline; gap:var(--s2);}
+
+/* §Session strip — assessments produced this browser session. */
+.result-sessions{padding:var(--s3) var(--s4);}
+.sess-row{display:flex; flex-wrap:wrap; gap:var(--s2);}
+.sess-chip{
+  display:inline-flex; align-items:center; gap:var(--s2);
+  padding:var(--s2) var(--s3); border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface-2); color:var(--text); cursor:pointer; font:inherit;
+  font-size:var(--fs-sm); max-width:100%;
+}
+.sess-chip:hover{border-color:var(--border-strong);}
+.sess-chip[aria-current="true"]{border-color:var(--accent);}
+.sess-chip__lvl{
+  font-family:var(--font-mono); font-size:var(--fs-xs); font-weight:600;
+  color:var(--on-accent); padding:0 var(--s2); border-radius:var(--r-sm);
+}
+.sess-chip__sum{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:22ch;}
+.sess-chip__at{color:var(--text-faint); font-size:var(--fs-xs);}
 
 /* ==========================================================================
    Cards / panels
@@ -371,8 +394,12 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 }
 .filter-btn[aria-pressed="true"]{background:var(--surface-2); color:var(--text); border-color:var(--border-strong);}
 
-.compare-controls{display:flex; flex-wrap:wrap; gap:var(--s2); align-items:center;}
-.slot-hint{margin-top:var(--s2); font-size:var(--fs-xs); color:var(--text-faint);}
+/* Inline text button — reads as a link inside prose, used to send someone from the sample
+   cohort back to the intake. */
+.btn-link{
+  background:none; border:0; padding:0; font:inherit; color:var(--accent);
+  text-decoration:underline; cursor:pointer;
+}
 
 .plist{list-style:none; margin:0; padding:0; max-height:60vh; overflow:auto;}
 .plist__item{
@@ -520,7 +547,8 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible, summary:focus-v
 .reg-label{display:flex; align-items:center; justify-content:space-between; gap:var(--s2); margin-bottom:var(--s2);}
 .reg-actions{display:inline-flex; align-items:center; gap:var(--s2);}
 
-.prose{font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body); max-width:62ch;}
+.prose{font-family:var(--font-sans); font-size:var(--fs-base); line-height:var(--lh-body); max-width:62ch; margin:0;}
+.prose + .prose{margin-top:var(--s3);}
 
 .sbar__body--llm{font-size:var(--fs-base); line-height:var(--lh-body);}
 .footnote{margin-top:var(--s3); font-size:var(--fs-xs); color:var(--text-faint);}
@@ -660,6 +688,18 @@ select.finput{font-family:var(--font-mono);}
   border-radius:var(--r-sm); padding:var(--s2) var(--s3);
 }
 
+/* §Patient guidance loading skeleton — shown while a GenAI result is generating (e.g. the
+   self-check "What to do" suggestion). Tokens only, no new colours. */
+.skeleton-line{
+  height:0.9em; border-radius:var(--r-sm); margin-top:var(--s2);
+  background:linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size:400% 100%; animation:vh-skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes vh-skeleton-shimmer{
+  0%{background-position:100% 50%;}
+  100%{background-position:0 50%;}
+}
+
 .derived-tag{
   font-size:var(--fs-xs); font-weight:600; letter-spacing:.03em; text-transform:none;
   color:var(--warn); background:var(--warn-tint);
@@ -682,8 +722,9 @@ select.finput{font-family:var(--font-mono);}
   .results-quick{flex-direction:column; align-items:flex-start;}
   .status-grid p{font-size:var(--fs-sm);}
   .layout{grid-template-columns:1fr;}
-  .main, .main.compare{grid-template-columns:1fr;}
-  .column, .main.compare .column{grid-template-columns:1fr;}
+  .main{grid-template-columns:1fr;}
+  .column{grid-template-columns:1fr;}
+  .verdict__conf{margin-left:0;}
   .sidebar{position:static;}
   .plist{max-height:40vh;}
   .frow{grid-template-columns:1fr;}
