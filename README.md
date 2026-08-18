@@ -22,13 +22,13 @@ DATABASE_URL=postgresql://postgres.<project-ref>:<database-password>@aws-<region
 Supabase and the explicit `postgresql+psycopg://` form. See
 [Using one Supabase database](#using-one-supabase-database) for the setup.
 
-**Prerequisites:** Python 3.11 (tested; Jace also works on 3.9, its original
-target — anything in that range is fine) and Git.
+**Prerequisites:** Python 3.11 or 3.12 and Git. The team launcher is normally
+run with `py -3.12 run_all.py` on Windows.
 
 ```bash
 git clone <this-repo-url>
-cd Integration
-python run_all.py
+cd VitalHealth
+py -3.12 run_all.py
 ```
 
 That one command sets up everything on a fresh clone: it creates a venv for
@@ -171,10 +171,11 @@ renders a different dashboard for each (see
 [Dashboards](#dashboards)).
 
 - A **patient** account is linked to a row in `patients`, created at
-  registration. The current patient surface is their read-only portal
-  dashboard. Clinical triage, stroke assessment, EMC drafting, review, and
-  issuance are rejected server-side until dedicated patient submission routes
-  are introduced.
+  registration. Patients can use the triage self-check and submit Stroke
+  Assessment and EMC requests for clinician review. They see a safe waiting
+  state until a clinician acts; model internals, clinician-only drafts, and
+  unapproved results are not exposed. A patient can view or download only
+  their own approved EMC.
 - A **clinician** account can read every patient's records. Registration
   therefore requires `CLINICIAN_ACCESS_CODE`, and **fails closed**: if that
   variable is unset, the Clinician option is rejected outright.
@@ -182,6 +183,10 @@ renders a different dashboard for each (see
   picks a patient with **Work on** in the dashboard. That choice is a second
   signed cookie (`vh_subject`) which all three backends read, and it is
   cleared on logout.
+- The clinician EMC landing page is a review workbench for pending and
+  completed patient requests. Creating an EMC for an in-clinic consultation
+  is a separate, explicit clinician action rather than the default landing
+  page.
 
 Backends authenticate off the **signed session cookie**, which the proxy
 forwards along with every other header. The `X-Vitalhealth-User` /
@@ -215,8 +220,8 @@ the SPA's role branch only picks a layout.
 
 - **Patient** — one tile per module showing progress (*n* of 3), safe workflow
   status, their submitted fields, and a chronological activity list. Triage
-  priority, stroke probabilities, model drivers, and clinician identities are
-  never returned to this view.
+  priority, stroke probabilities, model drivers, clinician-only drafts, and
+  clinician identities are never returned to this view.
 - **Clinician** — every patient in one table with each module's latest result
   and last activity, a search box, a drill-down into one patient's full
   history, and an "Unassigned records" bucket for assessments run with no
@@ -303,11 +308,11 @@ For a patient running their own assessment these coincide. For a clinician
 assessing someone else they do not, and the dashboards depend on the
 distinction.
 
-The three clinical apps remain usable without a database: `DATABASE_URL` is
-optional for `apps/Jace/.env`, `apps/Jeslyn/.env`, and `apps/YS/.env`, and
-predictions still work without it (persistence writes just no-op). Use the
-same URL in all three files. Note that Jace additionally needs it to serve
-the dashboards; `run_all.py` copies the gateway's value into any backend
+The individual ML apps can still be launched in a limited standalone developer
+mode without a database, but the integrated patient/clinician workflow cannot:
+login, dashboards, patient submissions, review queues, approvals, and EMC
+downloads all depend on shared persistence. Use the same `DATABASE_URL` for
+all four processes; `run_all.py` copies the gateway's value into any backend
 that does not set its own.
 
 The gateway is different: `DATABASE_URL` is a **hard requirement** for it
@@ -354,7 +359,7 @@ for the one exception: Jace's own code doesn't load `.env` itself).
 | `OPENROUTER_API_KEY` | YS | OpenRouter-hosted models via the `openai` client |
 | `OPENROUTER_MODEL` | YS | Optional; defaults to `openai/gpt-4o-mini` |
 | `SECRET_KEY` | Jeslyn | Flask session secret; defaults to a placeholder in development |
-| `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL, resolved by `load_shared_env()` the same way as `SESSION_SECRET`. Required for the gateway (the `users` table backing login) and for Jace (which serves the dashboards — without it both dashboards render empty). Optional for Jeslyn/YS, where it only controls whether records persist |
+| `DATABASE_URL` | Jace, Jeslyn, YS, gateway | One shared PostgreSQL URL, resolved by `load_shared_env()` the same way as `SESSION_SECRET`. Required for the integrated workflow: login, dashboards, patient submissions, review queues, approvals, and EMC downloads. Without it, only limited standalone development of an individual model is possible |
 | `SESSION_SECRET` | gateway, Jace, Jeslyn, YS | Signs the login session cookie. **All four must share one value** — the gateway signs, the backends verify to decide whose record a result is. Put it in the repo-root `.env` (or `apps/gateway/.env`) and every process picks it up via `load_shared_env()`, however it is launched. Defaults to a placeholder in development — set a long random value in production |
 | `CLINICIAN_ACCESS_CODE` | gateway | Required to register a clinician account. Unset means clinician registration is refused outright (clinicians can read every patient's records) |
 | `SESSION_COOKIE_SECURE` | gateway | Optional; set to `true` once the gateway is served over HTTPS |
