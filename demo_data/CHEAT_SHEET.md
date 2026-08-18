@@ -29,7 +29,7 @@ Low acuity / low stroke risk / simple EMC — healthy young adult with a headach
 - Complaint: `headache`
 - Vitals: HR `72`  SBP `112`  DBP `72`  RR `16`  O2 `99%`  Temp `36.8°C`
 - **Expect:** P4
-- **Or demo the note extractor:** click "Nur Aini binte Yusof" under "Demo characters" in the Triage intake tab (or paste this note): *"19yo woman walked in, headache since this morning"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Nur Aini binte Yusof" under "Demo characters" in the Triage intake tab (or paste this note): *"19yo woman walked in on her own. Headache since this morning, pain 4/10, no vomiting and no visual changes. Not on any regular medication. NKDA."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `19`  Gender: `Female`  BMI: `21.4`
@@ -54,7 +54,7 @@ Red-flag triage (P1, strokealert) / high stroke risk / complex EMC — deliberat
 - Complaint: `strokealert`
 - Vitals: HR `112`  SBP `188`  DBP `102`  RR `24`  O2 `92%`  Temp `37.4°C`
 - **Expect:** P1
-- **Or demo the note extractor:** click "David Tan" under "Demo characters" in the Triage intake tab (or paste this note): *"74yo man brought in by ambulance, sudden slurred speech and one-sided weakness, family suspects stroke"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "David Tan" under "Demo characters" in the Triage intake tab (or paste this note): *"74yo man brought in by ambulance. Sudden slurred speech and one-sided weakness starting 40 minutes ago, family suspects stroke. Hx hypertension, atrial fibrillation, previous TIA two years ago. On warfarin and amlodipine. Allergic to penicillin."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `74`  Gender: `Male`  BMI: `29.5`
@@ -79,7 +79,7 @@ Medium acuity (abdominal pain) / medium stroke risk / moderate EMC.
 - Complaint: `abdominalpain`
 - Vitals: HR `90`  SBP `142`  DBP `88`  RR `18`  O2 `97%`  Temp `37.6°C`
 - **Expect:** P3
-- **Or demo the note extractor:** click "Grace Lim" under "Demo characters" in the Triage intake tab (or paste this note): *"52yo woman, drove herself in, abdominal pain since last night"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Grace Lim" under "Demo characters" in the Triage intake tab (or paste this note): *"52yo woman drove herself in. Abdominal pain since last night, worse over the right side, pain 7/10. Vomited twice this morning. Hx gallstones. Takes omeprazole. NKDA."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `52`  Gender: `Female`  BMI: `27.0`
@@ -104,7 +104,7 @@ High acuity (breathing difficulty) / high stroke risk / complex EMC.
 - Complaint: `breathingdifficulty`
 - Vitals: HR `118`  SBP `160`  DBP `95`  RR `28`  O2 `89%`  Temp `38.1°C`
 - **Expect:** P2
-- **Or demo the note extractor:** click "Marcus Wong" under "Demo characters" in the Triage intake tab (or paste this note): *"81yo man, ambulance brought him in, severe difficulty breathing, started about an hour ago"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Marcus Wong" under "Demo characters" in the Triage intake tab (or paste this note): *"81yo man, ambulance brought him in. Severe difficulty breathing that started about an hour ago, worse lying flat. Hx COPD and heart failure, admitted twice last year. On salbutamol inhaler and furosemide. No known drug allergies."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `81`  Gender: `Male`  BMI: `31.0`
@@ -129,7 +129,7 @@ Edge case: age 15 is outside Jace's valid 18-102 range (expect model_refused), w
 - Complaint: `fall`
 - Vitals: HR `88`  SBP `108`  DBP `70`  RR `18`  O2 `98%`  Temp `37.0°C`
 - **Expect:** refused — age 15 is outside the model's training distribution (adults 18–102); the model is not run on out-of-distribution input
-- **Or demo the note extractor:** click "Timothy Ng" under "Demo characters" in the Triage intake tab (or paste this note): *"15yo boy walked in with his mother, fell while skateboarding, hurt his wrist"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Timothy Ng" under "Demo characters" in the Triage intake tab (or paste this note): *"15yo boy walked in with his mother. Fell while skateboarding about an hour ago and hurt his right wrist, pain 6/10. No head injury and did not black out. NKDA, no regular medication."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `15`  Gender: `Male`  BMI: `19.0`
@@ -154,7 +154,7 @@ Medium-high acuity (chest pain) / medium stroke risk / moderate EMC.
 - Complaint: `chestpain`
 - Vitals: HR `102`  SBP `150`  DBP `92`  RR `20`  O2 `95%`  Temp `37.0°C`
 - **Expect:** P3
-- **Or demo the note extractor:** click "Ethan Koh" under "Demo characters" in the Triage intake tab (or paste this note): *"45yo man drove himself in, chest pain that started this morning"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Ethan Koh" under "Demo characters" in the Triage intake tab (or paste this note): *"45yo man drove himself in. Central chest pain since this morning, pain 6/10, radiating to the left arm, feels clammy. Hx high cholesterol, father had a heart attack in his fifties. On atorvastatin. NKDA."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `45`  Gender: `Male`  BMI: `26.5`
@@ -172,14 +172,14 @@ Medium-high acuity (chest pain) / medium stroke risk / moderate EMC.
 
 ## Rosa Fernandez (`demo-rosa-fernandez`)
 
-Low-medium acuity (fever) / low-medium stroke risk / simple EMC.
+Low-medium acuity (fever) / low-medium stroke risk / simple EMC. Deliberately the THIN note of the roster — see clinician_note.
 
 **Triage (`/triage/`)**
 - Age: `68`  Sex: `Female`  Arrival mode: `Public Transportation`
 - Complaint: `fever`
 - Vitals: HR `96`  SBP `128`  DBP `80`  RR `18`  O2 `96%`  Temp `38.6°C`
 - **Expect:** P3
-- **Or demo the note extractor:** click "Rosa Fernandez" under "Demo characters" in the Triage intake tab (or paste this note): *"68yo woman took the bus in, fever since yesterday"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Rosa Fernandez" under "Demo characters" in the Triage intake tab (or paste this note): *"68yo woman took the bus in. Fever since yesterday. Came alone, no family with her, unable to give any further history."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `68`  Gender: `Female`  BMI: `24.0`
@@ -204,7 +204,7 @@ Medium acuity (dizziness/fall risk) / medium-high stroke risk / moderate EMC.
 - Complaint: `dizziness`
 - Vitals: HR `84`  SBP `136`  DBP `84`  RR `16`  O2 `97%`  Temp `36.9°C`
 - **Expect:** P3
-- **Or demo the note extractor:** click "Balvinder Singh" under "Demo characters" in the Triage intake tab (or paste this note): *"58yo man came in a wheelchair, feeling dizzy since this morning"* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
+- **Or demo the note extractor:** click "Balvinder Singh" under "Demo characters" in the Triage intake tab (or paste this note): *"58yo man brought in by his daughter in a wheelchair. Dizzy since this morning, worse on standing. Hx type 2 diabetes and hypertension. On metformin and a blood pressure tablet he cannot name. Allergic to sulfa drugs."* — runs live against Gemini, no pinned fallback, so a working `GEMINI_API_KEY` must be reachable at demo time.
 
 **Stroke risk (`/stroke/`)**
 - Age: `58`  Gender: `Male`  BMI: `28.0`

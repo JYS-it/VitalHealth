@@ -29,7 +29,6 @@ _PATIENT_PAGE_ROUTES = {
     "/api/self-check/options",
     "/api/self-check/extract",
     "/api/self-check",
-    "/api/self-check/describe-help",
     "/api/self-check/explain",
 }
 

@@ -31,7 +31,11 @@ CHARACTERS = [
         "external_id": "demo-nur-aini-yusof",
         "display_name": "Nur Aini binte Yusof",
         "note": "Low acuity / low stroke risk / simple EMC — healthy young adult with a headache.",
-        "clinician_note": "19yo woman walked in, headache since this morning",
+        # Triage showcase: routine basis. Complete note, normal vitals, nothing escalating —
+        # the justification has to say plainly that no escalating factor was recorded.
+        "clinician_note": "19yo woman walked in on her own. Headache since this morning, "
+                          "pain 4/10, no vomiting and no visual changes. Not on any regular "
+                          "medication. NKDA.",
         "triage": {
             "age": 19,
             "sex": "Female",
@@ -64,8 +68,14 @@ CHARACTERS = [
         "external_id": "demo-david-tan",
         "display_name": "David Tan",
         "note": "Red-flag triage (P1, strokealert) / high stroke risk / complex EMC — deliberately coherent across apps.",
-        "clinician_note": "74yo man brought in by ambulance, sudden slurred speech and "
-                           "one-sided weakness, family suspects stroke",
+        # Triage showcase: red_flag basis — the level is floored to P1 by rule, not by the
+        # model, which is the justification's hardest thing to say honestly. Richest Background
+        # of the roster (onset, three history mentions, two medications, a stated allergy), so
+        # it also exercises the handover's Pathway line.
+        "clinician_note": "74yo man brought in by ambulance. Sudden slurred speech and "
+                          "one-sided weakness starting 40 minutes ago, family suspects "
+                          "stroke. Hx hypertension, atrial fibrillation, previous TIA two "
+                          "years ago. On warfarin and amlodipine. Allergic to penicillin.",
         "triage": {
             "age": 74,
             "sex": "Male",
@@ -99,7 +109,12 @@ CHARACTERS = [
         "external_id": "demo-grace-lim",
         "display_name": "Grace Lim",
         "note": "Medium acuity (abdominal pain) / medium stroke risk / moderate EMC.",
-        "clinician_note": "52yo woman, drove herself in, abdominal pain since last night",
+        # Triage showcase: complaint basis with a stated pain score and a prior diagnosis the
+        # note quotes but the model never codes — the handover Background carries it verbatim
+        # while the justification must stay silent about it.
+        "clinician_note": "52yo woman drove herself in. Abdominal pain since last night, "
+                          "worse over the right side, pain 7/10. Vomited twice this morning. "
+                          "Hx gallstones. Takes omeprazole. NKDA.",
         "triage": {
             "age": 52,
             "sex": "Female",
@@ -132,8 +147,13 @@ CHARACTERS = [
         "external_id": "demo-marcus-wong",
         "display_name": "Marcus Wong",
         "note": "High acuity (breathing difficulty) / high stroke risk / complex EMC.",
-        "clinician_note": "81yo man, ambulance brought him in, severe difficulty breathing, "
-                           "started about an hour ago",
+        # Triage showcase: physiology basis — RR 28, SpO2 89 and T 38.1 are all out of range,
+        # the one character where the vitals genuinely drive the level. The handover's Monitor
+        # line has something real to attach a trigger to.
+        "clinician_note": "81yo man, ambulance brought him in. Severe difficulty breathing "
+                          "that started about an hour ago, worse lying flat. Hx COPD and "
+                          "heart failure, admitted twice last year. On salbutamol inhaler "
+                          "and furosemide. No known drug allergies.",
         "triage": {
             "age": 81,
             "sex": "Male",
@@ -167,7 +187,12 @@ CHARACTERS = [
         "display_name": "Timothy Ng",
         "note": "Edge case: age 15 is outside Jace's valid 18-102 range (expect model_refused), "
                 "while Jeslyn (0-120) and YS (0-130) still process the same character normally.",
-        "clinician_note": "15yo boy walked in with his mother, fell while skateboarding, hurt his wrist",
+        # Triage showcase: age refusal. The note is deliberately GOOD — full onset, pain score,
+        # negatives, allergy status — so the refusal is visibly about the 18-102 range and not
+        # about a thin note.
+        "clinician_note": "15yo boy walked in with his mother. Fell while skateboarding about "
+                          "an hour ago and hurt his right wrist, pain 6/10. No head injury and "
+                          "did not black out. NKDA, no regular medication.",
         "triage": {
             "age": 15,
             "sex": "Male",
@@ -200,7 +225,13 @@ CHARACTERS = [
         "external_id": "demo-ethan-koh",
         "display_name": "Ethan Koh",
         "note": "Medium-high acuity (chest pain) / medium stroke risk / moderate EMC.",
-        "clinician_note": "45yo man drove himself in, chest pain that started this morning",
+        # Triage showcase: the highest-base-rate complaint in the roster, so the justification
+        # has a real historical frequency to lead with, and the handover has an obvious
+        # protocol-standard Obtain line (ECG / troponin).
+        "clinician_note": "45yo man drove himself in. Central chest pain since this morning, "
+                          "pain 6/10, radiating to the left arm, feels clammy. Hx high "
+                          "cholesterol, father had a heart attack in his fifties. On "
+                          "atorvastatin. NKDA.",
         "triage": {
             "age": 45,
             "sex": "Male",
@@ -232,8 +263,13 @@ CHARACTERS = [
     {
         "external_id": "demo-rosa-fernandez",
         "display_name": "Rosa Fernandez",
-        "note": "Low-medium acuity (fever) / low-medium stroke risk / simple EMC.",
-        "clinician_note": "68yo woman took the bus in, fever since yesterday",
+        "note": "Low-medium acuity (fever) / low-medium stroke risk / simple EMC. Deliberately "
+                "the THIN note of the roster — see clinician_note.",
+        # Triage showcase: incompleteness. Kept sparse on purpose and given a reason for it, so
+        # the handover's Information gaps line and Complete: step have something to report and
+        # the justification has to state its uncertainty rather than pad.
+        "clinician_note": "68yo woman took the bus in. Fever since yesterday. Came alone, no "
+                          "family with her, unable to give any further history.",
         "triage": {
             "age": 68,
             "sex": "Female",
@@ -266,7 +302,13 @@ CHARACTERS = [
         "external_id": "demo-balvinder-singh",
         "display_name": "Balvinder Singh",
         "note": "Medium acuity (dizziness/fall risk) / medium-high stroke risk / moderate EMC.",
-        "clinician_note": "58yo man came in a wheelchair, feeling dizzy since this morning",
+        # Triage showcase: the only wheelchair arrival, plus a partially-unknown medication the
+        # note quotes honestly rather than guessing — span-or-silence made visible in the
+        # handover Background.
+        "clinician_note": "58yo man brought in by his daughter in a wheelchair. Dizzy since "
+                          "this morning, worse on standing. Hx type 2 diabetes and "
+                          "hypertension. On metformin and a blood pressure tablet he cannot "
+                          "name. Allergic to sulfa drugs.",
         "triage": {
             "age": 58,
             "sex": "Male",

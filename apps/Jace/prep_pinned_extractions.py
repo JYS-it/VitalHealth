@@ -1,6 +1,6 @@
 """prep_pinned_extractions.py — one-off builder for the offline intake-demo artefact.
 
-Runs each demo seed note (the 5 in static/app.js) through the LIVE extractor once and
+Runs each demo seed note (the 10 in SEEDS below) through the LIVE extractor once and
 pins the full seed flow to sample/pinned_extractions.json, keyed by
 core.note_fingerprint(note):
 
@@ -26,8 +26,9 @@ import ctrse_core as core
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.join(APP_DIR, "sample", "pinned_extractions.json")
 
-# The 10 demo seeds — MUST match static/app.js `seeds` verbatim
-# (tests/test_intake_api.py asserts coverage against app.js).
+# The 10 demo seeds — the canonical list. They used to be duplicated into static/app.js as a
+# "Demo seeds" button row; that row was removed, so this is now the only copy, and
+# tests/test_intake_api.py reads it from here to assert every seed is pinned.
 SEEDS = [
     ("chest pain", "68yo woman, daughter brought her in, vomiting since last night, chest feels tight, heart problems before"),
     ("fall", "72yo man fell at home this morning, hip hurts, on blood thinners"),

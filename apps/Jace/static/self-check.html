@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Triage self-check — VitalHealth</title>
   <link rel="icon" type="image/png" href="/vh-assets/brand/vitalhealth-logo-full.png">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=12">
   <link rel="stylesheet" href="/vh-assets/vitalhealth-shell.css?v=vh-shell-20260815">
-  <script defer src="intake-shared.js?v=1"></script>
-  <script defer src="self-check.js?v=5"></script>
+  <script defer src="intake-shared.js?v=2"></script>
+  <script defer src="self-check.js?v=6"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
@@ -24,10 +24,9 @@
   gated); there is no separate patient-safe picker. What differs from the
   clinician page is downstream of the model, not the interface: the model
   assessment / justification / handover blocks are gone, replaced by
-  §Describe-help (use case D, confirm screen) and §Patient guidance (use
-  case C, result screen) — the two GenAI surfaces written for a PATIENT
-  register, never the clinician one. See ctrse_core.py's SYSTEM_PROMPT_
-  DESCRIBE_HELP / SYSTEM_PROMPT_PATIENT and api.py's /api/self-check/*
+  §Patient guidance (use case C, result screen) — the one GenAI surface
+  written for a PATIENT register, never the clinician one. See
+  ctrse_core.py's SYSTEM_PROMPT_PATIENT and api.py's /api/self-check/*
   routes.
 -->
 <body x-data="selfCheckApp()" x-init="init()" data-vitalhealth-section="triage self-check">
@@ -55,29 +54,45 @@
     </div>
   </header>
 
-  <div class="app" style="max-width:760px;">
+  <!-- No max-width override: this page uses the same 1280px .app shell as the clinician side, so
+       the header, nav and card edges line up across the two surfaces. Prose keeps its own
+       readable measure via .prose's max-width. -->
+  <div class="app">
 
-    <!-- ===================== PERSISTENT EMERGENCY BANNER =====================
+    <!-- ===================== PERSISTENT SAFETY NOTICE =====================
          Non-dismissible on purpose: nothing reviews a self-check, so the
          escape hatch must always be visible, not just shown once at the
          top. Numbers come from the API, not hardcoded here, so this can
-         never drift from what a released result's action_line says. -->
-    <div class="redflag" style="margin-bottom:var(--s5);">
-      <span>
-        This tool is <strong>not for emergencies</strong>. If this could be a medical emergency, call
-        <strong class="mono" x-text="emergencyNumber">995</strong> now or go to the nearest emergency department.
+         never drift from what a released result's action_line says.
+
+         Calm, not alarming. This used to be a red .redflag block carrying
+         both the emergency line and the crisis line in full, which read as
+         an error state on a page nobody had done anything wrong on. The
+         emergency line stays on screen at all times; the crisis line moves
+         one tap away inside a disclosure rather than being shouted at
+         every visitor. -->
+    <div class="safety-strip">
+      <span class="safety-strip__icon" aria-hidden="true">&#9432;</span>
+      <div class="safety-strip__body">
+        <span>Not for emergencies &mdash; if this could be an emergency, call
+          <strong class="mono" x-text="emergencyNumber">995</strong> or go to the nearest emergency department.</span>
         <template x-if="crisisNumber">
-          <span> If you are thinking about harming yourself or someone else, call
-            <strong class="mono" x-text="crisisNumber"></strong> (<span x-text="crisisLabel"></span>) —
-            you can talk to someone right now.</span>
+          <details class="safety-strip__more">
+            <summary>Other urgent help</summary>
+            <p>If you are thinking about harming yourself or someone else, call
+              <strong class="mono" x-text="crisisNumber"></strong>
+              (<span x-text="crisisLabel"></span>) &mdash; you can talk to someone right now.</p>
+          </details>
         </template>
-      </span>
+      </div>
     </div>
 
     <div class="vh-banner vh-banner--error" x-show="error" x-cloak x-text="error"></div>
 
-    <!-- ---------------- STAGE 1: input ---------------- -->
-    <section class="card panel" x-show="intake.stage === 'input'" aria-label="Triage self-check">
+    <!-- ---------------- STAGE 1: input ----------------
+         Hidden while extracting: the wait is covered by the skeleton below, which is shaped like
+         the confirm screen it becomes. -->
+    <section class="card panel" x-show="intake.stage === 'input' && !intake.extracting" aria-label="Triage self-check">
       <div class="panel__title eyebrow"><span>Tell us how you're feeling</span></div>
       <div class="stack">
 
@@ -87,11 +102,13 @@
             <span>Describe what is happening</span>
             <span class="count mono" x-text="intake.note.length + ' / 5000'"></span>
           </div>
-          <p class="prose">Use your own words. For example: where you feel it, when it started, and whether it is
-            changing. Do not include names or identification numbers.</p>
           <textarea class="note-input" rows="6" maxlength="5000" aria-label="Describe what is happening"
             placeholder="Example: I have had tight pain in my chest for 30 minutes and feel short of breath."
             x-model="intake.note"></textarea>
+          <!-- Guidance demoted from .prose above the box to a footnote below it: it is a hint,
+               not the instruction, and it was competing with the field label for attention. -->
+          <p class="footnote">Your own words &mdash; where it is, when it started, whether it&rsquo;s changing.
+            No names or ID numbers.</p>
           <!-- Demo seeds, same affordance as the clinician intake's seed row (index.html) —
                but a separate first-person list (self-check.js `seeds`), because the clinician
                seeds and demo_character_seeds.js are written in third person about a patient,
@@ -146,6 +163,28 @@
       </div>
     </section>
 
+    <!-- ---------------- STAGE 1 -> 2 skeleton ----------------
+         In place of the old full-screen overlay: the same card, title and field-row rhythm the
+         confirm screen uses, so the page transitions into its next state rather than being
+         covered by one. -->
+    <section class="card panel" x-show="intake.extracting" x-cloak aria-label="Reading your description">
+      <div class="panel__title eyebrow"><span>Reading your description&hellip;</span></div>
+      <div class="stack">
+        <div>
+          <div class="skeleton-line" style="width:94%;"></div>
+          <div class="skeleton-line" style="width:71%;"></div>
+        </div>
+        <div class="skeleton-rows">
+          <template x-for="w in ['38%','55%','46%','62%','41%','58%']" :key="w">
+            <div class="skeleton-row">
+              <div class="skeleton-line" style="width:5rem;"></div>
+              <div class="skeleton-line" :style="`width:${w}`"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </section>
+
     <!-- ---------------- STAGE 2: confirm ---------------- -->
     <section class="card panel" x-show="intake.stage === 'confirm'" x-cloak aria-label="Confirm what we understood">
       <div class="panel__title eyebrow row-between">
@@ -159,34 +198,6 @@
         <div class="note-view" aria-label="Your description" x-html="highlightedNote()"></div>
         <p class="footnote">Every field below quotes a phrase from what you wrote &mdash; hover a field to see its source. A field with no quotation cannot exist.</p>
 
-        <!-- §Describe-help (use case D) — on-demand: the patient asks for feedback before this
-             is scored. This is the ONLY place this tool asks for more detail, and only about
-             something already mentioned — it never suggests a symptom (see
-             ctrse_core.py's SYSTEM_PROMPT_DESCRIBE_HELP rule 3). The answer travels as its own
-             field (not appended by the browser) and is composed server-side, so
-             span-or-silence still validates against exactly what was sent. -->
-        <div class="izone">
-          <div class="row-between">
-            <p class="eyebrow">Is your description clear enough?</p>
-            <button class="btn-ghost" type="button" @click="loadDescribeHelp()"
-                    :disabled="intake.describeHelpLoading"
-                    x-text="intake.describeHelpLoading ? 'Checking…' : 'Get feedback on my description'"></button>
-          </div>
-          <template x-if="intake.describeHelp">
-            <div class="stack--tight">
-              <p class="prose" x-text="intake.describeHelp?.text"></p>
-              <label class="frow" style="grid-template-columns:1fr;">
-                <span class="frow__label">Add more detail</span>
-                <textarea class="note-input" rows="3" x-model="intake.followUp"
-                  placeholder="Add anything you'd like to clarify or add..."></textarea>
-              </label>
-              <button class="btn-generate" type="button" @click="submitFollowUp()"
-                      :disabled="!intake.followUp.trim() || intake.extracting"
-                      x-text="intake.extracting ? 'Adding…' : 'Add this detail'"></button>
-            </div>
-          </template>
-        </div>
-
         <!-- refusal (paediatric / OOD / multi-patient): no confirm action offered -->
         <div class="refusal" x-show="intake.refusal" x-cloak>
           <span>&#9888;</span>
@@ -196,7 +207,7 @@
         <!-- guardrail notices — forced_ambiguity is filtered out of this list (see
              visibleGuardrailFlags()): it has no patient-register wording in friendlyFlag() and
              would otherwise show the raw internal flag name, but the same information is
-             already readable on the affected symptom's own "we weren't sure" row below. -->
+             already readable on the affected symptom's own "Please check this" row below. -->
         <div class="gnotices" x-show="visibleGuardrailFlags().length" x-cloak>
           <div class="eyebrow mb2">A few notes about your description</div>
           <ul class="gnotice-list">
@@ -252,7 +263,7 @@
             </div>
             <div class="frow__src mono" x-show="intake.fields?.arrival.span" x-text="'&ldquo;' + intake.fields?.arrival.span + '&rdquo;'"></div>
             <div class="flag" x-show="intake.fields?.arrival.flagged" x-cloak>
-              <span class="flag__mark">&#9873; we weren't sure</span>
+              <span class="flag__mark">&#9873; Please check this</span>
               <span x-show="intake.fields?.arrival.reason" x-text="intake.fields?.arrival.reason"></span>
               <label class="ack"><input type="checkbox" x-model="intake.fields.arrival.ack"> acknowledge</label>
             </div>
@@ -277,7 +288,7 @@
               <div class="frow__src mono" x-show="c.span" x-text="'&ldquo;' + c.span + '&rdquo;'"></div>
               <div class="frow__src" x-show="c.fallback" x-cloak><span class="not-stated">not directly quoted from your description</span></div>
               <div class="flag" x-show="c.flagged" x-cloak>
-                <span class="flag__mark">&#9873; we weren't sure</span>
+                <span class="flag__mark">&#9873; Please check this</span>
                 <label class="ack"><input type="checkbox" x-model="c.ack"> acknowledge</label>
               </div>
             </div>
@@ -349,7 +360,7 @@
                   :disabled="!allAcked || intake.predicting"
                   @click="confirmRun()"
                   x-text="intake.predicting ? 'Checking…' : 'Confirm & check my symptoms →'"></button>
-          <span class="footnote ml2" x-show="!allAcked">acknowledge every &#9873; note to enable</span>
+          <span class="footnote ml2" x-show="!allAcked">acknowledge every &#9873; row to enable</span>
         </div>
       </div>
       </template>
@@ -358,8 +369,15 @@
     <!-- ---------------- STAGE 3: result =====================
          Band headline + action line come first: the deterministic
          instruction ("call 995 now") stays the first thing read regardless
-         of whether GenAI guidance below loads or fails. -->
-    <section class="card stack" x-show="intake.stage === 'result' && intake.result" x-cloak>
+         of whether GenAI guidance below loads or fails.
+
+         result-card caps and centres this section. Stages 1-2 are genuinely form-shaped
+         (a vitals grid, confirm rows) and use the full 1280px shell width like the clinician
+         side; this stage is pure prose, and .prose's own 62ch cap left a wide gap of empty
+         card down the right-hand side once the page stopped being 760px wide. Narrowing the
+         card itself (rather than just the text inside it) is what makes the paragraphs read as
+         filling their container instead of floating in one that's too big for them. -->
+    <section class="card stack result-card" x-show="intake.stage === 'result' && intake.result" x-cloak>
       <div class="badge" :style="{ background: bandColour(intake.result?.urgency.band_tone) }"
            x-text="intake.result?.urgency.band_label"></div>
 

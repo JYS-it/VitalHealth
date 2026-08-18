@@ -66,8 +66,9 @@ python demo_data\sync_jace_seeds.py
 - `sync_jace_seeds.py` is stdlib-only and writes
   `apps/Jace/static/demo_character_seeds.js`, which Jace's own frontend
   loads directly (`index.html`) to show a one-click "Demo characters" row
-  in its Triage intake tab, alongside its existing built-in "Demo seeds"
-  row. **This generated file is committed**, not gitignored — a fresh
+  in its Triage intake tab. That row is now the *only* seed row — Jace's
+  built-in "Demo seeds" row was removed from the UI, so these 8 characters
+  are the one-click demo path. **This generated file is committed**, not gitignored — a fresh
   clone needs it present for Jace's UI to work, not only after someone
   thinks to run this script.
 
@@ -102,10 +103,12 @@ Each character also has a `clinician_note` — free text you can paste into
 Jace's note box, or (after running `sync_jace_seeds.py`) load with one
 click via the "Demo characters" row. Unlike everything else in this
 pipeline, **this runs live against the real Gemini API each time** —
-deliberately not pre-captured/pinned like Jace's own 10 built-in seeds
-(those keep their pinned offline fallback in
-`apps/Jace/sample/pinned_extractions.json`; the 8 characters' notes don't
-have one). Make sure `GEMINI_API_KEY` is reachable in the environment Jace
+deliberately not pre-captured/pinned like Jace's own 10 built-in seed
+notes (those keep their pinned offline fallback in
+`apps/Jace/sample/pinned_extractions.json`, generated from — and now
+solely owned by — `apps/Jace/prep_pinned_extractions.py`; they no longer
+have a button row in the UI, so paste them if you need them. The 8
+characters' notes have no pinned fallback). Make sure `GEMINI_API_KEY` is reachable in the environment Jace
 runs in before demoing this part — `run_all.py` and standalone Jace both
 just inherit it from your shell/profile if it's already set there.
 

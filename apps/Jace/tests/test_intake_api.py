@@ -15,6 +15,9 @@ from fastapi.testclient import TestClient
 
 import ctrse_core as core
 import api
+# The generator for sample/pinned_extractions.json, and now the single source of truth for the
+# demo seed notes. Module-level cost is one `import ctrse_core`, which api already paid for.
+import prep_pinned_extractions
 
 client = TestClient(api.app)
 
@@ -114,19 +117,18 @@ import re
 import pytest
 
 
-def _appjs_seed_notes():
-    """The seed notes exactly as static/app.js ships them (drift guard). Allows a
-    backslash-escaped apostrophe inside the single-quoted JS string literal."""
-    js = open(os.path.join(os.path.dirname(api.__file__), "static", "app.js"),
-              encoding="utf-8").read()
-    block = js[js.index("seeds: ["):js.index("]", js.index("seeds: ["))]
-    raw = re.findall(r"note: '((?:[^'\\]|\\.)+)'", block)
-    return [n.replace("\\'", "'") for n in raw]
+def _seed_notes():
+    """The canonical demo seed notes. Read from prep_pinned_extractions.SEEDS — the script that
+    GENERATES sample/pinned_extractions.json — rather than scraped out of static/app.js, which
+    is where they used to be duplicated. The "Demo seeds" button row was removed from the intake
+    UI, so app.js no longer carries a copy for this to drift against; the pinned artefact and its
+    generator are now the only place the list lives."""
+    return [note for _label, note in prep_pinned_extractions.SEEDS]
 
 
-def test_pinned_extractions_cover_all_appjs_seeds():
-    notes = _appjs_seed_notes()
-    assert len(notes) == 10, "expected the 10 demo seeds in app.js"
+def test_pinned_extractions_cover_every_seed():
+    notes = _seed_notes()
+    assert len(notes) == 10, "expected the 10 demo seeds in prep_pinned_extractions.SEEDS"
     for note in notes:
         fp = core.note_fingerprint(note)
         assert fp in api._PINNED_EXTRACTIONS, f"seed not pinned: {note[:40]}…"
@@ -136,14 +138,14 @@ def test_pinned_extractions_cover_all_appjs_seeds():
 
 def test_extract_pinned_fallback_when_offline(monkeypatch):
     monkeypatch.setattr(core, "GEMINI_AVAILABLE", False)
-    note = _appjs_seed_notes()[0]                      # chest-pain seed
+    note = _seed_notes()[0]                      # chest-pain seed
     r = client.post("/api/extract", json={"note": note})
     assert r.status_code == 200
     body = r.json()
     assert body["source"] == "pinned"
     assert body["note_used"] and body["complaints"]
     # paediatric seed: the pinned refusal survives the fallback path
-    paed = next(n for n in _appjs_seed_notes() if "6yo" in n)
+    paed = next(n for n in _seed_notes() if "6yo" in n)
     rp = client.post("/api/extract", json={"note": paed}).json()
     assert rp["source"] == "pinned" and rp["model_refused"] is True
 

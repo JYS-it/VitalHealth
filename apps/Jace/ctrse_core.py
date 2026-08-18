@@ -39,7 +39,6 @@ __all__ = [
     "SYSTEM_PROMPT_JUSTIFY",
     "SYSTEM_PROMPT_HANDOVER",
     "SYSTEM_PROMPT_PATIENT",
-    "SYSTEM_PROMPT_DESCRIBE_HELP",
     "build_user_prompt",
     "generate",
     "guardrail_check",
@@ -907,54 +906,75 @@ SYSTEM_PROMPT_HANDOVER = ("You are a decision-support writing assistant embedded
 "triage tool.\n\nYou will be given a JSON payload describing the output of a STATISTICAL MODEL that predicts "
 "the triage nurse's ESI acuity assignment (mapped to P1=critical ... P4=non-urgent). The model does NOT "
 "measure physiological deterioration and does NOT diagnose.\n\n" + COMMON_RULES + """
-You are writing two fields of a clinical triage HANDOVER note. The note header, Situation and
-Background (acuity, the vitals row, history, meds, ED utilisation) are rendered separately by code —
-do NOT restate them. Write in telegraphic clinical-handover register (c/o, hx, pt, WNL, RA);
-fragments over full sentences. Refer to any vital by its recorded value (e.g. HR 121, SpO₂ 94% RA,
-T 37.1), NEVER by a diagnostic label (do not write "tachycardia", "hypoxia", "febrile",
+You are writing two fields of a clinical triage HANDOVER note.
+
+WHAT IS ALREADY ON THE PAGE — the note header and the WHOLE of Situation and Background are
+rendered by CODE and printed directly above your text: acuity and confidence, age, sex, every coded
+complaint with its onset, arrival mode, department, what drove the acuity, the verbatim triage note,
+the full vitals row with out-of-range values emphasised, which vitals were not recorded, allergies,
+pain score, history, medications, ED utilisation, the model's driver features, and the information
+gaps. Do NOT restate any of it. A fact already printed above costs the reader attention and adds
+nothing to the handover.
+
+WRITE NO DIGITS. Name a vital where it matters to the reasoning (SpO₂, HR, RR) but NEVER write its
+value — the Background row carries every number. The same goes for age, counts and dates.
+
+Write in telegraphic clinical-handover register (c/o, hx, pt, WNL, RA); fragments over full
+sentences. NEVER label a vital diagnostically (do not write "tachycardia", "hypoxia", "febrile",
 "hypertensive" — those are findings not present in the payload). Produce EXACTLY these two labelled
 outputs and nothing else before the closing sentence:
 
-  Assessment: <a full, substantive handover paragraph — this is the A of an SBAR and a receiving
-              clinician should be able to pick up the patient from it. Cover, in this order and in
-              telegraphic register: the recorded triage picture (complaint(s) as coded, arrival,
-              recorded vital VALUES, and what the note recorded as history / medications /
-              allergies where present); then, critically, WHAT DROVE THE ACUITY — name the
+  Assessment: <3-4 telegraphic sentences. Not a summary of the page above — the READING of it.
+              Cover, in this order: (1) which recorded vitals sit OUT OF RANGE, named not valued,
+              and whether they drove the acuity or not; (2) WHAT DROVE THE ACUITY — name the
               escalation_basis explicitly in plain clinical terms, e.g. "acuity driven by chief
               complaint and arrival mode, not vital derangement" or "acuity is protocol-based, not
-              physiological instability"; then how COMPLETE the picture is (which vitals were not
-              recorded, whether onset is documented) and where the prediction is least certain.
+              physiological instability"; (3) what the completeness of the picture does to the
+              prediction, stated as a CONSEQUENCE — "acuity rests on the coded complaint alone,
+              nothing recorded to corroborate it" — rather than as a re-list of what is missing.
               Do not assert a diagnosis and do not infer anything the payload does not record.>
-  Recommendation: <several concrete next steps, not one clipped line — the R of an SBAR is what
-              the receiving clinician acts on. Work through each that applies: the protocol-standard
-              investigation(s) tied to the coded complaint; what is missing and should be obtained;
-              the monitoring / observation implication; and the pathway implication for
-              protocol-basis cases. INFORMATION and ACTION only. Permitted: an obvious protocol-standard
-              next investigation tied to the coded complaint (e.g. ECG/troponin for chest pain,
-              glucose for altered mental state); what is missing and should be obtained (obtain
-              vitals when none are recorded — see vitals_not_recorded; onset time not recorded);
-              and, for protocol-basis cases, the pathway implication (mental-health risk
-              assessment; do not route to medical resuscitation; ensure continuous observation).
+  Recommendation: <the section the receiving clinician acts on, and the substantial half of this
+              note. Write it as SEPARATE LINES, one item per line, each prefixed "- " and led by
+              one of these heads, in this order:
+                - Immediate: priority of review and level of observation required.
+                - Obtain: the protocol-standard investigation(s) tied to the coded complaint
+                  (e.g. ECG/troponin for chest pain, glucose for altered mental state).
+                - Complete: the triage data still missing and worth capturing (obtain vitals when
+                  none are recorded — see vitals_not_recorded; onset not documented; allergy
+                  status not stated).
+                - Monitor: what to watch, and the trigger that should prompt escalation.
+                - Pathway: routing implication — protocol-basis and red-flag cases ONLY
+                  (mental-health risk assessment; do not route to medical resuscitation; ensure
+                  continuous observation).
+              Emit every head that applies and DROP any head you would have to pad. Escalation
+              triggers must be QUALITATIVE ("escalate if SpO₂ falls further or work of breathing
+              increases"), never numeric — a threshold figure is not in the payload.
               This system has NO triage clock: never state or imply how old any vital or observation
-              is, and never reference elapsed time (no "N min old", no "recorded at HH:MM", no
-              staleness claim). Recommending that recorded vitals be repeated is fine; attaching an
-              age or elapsed time to them is not. FORBIDDEN: any diagnosis, any treatment or drug,
-              any disposition decision (admit / discharge / refer to a ward). Recommend information
-              and next steps, never a management or disposition decision.>
+              is, never reference elapsed time (no "N min old", no "recorded at HH:MM", no staleness
+              claim), and never attach a time target to a review ("within N minutes" is forbidden).
+              Recommending that recorded vitals be repeated is fine; attaching an age or elapsed
+              time to them is not. FORBIDDEN: any diagnosis, any treatment or drug, any disposition
+              decision (admit / discharge / refer to a ward). Recommend information and next steps,
+              never a management or disposition decision.>
+
+Line breaks inside the Recommendation are REQUIRED, not a violation. The "no bullet lists" rule
+belongs to the justification register (SYSTEM_PROMPT_JUSTIFY), not to COMMON_RULES, and does not
+apply here — do not re-add it.
 
 REGISTER — this is a handover, not an explanation of the model. The justification register (written
 separately, for a clinician deciding whether to trust the prediction) carries the statistics and the
-calibration; this one must not repeat them. The ONLY numerals permitted here are recorded vital
-values and the patient's age. Do NOT write historical base rates, emergency rates, cohort counts,
-probabilities, percentages, or threshold arithmetic, and do NOT restate where the prediction sits
-relative to the alert threshold — say "acuity driven by the coded complaint" and stop, without
-quantifying it.
+calibration; this one must not repeat them. Do NOT write historical base rates, emergency rates,
+cohort counts, probabilities, percentages, or threshold arithmetic, and do NOT restate where the
+prediction sits relative to the alert threshold — say "acuity driven by the coded complaint" and
+stop, without quantifying it.
 
 DENSITY, not brevity — there is no word limit, and a thin handover is a failed handover. Be
 substantive and complete, but write it the way a handover is written rather than the way an essay
-is: drop articles and copulas, use standard abbreviations ("68 y/o, c/o chest pain, arrived by car"
-— not "the patient is a 68-year-old who complained of chest pain and arrived by car"). Every
-sentence should carry a fact the receiving clinician needs.
+is: drop articles and copulas, use standard abbreviations ("c/o chest pain, arrived by car" — not
+"the patient complained of chest pain and arrived by car"). Where you must name a complaint in
+order to say what drove the acuity, write it as "c/o <complaint>", never as "the chief complaint
+of <complaint>". Every line must carry something the receiving clinician needs and CANNOT read off
+the page above it.
 
 NEVER write a raw feature identifier, vocabulary token, or internal field value — no "cc_chestpain",
 "o2_device", "arrivalmode", "escalation_basis", "red_flag", "model_level", and never the word
@@ -980,6 +1000,16 @@ clinical language ("c/o chest pain", not "c/o chestpain").
 # depends on this patient's confirmed complaints), for overdose, protocol (suicidal/homicidal/
 # psychiatricevaluation/alcoholintoxication), and red-flag complaints — see
 # _self_care_suppressed().
+#
+# Rule 1 (ground in the RESULT/note) and the suppressed directive collide for exactly the
+# overdose case: the note itself names the substance ("took a whole box of paracetamol"), so a
+# model honouring rule 1 while explaining the urgency would name it back — which
+# _SELF_CARE_PATTERNS below then correctly catches, and the whole generation is withheld (never
+# a flagged-but-shown fallback for patient-facing content). Silence isn't a graceful failure
+# here; it's the ONE case where the guidance panel is most worth seeing, since it's the one
+# case demonstrating suppression at all. Fixed by making _WHILE_WAITING_SUPPRESSED explicitly
+# override rule 1 for medication/substance naming — the model still grounds the URGENCY in what
+# happened, just never by the substance's name.
 SYSTEM_PROMPT_PATIENT = ("You are a decision-support writing assistant embedded in an "
 "emergency-department triage self-check tool used directly by PATIENTS. No clinician reviews "
 "your output before the patient sees it. You will be given a JSON RESULT that has ALREADY been "
@@ -1030,8 +1060,13 @@ _WHILE_WAITING_ALLOWED = (
 )
 _WHILE_WAITING_SUPPRESSED = (
     "Self-care, comfort, and medication guidance is NOT permitted for this generation — do "
-    "not suggest or mention any medication, substance, or self-care action of any kind. Cover "
-    "ONLY where/how soon to seek care and the relevant watch-for signs."
+    "not suggest or mention any medication, substance, or self-care action of any kind. This "
+    "OVERRIDES rule 1's grounding permission for medications/substances specifically: even "
+    "though the RESULT or note may name what the patient took (e.g. a substance involved in an "
+    "overdose), you must NEVER repeat that name back, not even once, not even purely "
+    "descriptively while explaining the urgency. Refer to it only in generic, substance-free "
+    "terms — 'what you took', 'what happened' — never by name. Cover ONLY where/how soon to "
+    "seek care and the relevant watch-for signs."
 )
 
 
@@ -1052,42 +1087,15 @@ def _self_care_suppressed(complaint_tokens):
         return True
     return False
 
-# §Describe-help (use case D) — runs on the patient confirm screen, BEFORE any prediction exists
-# (grounded in the extraction object, not patient_view/payload). The one rule everything else here
-# depends on: it may ask for MORE DETAIL on something already mentioned, never suggest a symptom
-# the patient didn't report — doing so would lead them to report something they don't have, which
-# corrupts the very extraction that feeds the triage model. _guardrail_check_patient's
-# unreported-symptom scan (shared with C) is what makes that rule falsifiable, not just requested.
-SYSTEM_PROMPT_DESCRIBE_HELP = ("You are a decision-support writing assistant embedded in an "
-"emergency-department triage self-check tool used directly by PATIENTS, at the moment they are "
-"reviewing what the tool understood from their own description — BEFORE any triage result "
-"exists. No clinician reviews your output before the patient sees it. You will be given a JSON "
-"EXTRACTION: what a separate, guarded extractor found in the patient's note, and what it left "
-"empty.\n\n"
-"""STRICT RULES — violating any of these makes the output unusable:
-1. Ground every statement in the supplied EXTRACTION only. Name no symptom, sign, or fact that
-   is not present in it.
-2. Speak directly to the patient in plain, warm, second person ("you"). No clinical jargon, no
-   model-internal language.
-3. You may ask for MORE DETAIL about something the patient already mentioned — when it started,
-   how severe it is, whether it is changing, exactly where it is. You must NEVER suggest or ask
-   about a symptom, body part, or complaint they did not already mention.
-4. Never suggest a diagnosis, and never comment on urgency, severity, or what the result might
-   be — there is no result yet.
-5. If the extraction is already reasonably complete (at least one complaint with a span, and
-   either an onset or enough other detail), say so briefly and encouragingly instead of
-   manufacturing a request for more.
-6. One or two short sentences. No headers, no bullets, no lists, no closing disclaimer — there
-   is no prediction yet to describe.
-"""
-"Write only the sentences themselves — no label, no preamble.")
-
 # NB3 use-case tokens are "A"/"B"; the app/API vocabulary is "justify"/"handover". "C" /
-# "patient_guidance" is the §Patient guidance use case; "D" / "describe_help" is §Describe-help.
-# Both share generate()/guardrail_check() machinery, deliberately never reachable from
-# /api/explain (see api.py's dedicated /api/self-check/* routes).
+# "patient_guidance" is the §Patient guidance use case, which shares generate()/guardrail_check()
+# machinery but is deliberately never reachable from /api/explain (see api.py's dedicated
+# /api/self-check/* routes).
+#
+# A fourth use case, "D"/"describe_help" (§Describe-help — an on-demand "is your description clear
+# enough?" panel on the patient confirm screen), was removed along with its UI. Nothing about the
+# split above depended on it; C keeps the whole patient-facing guardrail branch to itself.
 _USE_CASE_MAP = {"justify": "A", "handover": "B", "A": "A", "B": "B",
-                  "describe_help": "D", "D": "D",
                   "patient_guidance": "C", "C": "C"}
 
 # Refinement §1.5 — per-request basis directives (exact strings). All {…} placeholders are
@@ -1162,14 +1170,6 @@ def _basis_directive(payload):
 
 def build_user_prompt(payload, use_case):
     uc = _USE_CASE_MAP.get(use_case, use_case)
-    if uc == "D":
-        # payload here is the extraction object itself (no prediction exists yet at confirm
-        # time) — a third shape, distinct from both the clinician payload and patient_view.
-        return ("Using ONLY the fields in this JSON EXTRACTION, write 1-2 short plain-language "
-                "sentences helping the patient improve their description for this check — ask "
-                "for more detail on something they already mentioned, or affirm it's clear "
-                "enough. Never ask about a symptom that isn't already present.\n\n"
-                "EXTRACTION:\n" + json.dumps(payload, indent=2))
     if uc == "C":
         # payload here is the WIDENED suggestion payload api.py assembles (patient_view plus
         # allergies/medications/history_mentions/onset/pain_score/note/confirmed_complaint_tokens)
@@ -1199,9 +1199,15 @@ def build_user_prompt(payload, use_case):
                    "base rates, threshold context, and the high-importance features present")
     else:
         task = "write the two labelled outputs (Assessment / Recommendation)"
-        factors = ("the coded chief complaint(s), arrival mode, age, red flags, recorded vital "
-                   "VALUES, and what drove the acuity — NOT base rates, probabilities, cohort "
-                   "counts or threshold arithmetic, which belong to the justification register")
+        # No "recorded vital VALUES" here. Situation and Background are rendered by code from
+        # this same payload and printed directly above the model's text, so asking for the
+        # values printed them twice — once as fact, once as prose. B now gets the reading of
+        # the picture; the numbers stay in the code-rendered block that owns them.
+        factors = ("the coded chief complaint(s), the red flags, and what drove the acuity — "
+                   "NOT the recorded facts already printed above your text (vital values, age, "
+                   "arrival mode, allergies, history, medications), and NOT base rates, "
+                   "probabilities, cohort counts or threshold arithmetic, which belong to the "
+                   "justification register")
     prompt = (f"Using only the fields in this JSON payload, {task}. Refer to the factors the model "
               f"weighted ({factors}), written in ordinary clinical language — never by their raw "
               "payload identifiers.\n\n"
@@ -1217,8 +1223,21 @@ def build_user_prompt(payload, use_case):
         prompt += ("\n\nREADABLE LABELS (write the complaint this way, never as the raw token):\n" +
                    "\n".join(f'- {t} -> "{label.lower()}"' for t, label in readable))
     if uc == "B":
+        # Restated in the user prompt as well as the system instruction: the shape is the whole
+        # point of the Recommendation now, and a model that skims the system block still sees it
+        # here, immediately beside the payload it has to apply it to.
+        # "FORMAT", not "SHAPE": test_neither_prompt_solicits_shap_any_more scans the prompt for
+        # the substring "SHAP", and "SHAPE" would match it.
+        prompt += ("\n\nRECOMMENDATION FORMAT (one item per line, each prefixed \"- \", in this "
+                   "order; drop any head you would have to pad):\n"
+                   "- Immediate: <priority of review and level of observation>\n"
+                   "- Obtain: <protocol-standard investigation(s) for the coded complaint>\n"
+                   "- Complete: <triage data still missing and worth capturing>\n"
+                   "- Monitor: <what to watch, and the qualitative trigger for escalation>\n"
+                   "- Pathway: <routing implication — protocol-basis and red-flag cases only>")
         prompt += ("\n\nCONTEXT: this system has no triage clock — the payload carries no timestamp and "
-                   "no elapsed time. Do NOT state or imply how old any vital or observation is. If "
+                   "no elapsed time. Do NOT state or imply how old any vital or observation is, and do "
+                   "not attach a time target to a review. If "
                    "vitals_not_recorded is non-empty, the Recommendation should note that those vitals "
                    "be obtained; recorded vitals may be flagged for repeat, but without attaching any age "
                    "or elapsed time to them.")
@@ -1237,9 +1256,8 @@ DIAGNOSTIC_PATTERNS = [r"\bpatient (has|is suffering|suffers|is diagnosed|presen
 REASSURING_WORDS = ["reassuring", "no cause for concern", "not urgent", "nothing serious", "routine", "low risk",
                     "can safely wait", "no concern"]
 HANDOVER_LABELS = ["Assessment:", "Recommendation:"]
-# C and D are both single free-form passages, unlike B's two-label shape — nothing to require.
+# C is a single free-form passage, unlike B's two-label shape — nothing to require.
 PATIENT_GUIDANCE_LABELS = []
-DESCRIBE_HELP_LABELS = []
 # The Recommendation is information + action only — never treatment or a disposition decision.
 DISPOSITION_PATTERNS = [r"\badmit(ted|s|ting)?\b", r"\bdischarg(e|ed|es|ing)\b",
                         r"\bprescrib(e|ed|es|ing)\b", r"\badminister(ed|s|ing)?\b"]
@@ -1333,21 +1351,18 @@ def _patient_reported_text(payload):
     return " ".join(tokens + labels).lower()
 
 
-def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=True):
-    """§Patient guidance guardrail, shared by C (patient_guidance) and D (describe_help) — the
-    only two GenAI outputs that ever reach a patient directly, with no clinician review before
-    release. Kept separate from the clinician body below: these payload shapes (the widened
-    suggestion payload for C, the raw extraction for D) share no keys with the clinician payload
+def _guardrail_check_patient(payload, text, required_labels):
+    """§Patient guidance guardrail for C (patient_guidance) — the only GenAI output that reaches a
+    patient directly, with no clinician review before release. Kept separate from the clinician
+    body below: C's widened suggestion payload shares no keys with the clinician payload
     (probabilities/escalation_basis/active_chief_complaints), and stricter rules apply —
     reassurance is banned unconditionally, not just on clinician P1/P2, new content is restricted
-    to a fixed vocabulary (PATIENT_WATCH_FOR for C's escalation signs; nothing beyond what the
-    patient themselves already reported for D — see SYSTEM_PROMPT_DESCRIBE_HELP rule 3) rather
-    than the full cc_ vocabulary, and — C only — self-care/medication content is rejected
-    outright when _self_care_suppressed() says it must be withheld for this patient.
+    to a fixed vocabulary (PATIENT_WATCH_FOR for the escalation signs) rather than the full cc_
+    vocabulary, and self-care/medication content is rejected outright when
+    _self_care_suppressed() says it must be withheld for this patient.
 
-    require_disclaimer is False for D: at confirm time, before any prediction has run, DISCLAIMER
-    ("the model's prediction of a triage assignment...") would describe a prediction that
-    doesn't exist yet.
+    Was shared with D (describe_help) until that use case was removed; the require_disclaimer
+    parameter existed only for D, which ran before any prediction existed, and went with it.
     """
     flags = []
     has_disclaimer = DISCLAIMER.lower() in text.lower()
@@ -1360,7 +1375,7 @@ def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=
     for pat in DIAGNOSTIC_PATTERNS:
         if re.search(pat, t):
             flags.append(f"diagnostic language: /{pat}/")
-    if require_disclaimer and not has_disclaimer:
+    if not has_disclaimer:
         flags.append("missing mandatory closing disclaimer")
     missing = [l for l in required_labels if l.lower() not in text.lower()]
     if missing:
@@ -1403,13 +1418,11 @@ def _guardrail_check_patient(payload, text, required_labels, require_disclaimer=
 def guardrail_check(payload, text, use_case="A"):
     """(passed, flags). Disclaimer checked on full text then stripped so its wording ('diagnosis')
     does not trip the diagnostic-language scan. B additionally requires its two labels. C (patient
-    guidance) and D (describe-help) dispatch to _guardrail_check_patient — different payload
-    shapes and rules from the clinician body below."""
+    guidance) dispatches to _guardrail_check_patient — a different payload shape and stricter
+    rules than the clinician body below."""
     uc = _USE_CASE_MAP.get(use_case, use_case)
     if uc == "C":
         return _guardrail_check_patient(payload, text, PATIENT_GUIDANCE_LABELS)
-    if uc == "D":
-        return _guardrail_check_patient(payload, text, DESCRIBE_HELP_LABELS, require_disclaimer=False)
     flags = []
     has_disclaimer = DISCLAIMER.lower() in text.lower()
     body = text.replace(DISCLAIMER, "").strip()
@@ -1530,7 +1543,6 @@ def generate(payload, use_case, prefer_live=True, pinned=None):
     uc = _USE_CASE_MAP.get(use_case, use_case)
     system_prompt = (SYSTEM_PROMPT_JUSTIFY if uc == "A"
                       else SYSTEM_PROMPT_PATIENT if uc == "C"
-                      else SYSTEM_PROMPT_DESCRIBE_HELP if uc == "D"
                       else SYSTEM_PROMPT_HANDOVER)
     user_prompt = build_user_prompt(payload, uc)
 
@@ -1553,10 +1565,10 @@ def generate(payload, use_case, prefer_live=True, pinned=None):
         offline_text = "No live or pinned explanation is available for this patient this session."
         return {"source": "offline", "assessment": offline_text, "recommendation": offline_text,
                 "guardrails": offline_flags, "disclaimer": DISCLAIMER}
-    if uc in ("C", "D"):
-        # Unlike B's clinician-facing placeholder sentence, patient guidance/describe-help stays
-        # empty on offline — api.py hides the section entirely instead of showing filler text to
-        # a patient. Nothing reaches a patient here that wasn't guardrail-checked.
+    if uc == "C":
+        # Unlike B's clinician-facing placeholder sentence, patient guidance stays empty on
+        # offline — api.py hides the section entirely instead of showing filler text to a
+        # patient. Nothing reaches a patient here that wasn't guardrail-checked.
         return {"source": "offline", "text": "",
                 "guardrails": offline_flags, "disclaimer": DISCLAIMER}
     offline_text = "No live or pinned explanation is available for this patient this session."
