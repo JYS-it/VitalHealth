@@ -908,8 +908,9 @@ SYSTEM_PROMPT_HANDOVER = ("You are a decision-support writing assistant embedded
 "measure physiological deterioration and does NOT diagnose.\n\n" + COMMON_RULES + """
 You are writing two fields of a clinical triage HANDOVER note.
 
-WHAT IS ALREADY ON THE PAGE — the note header and the WHOLE of Situation and Background are
-rendered by CODE and printed directly above your text: acuity and confidence, age, sex, every coded
+WHAT IS ALREADY ON THE PAGE — the note header, the WHOLE of Situation and Background, and the
+recorded vitals row that OPENS your Assessment (the numbers sit immediately above your prose, not
+two sections away) are rendered by CODE: acuity and confidence, age, sex, every coded
 complaint with its onset, arrival mode, department, what drove the acuity, the verbatim triage note,
 the full vitals row with out-of-range values emphasised, which vitals were not recorded, allergies,
 pain score, history, medications, ED utilisation, the model's driver features, and the information
@@ -917,7 +918,8 @@ gaps. Do NOT restate any of it. A fact already printed above costs the reader at
 nothing to the handover.
 
 WRITE NO DIGITS. Name a vital where it matters to the reasoning (SpO₂, HR, RR) but NEVER write its
-value — the Background row carries every number. The same goes for age, counts and dates.
+value — the vitals row directly above your prose carries every number. The same goes for age,
+counts and dates.
 
 Write in telegraphic clinical-handover register (c/o, hx, pt, WNL, RA); fragments over full
 sentences. NEVER label a vital diagnostically (do not write "tachycardia", "hypoxia", "febrile",

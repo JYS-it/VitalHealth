@@ -562,8 +562,6 @@ document.addEventListener('alpine:init', () => {
         ]),
         section([
           'B:',
-          `  Triage vitals: ${vitals}`,
-          notRecorded ? `  Not recorded: ${notRecorded}` : '',
           `  Allergies: ${this.allergyLine(col)}`,
           pain ? `  Pain score: ${pain}` : '',
           history ? `  Hx: ${history}` : '',
@@ -572,7 +570,14 @@ document.addEventListener('alpine:init', () => {
           drivers ? `  Model drivers: ${drivers}` : '',
           gaps ? `  Information gaps: ${gaps}` : '',
         ]),
-        `A: ${h.assessment || h.text || ''}`,
+        // Vitals open A, not B — same order as the rendered note, so a pasted handover and the
+        // screen carry the same facts in the same places.
+        section([
+          'A:',
+          `  Triage vitals: ${vitals}`,
+          notRecorded ? `  Not recorded: ${notRecorded}` : '',
+          `  ${h.assessment || h.text || ''}`,
+        ]),
         rec.length
           ? section(['R:', ...rec.map((r) => `  - ${r}`)])
           : `R: ${h.recommendation || ''}`,

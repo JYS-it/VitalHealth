@@ -11,7 +11,7 @@
   <!-- Versioned like app.js/style.css: the note texts changed, and without a cache bust a
        returning browser would seed the old ones. -->
   <script defer src="demo_character_seeds.js?v=2"></script>
-  <script defer src="app.js?v=11"></script>
+  <script defer src="app.js?v=12"></script>
   <script defer src="dashboard.js?v=1"></script>
   <script defer src="/vh-assets/vita.js?v=vh-shell-20260815"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
@@ -917,10 +917,10 @@
                       <b>Situation</b> &mdash; acuity, who the patient is, what they came in with, and what drove the level
                     </div></div>
                     <div class="hnote__sec"><span class="hnote__k">B</span><div class="hnote__body">
-                      <b>Background</b> &mdash; recorded vitals, allergies, history, medications, and what was not recorded
+                      <b>Background</b> &mdash; allergies, pain score, history, medications, and prior ED use
                     </div></div>
                     <div class="hnote__sec"><span class="hnote__k">A</span><div class="hnote__body">
-                      <b>Assessment</b> &mdash; how the recorded picture reads, and where the prediction is least certain
+                      <b>Assessment</b> &mdash; the recorded vitals, how that picture reads, and where the prediction is least certain
                     </div></div>
                     <div class="hnote__sec"><span class="hnote__k">R</span><div class="hnote__body">
                       <b>Recommendation</b> &mdash; the concrete next steps for the receiving clinician
@@ -1011,25 +1011,16 @@
                       <div class="hnote__sec">
                         <span class="hnote__k">B</span>
                         <div class="hnote__body">
-                          <div class="hnote__line">
-                            <span class="hnote__lbl">Triage vitals:</span>
-                            <template x-for="(v, i) in vitalsRow(col.detail)" :key="v.label">
-                              <span class="vitseg" :class="{ 'vitseg--abn': v.abn }">
-                                <span x-text="i > 0 ? '· ' : ''"></span><span class="vitseg__lbl" x-text="v.label"></span> <span class="mono" x-text="v.text"></span>
-                              </span>
-                            </template>
-                            <span class="empty-inline" x-show="vitalsRow(col.detail).length === 0">none recorded</span>
-                          </div>
+                          <!-- Triage vitals and the vitals-not-recorded line used to sit here.
+                               They now open Assessment instead: the recorded observations are
+                               what A reads, and putting them beside that reading rather than two
+                               sections above it keeps the numbers next to their interpretation.
+                               Background keeps the standing context — allergies, pain, history,
+                               medications, prior ED use — which is what it is asked to carry. -->
                           <!-- Missingness is itself a finding (NB3 §S/B provenance): "not asked"
                                and "none" are different facts and a handover that blurs them is
-                               worse than one that says nothing. Hence this line and the
-                               always-rendered Allergies line below. -->
-                          <!-- The "N of 6" count used to be appended here; it now lives once, on
-                               the Information gaps line below, with the rest of the missingness. -->
-                          <div class="hnote__line hnote__missing" x-show="col.detail?.vitals_not_recorded?.length" x-cloak>
-                            <span class="hnote__lbl">Not recorded:</span>
-                            <span class="mono" x-text="col.detail?.vitals_not_recorded?.join(', ')"></span>
-                          </div>
+                               worse than one that says nothing. Hence the always-rendered
+                               Allergies line below, and the vitals-not-recorded line now in A. -->
                           <div class="hnote__line">
                             <span class="hnote__lbl">Allergies:</span>
                             <span x-text="allergyLine(col)"></span>
@@ -1063,7 +1054,22 @@
                       <!-- A -->
                       <div class="hnote__sec">
                         <span class="hnote__k">A</span>
-                        <div class="hnote__body sbar__body--llm" x-text="col.gen.handover.assessment"></div>
+                        <div class="hnote__body">
+                          <div class="hnote__line">
+                            <span class="hnote__lbl">Triage vitals:</span>
+                            <template x-for="(v, i) in vitalsRow(col.detail)" :key="v.label">
+                              <span class="vitseg" :class="{ 'vitseg--abn': v.abn }">
+                                <span x-text="i > 0 ? '· ' : ''"></span><span class="vitseg__lbl" x-text="v.label"></span> <span class="mono" x-text="v.text"></span>
+                              </span>
+                            </template>
+                            <span class="empty-inline" x-show="vitalsRow(col.detail).length === 0">none recorded</span>
+                          </div>
+                          <div class="hnote__line hnote__missing" x-show="col.detail?.vitals_not_recorded?.length" x-cloak>
+                            <span class="hnote__lbl">Not recorded:</span>
+                            <span class="mono" x-text="col.detail?.vitals_not_recorded?.join(', ')"></span>
+                          </div>
+                          <div class="sbar__body--llm" x-text="col.gen.handover.assessment"></div>
+                        </div>
                       </div>
 
                       <!-- R — asked for as one item per line (Immediate / Obtain / Complete /
